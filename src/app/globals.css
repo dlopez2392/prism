@@ -1,0 +1,145 @@
+@import "../styles/tokens.css";
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Tailwind bridge — utilities resolve to tokens, so `bg-surface-1` and
+   `text-ink-2` swap with the theme and no component carries a literal. */
+@theme inline {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink-1: var(--ink-1);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-on-accent: var(--ink-on-accent);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-button: var(--button);
+  --color-button-hover: var(--button-hover);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-serious: var(--serious);
+  --color-crit: var(--crit);
+  --color-good-ink: var(--good-ink);
+  --color-crit-ink: var(--crit-ink);
+  --color-flow-in: var(--flow-in);
+  --color-flow-out: var(--flow-out);
+
+  --radius-card: var(--radius-card);
+  --radius-ctl: var(--radius-ctl);
+  --radius-pill: var(--radius-pill);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-hero: var(--shadow-hero);
+}
+
+html {
+  background: var(--surface-0);
+  color: var(--ink-1);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100dvh;
+  background-color: var(--surface-0);
+  /* The prism ground: three soft glows, sized in viewport units so the
+     composition holds at any width. Fixed, so nothing moves on scroll. */
+  background-image:
+    radial-gradient(60vw 50vh at 8% -10%, var(--glow-1), transparent 70%),
+    radial-gradient(45vw 40vh at 100% 0%, var(--glow-2), transparent 70%),
+    radial-gradient(50vw 45vh at 70% 110%, var(--glow-3), transparent 70%);
+  background-attachment: fixed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.text-prism {
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bg-prism {
+  background: var(--gradient-prism);
+}
+
+/* Skeleton shimmer — loading states are shaped like their content. */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s var(--ease) infinite;
+  border-radius: var(--radius-ctl);
+}
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* Charts draw themselves in once (paths carry pathLength="1"); hover lifts
+   are 150ms. */
+.chart-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 900ms var(--ease) forwards;
+}
+
+.chart-grow {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: grow 520ms var(--ease) both;
+}
+
+@keyframes grow {
+  from { transform: scaleY(0); }
+  to { transform: none; }
+}
+
+.mark {
+  transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.fade-up {
+  animation: fade-up 420ms var(--ease) both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  .chart-draw { stroke-dasharray: none; stroke-dashoffset: 0; }
+}
+
+@media (forced-colors: active) {
+  .bg-prism { background: Canvas; border: 1px solid CanvasText; }
+  .text-prism { color: CanvasText; background: none; }
+}

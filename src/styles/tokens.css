@@ -1,0 +1,204 @@
+/* apps/finance/src/styles/tokens.css
+ *
+ * Prism's design tokens — the ONLY place a colour, radius, shadow or duration
+ * is written as a literal. Components consume these through the Tailwind
+ * theme bridge in app/globals.css, or as var(--…) in SVG.
+ *
+ * Theme selection: the inline script in app/layout.tsx stamps
+ * <html data-theme="light|dark"> before first paint (stored choice, else the
+ * OS preference). The media-query block below is the no-JS fallback; the
+ * :not([data-theme="light"]) guard lets an explicit light choice beat an OS
+ * that prefers dark.
+ *
+ * The categorical series (--c-1 … --c-8) are a validated set, not a mood
+ * board: the ORDER is the colour-blind-safety mechanism. Worst adjacent CVD
+ * ΔE 10.1 in both modes (target ≥ 8), worst adjacent normal-vision ΔE
+ * 20.3 light / 20.1 dark (floor 15), every slot ≥ 3:1 on --surface-1.
+ * Re-run the validator before changing a single hex (DESIGN.md §Colour).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces — four steps, never more. */
+  --surface-0: #f4f3fb; /* page */
+  --surface-1: #ffffff; /* cards, sidebar */
+  --surface-2: #f3f2fa; /* nested panels, inputs */
+  --surface-3: #e9e7f5; /* hover, raised */
+  --line: rgba(24, 20, 60, 0.08);
+  --line-strong: rgba(24, 20, 60, 0.16);
+
+  /* Ink */
+  --ink-1: #15122b;
+  --ink-2: #4b4766;
+  --ink-3: #6b6785;
+  --ink-on-accent: #ffffff;
+  /* Text inside a bright fill (amber, cyan, orange, emerald, lime tiles):
+     ink, not white — white on amber is 3.2:1. Same in both modes, because
+     the fill is the same in both modes. */
+  --ink-on-bright: #15122b;
+  /* Ink on the hero gradient — the gradient is identical in both modes. */
+  --on-hero: #ffffff;
+  --on-hero-soft: rgba(255, 255, 255, 0.9);
+  --on-hero-faint: rgba(255, 255, 255, 0.16);
+
+  /* Brand */
+  --accent: #7c3aed;
+  --accent-strong: #6d28d9;
+  --accent-soft: rgba(124, 58, 237, 0.1);
+  /* Accent as TEXT (links): 5.7:1 on white here, 6.6:1 on the dark card. */
+  --accent-ink: #6d28d9;
+  /* Filled buttons: the same violet in both modes, white label at 5.7:1 —
+     dark mode's brighter --accent would only reach 4.2:1. */
+  --button: #7c3aed;
+  --button-hover: #6d28d9;
+  --focus: #7c3aed;
+
+  /* The one hero gradient per screen (DESIGN.md rule 6): deep jewel tones so
+     white clears 4.5:1 at EVERY stop (min 6.0) and --on-hero-soft still clears
+     it too (min 5.1) — measured, not eyeballed. */
+  --gradient-prism: linear-gradient(125deg, #4c1d95 0%, #6d28d9 30%, #a21caf 62%, #be185d 88%, #be123c 112%);
+  --gradient-text: linear-gradient(90deg, #7c3aed, #db2777 60%, #ea580c);
+
+  /* Ambient ground — the three prism glows behind everything. */
+  --glow-1: rgba(124, 58, 237, 0.16);
+  --glow-2: rgba(219, 39, 119, 0.1);
+  --glow-3: rgba(8, 145, 178, 0.1);
+
+  /* Categorical series — fixed order, never cycled (validated set). */
+  --c-1: #7c3aed; /* violet  */
+  --c-2: #db2777; /* pink    */
+  --c-3: #d97706; /* amber   */
+  --c-4: #0891b2; /* cyan    */
+  --c-5: #ea580c; /* orange  */
+  --c-6: #059669; /* emerald */
+  --c-7: #2563eb; /* blue    */
+  --c-8: #65a30d; /* lime    */
+  --c-other: #8e8aa8;
+
+  /* Polarity pair — money in (cool) vs money out (warm). Diverging job, so
+     two hues that read as opposites; used only where the chart IS in-vs-out. */
+  --flow-in: #0d9488;
+  --flow-out: #e11d48;
+  --flow-mid: #e9e7f5;
+
+  /* Sequential — one hue, light → dark (heatmap, calendar). */
+  --seq-0: #f1eff9;
+  --seq-1: #ddd6fe;
+  --seq-2: #c4b5fd;
+  --seq-3: #a78bfa;
+  --seq-4: #7c3aed;
+  --seq-5: #5b21b6;
+
+  /* Status — reserved meaning, always shipped with an icon + a word. */
+  --good: #0ca30c;
+  --warn: #fab219;
+  --serious: #ec835a;
+  --crit: #d03b3b;
+  --good-ink: #0a7a0a;
+  --crit-ink: #b42323;
+
+  /* Chart chrome */
+  --grid: #eceaf4;
+  --axis: #d5d2e3;
+  --crosshair: rgba(21, 18, 43, 0.28);
+
+  /* Shape & motion */
+  --radius-card: 20px;
+  --radius-ctl: 12px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(24, 20, 60, 0.04), 0 10px 30px -16px rgba(91, 33, 182, 0.22);
+  --shadow-pop: 0 18px 50px -12px rgba(24, 20, 60, 0.28);
+  --shadow-hero: 0 24px 60px -24px rgba(124, 58, 237, 0.65);
+  --dur-fast: 150ms;
+  --dur-panel: 250ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-0: #0b0b1a;
+    --surface-1: #15152e;
+    --surface-2: #1c1c3a;
+    --surface-3: #26264b;
+    --line: rgba(255, 255, 255, 0.07);
+    --line-strong: rgba(255, 255, 255, 0.14);
+    --ink-1: #f5f4ff;
+    --ink-2: #bbb9d8;
+    --ink-3: #8f8db0;
+    --accent: #8b5cf6;
+    --accent-strong: #a78bfa;
+    --accent-soft: rgba(139, 92, 246, 0.16);
+    --accent-ink: #a78bfa;
+    --focus: #a78bfa;
+    --gradient-text: linear-gradient(90deg, #a78bfa, #f472b6 60%, #fb923c);
+    --glow-1: rgba(139, 92, 246, 0.28);
+    --glow-2: rgba(236, 72, 153, 0.16);
+    --glow-3: rgba(8, 145, 178, 0.18);
+    --c-1: #8b5cf6;
+    --c-2: #ec4899;
+    --c-7: #3b82f6;
+    --c-other: #6e6c8f;
+    --flow-in: #2dd4bf;
+    --flow-out: #fb7185;
+    --flow-mid: #2c2c52;
+    --seq-0: #1d1d3c;
+    --seq-1: #2e2560;
+    --seq-2: #47338f;
+    --seq-3: #6843c9;
+    --seq-4: #8b5cf6;
+    --seq-5: #c4b5fd;
+    --good-ink: #3ddc3d;
+    --crit-ink: #ff7a7a;
+    --grid: #22223f;
+    --axis: #34345c;
+    --crosshair: rgba(245, 244, 255, 0.35);
+    --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 40px -20px rgba(0, 0, 0, 0.7);
+    --shadow-pop: 0 20px 60px -12px rgba(0, 0, 0, 0.75);
+    --shadow-hero: 0 30px 80px -28px rgba(168, 85, 247, 0.75);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #0b0b1a;
+  --surface-1: #15152e;
+  --surface-2: #1c1c3a;
+  --surface-3: #26264b;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --ink-1: #f5f4ff;
+  --ink-2: #bbb9d8;
+  --ink-3: #8f8db0;
+  --accent: #8b5cf6;
+  --accent-strong: #a78bfa;
+  --accent-soft: rgba(139, 92, 246, 0.16);
+  --accent-ink: #a78bfa;
+  --focus: #a78bfa;
+  --gradient-text: linear-gradient(90deg, #a78bfa, #f472b6 60%, #fb923c);
+  --glow-1: rgba(139, 92, 246, 0.28);
+  --glow-2: rgba(236, 72, 153, 0.16);
+  --glow-3: rgba(8, 145, 178, 0.18);
+  --c-1: #8b5cf6;
+  --c-2: #ec4899;
+  --c-7: #3b82f6;
+  --c-other: #6e6c8f;
+  --flow-in: #2dd4bf;
+  --flow-out: #fb7185;
+  --flow-mid: #2c2c52;
+  --seq-0: #1d1d3c;
+  --seq-1: #2e2560;
+  --seq-2: #47338f;
+  --seq-3: #6843c9;
+  --seq-4: #8b5cf6;
+  --seq-5: #c4b5fd;
+  --good-ink: #3ddc3d;
+  --crit-ink: #ff7a7a;
+  --grid: #22223f;
+  --axis: #34345c;
+  --crosshair: rgba(245, 244, 255, 0.35);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 40px -20px rgba(0, 0, 0, 0.7);
+  --shadow-pop: 0 20px 60px -12px rgba(0, 0, 0, 0.75);
+  --shadow-hero: 0 30px 80px -28px rgba(168, 85, 247, 0.75);
+}
