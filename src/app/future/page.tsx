@@ -7,12 +7,14 @@
 
 import type { Metadata } from "next";
 import { CalendarClock, Repeat, Telescope } from "lucide-react";
+import { AddToCalendar } from "@/components/add-to-calendar";
 import { UpcomingList } from "@/components/blocks";
 import { ChartCard } from "@/components/chart-card";
 import { Legend } from "@/components/charts/core";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { CategoryIcon } from "@/components/category-icon";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
+import { remindable } from "@/lib/finance/calendar";
 import { addDays } from "@/lib/finance/dates";
 import { dayDate, money, money0, shortDate } from "@/lib/finance/format";
 import { analyze, FORECAST_DAYS } from "@/lib/finance/model";
@@ -60,6 +62,7 @@ export default async function FuturePage() {
   const outflow = next30.filter((e) => e.amount < 0).reduce((s, e) => s - e.amount, 0);
   const subs = a.streams.filter((s) => s.kind === "subscription" && s.amount < 0).sort((x, y) => monthlyCost(y) - monthlyCost(x));
   const subsMonthly = subs.reduce((s, x) => s + monthlyCost(x), 0);
+  const reminders = remindable(a.streams, data.accounts, true).length;
   const lowest = forecast.lowest;
   const end = forecast.points.at(-1)!;
 
@@ -130,7 +133,11 @@ export default async function FuturePage() {
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <Card className="p-5 sm:p-6 lg:col-span-7">
-          <CardHeader title="The next 30 days" subtitle="Paydays, bills and transfers we found repeating" />
+          <CardHeader
+            title="The next 30 days"
+            subtitle="Paydays, bills and transfers we found repeating"
+            action={reminders > 0 ? <AddToCalendar demo={data.source === "demo"} count={reminders} /> : undefined}
+          />
           <div className="mt-2">
             {next30.length ? (
               <UpcomingList events={next30} limit={14} />

@@ -126,9 +126,9 @@ export const INTEGRATIONS: IntegrationGroup[] = [
       {
         id: "calendar",
         name: "Bill reminders in your calendar",
-        adds: "Paydays and bills on Google Calendar, Apple Calendar or Outlook.",
-        how: "A private calendar feed (ICS), or the Google Calendar API.",
-        status: "planned",
+        adds: "Paydays and bills on Google Calendar, Apple Calendar or Outlook, with an alert before each one.",
+        how: "Add to calendar on the Future screen: every bill becomes one repeating event. Download again to refresh the amounts.",
+        status: "live",
       },
       {
         id: "csv",
