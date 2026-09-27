@@ -5,7 +5,7 @@
   "license": "UNLICENSED",
   "description": "Prism \u2014 personal finance in full colour. A Bespoke Intelligence Solutions product.",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "packageManager": "pnpm@10.13.1",
   "scripts": {

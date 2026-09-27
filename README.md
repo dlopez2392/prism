@@ -14,7 +14,7 @@ deployment with any other BIS software.
 
 ## Run it
 
-Requires Node 22+ and pnpm 10.
+Requires Node 22 and pnpm 10.
 
 ```bash
 pnpm install
