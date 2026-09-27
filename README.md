@@ -37,9 +37,13 @@ For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 
 ## Deploy
 
+Production: **https://prism.bis-rgv.com** (Vercel, auto-deploys every push to
+`main`). `vercel.json` makes each deploy run lint and the unit tests before the
+build, so a failing test blocks a release even if CI is skipped. With no Plaid
+keys the deployment serves the demo household.
+
 Any Next.js host works. On Vercel: import the repository, keep the detected
-Next.js settings, and add the environment variables from `.env.example`. With
-no Plaid keys the deployment serves the demo household.
+Next.js settings, and add the environment variables from `.env.example`.
 
 ## Screens
 
@@ -94,8 +98,8 @@ CI (`.github/workflows/ci.yml`) runs all four on every push.
 
 ## License
 
-Proprietary. © 2026 Bespoke Intelligence Solutions. All rights reserved —
-see [`LICENSE`](./LICENSE).
+Proprietary. © 2026 Bespoke Intelligence Solutions. All rights reserved. The
+source is public for reference only; see [`LICENSE`](./LICENSE).
 
 ## Prototype limits (deliberate) and next steps
 
