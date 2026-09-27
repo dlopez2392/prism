@@ -2,6 +2,7 @@
   "name": "prism",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "Prism \u2014 personal finance in full colour. A Bespoke Intelligence Solutions product.",
   "engines": {
     "node": ">=22"

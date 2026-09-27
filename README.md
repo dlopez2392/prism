@@ -92,6 +92,11 @@ pnpm build
 
 CI (`.github/workflows/ci.yml`) runs all four on every push.
 
+## License
+
+Proprietary. © 2026 Bespoke Intelligence Solutions. All rights reserved —
+see [`LICENSE`](./LICENSE).
+
 ## Prototype limits (deliberate) and next steps
 
 - **Storage:** linked-bank tokens live in an AES-256-GCM sealed, httpOnly
