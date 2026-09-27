@@ -11,6 +11,20 @@
 - Bank data: Plaid through `src/lib/plaid/*`, mapped onto
   `src/lib/finance/types.ts`. Without `PLAID_CLIENT_ID`/`PLAID_SECRET` the app
   runs on the deterministic demo household in `src/lib/finance/demo.ts`.
+- **Committed integrations (owner-approved, do not drop or substitute without
+  the owner's sign-off)** — full notes in `docs/ROADMAP.md`:
+  1. Investment accounts through Plaid (already built in).
+  2. Coinbase for crypto (read-only OAuth).
+  3. A credit-score partner such as Experian or SavvyMoney. Credit Karma has
+     no way for other apps to read its data.
+  4. A home-value service such as ATTOM, since Zillow closed its public data
+     access in 2021.
+  5. Bill reminders in your calendar (private ICS feed per person).
+  6. A way for people to ask Claude or ChatGPT about their own money,
+     read-only (MCP server that cites its transactions).
+- Product roadmap order: accounts and sign-in → Plaid webhooks + stored cursor
+  → editable budgets and goals → household views → fallback aggregator → the
+  integrations above. Keep `docs/ROADMAP.md` current as items ship.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

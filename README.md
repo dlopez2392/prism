@@ -109,8 +109,7 @@ source is public for reference only; see [`LICENSE`](./LICENSE).
   `/transactions/sync` cursor so each load fetches only what changed.
 - **Budgets and goals** are drafted from history (live) or seeded (demo) and
   are not yet editable or saved.
-- **Next features, in order:** accounts and sign-in → Plaid webhooks + stored
-  cursor → editable budgets and goals → household ("yours, mine, ours")
-  views → a fallback aggregator (Finicity or MX) → a read-only MCP server so
-  people can ask their AI assistant about their money, with the transactions
-  cited.
+- **What's next:** see [`docs/ROADMAP.md`](./docs/ROADMAP.md) — the product
+  roadmap in order, and the six owner-approved integrations (Plaid
+  investments, Coinbase, a credit-score partner, a home-value service,
+  calendar bill reminders, and read-only AI access to your own money).
