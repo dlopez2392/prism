@@ -52,9 +52,9 @@ Next.js settings, and add the environment variables from `.env.example`.
 | **Overview** | Net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
 | **Cash flow** | Income → categories → saved **Sankey**, money in vs out by month, what you kept each month, savings-rate trend |
 | **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, searchable ledger |
-| **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick |
-| **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags |
-| **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider |
+| **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs |
+| **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
+| **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors |
 | **Connections** | Per-institution health, how data is protected, and an honest catalogue of every integration and its real access path |
 
@@ -68,9 +68,11 @@ src/lib/finance/   provider-neutral model + pure analytics (cash flow, budget
                    pacing, recurring detection, forecast, Sankey, insights)
 src/lib/charts/    chart geometry (scales, curves, bars, arcs, treemap)
 src/lib/plaid/     dependency-free Plaid client + mapping onto the model
-src/lib/server/    data loading (demo vs live) and the sealed token vault
+src/lib/server/    data loading (demo vs live), the sealed token vault, the
+                   on-device plan (cookies + Server Actions)
 src/components/    chart kit (SVG, no chart library) and UI blocks
 src/app/           the eight screens + /api/plaid/{link-token,exchange,disconnect}
+                   + /calendar/{bills,demo}.ics
 ```
 
 - **Money is integer cents** end to end; dates are calendar dates, never instants.
@@ -84,6 +86,16 @@ src/app/           the eight screens + /api/plaid/{link-token,exchange,disconnec
   computed from.
 - **Budget projections use history, not straight lines**, so rent on the 1st
   never makes Housing look thirty times over budget.
+- **Your plan, on your device:** edited budgets and goals are saved in two
+  httpOnly cookies and applied before any chart is drawn, so an edit moves
+  every screen at once. Whatever comes back from a cookie is re-validated,
+  all or nothing.
+- **Calendar reminders are real iCalendar:** one repeating series per bill
+  (so "delete all future events" works when a subscription ends), all-day
+  dates that land on the right day in any zone, month-end bills that clamp to
+  the last day of short months, and stable UIDs so a fresh download updates
+  rather than duplicates. `/calendar/bills.ics` is the person's own file;
+  `/calendar/demo.ics` is a public, subscribable feed of the demo household.
 
 ## Gates
 
@@ -107,8 +119,11 @@ source is public for reference only; see [`LICENSE`](./LICENSE).
   cookie so the prototype needs no database. Production moves them to a
   per-user, KMS-encrypted server-side store with sign-in, and persists the
   `/transactions/sync` cursor so each load fetches only what changed.
-- **Budgets and goals** are drafted from history (live) or seeded (demo) and
-  are not yet editable or saved.
+- **Budgets and goals** are editable and saved **on this device only** (two
+  cookies) until Prism has accounts; then the plan is imported once.
+- **Calendar reminders** for real bills are a download, not yet a live feed:
+  a calendar app fetches a subscribed URL without the person's cookies, so a
+  self-updating feed needs a revocable per-person token, which needs accounts.
 - **What's next:** see [`docs/ROADMAP.md`](./docs/ROADMAP.md) — the product
   roadmap in order, and the six owner-approved integrations (Plaid
   investments, Coinbase, a credit-score partner, a home-value service,

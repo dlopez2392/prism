@@ -19,12 +19,22 @@
      no way for other apps to read its data.
   4. A home-value service such as ATTOM, since Zillow closed its public data
      access in 2021.
-  5. Bill reminders in your calendar (private ICS feed per person).
+  5. Bill reminders in your calendar (private ICS feed per person). Stage 1
+     shipped: file download + public demo feed (`src/lib/finance/calendar.ts`).
   6. A way for people to ask Claude or ChatGPT about their own money,
      read-only (MCP server that cites its transactions).
 - Product roadmap order: accounts and sign-in → Plaid webhooks + stored cursor
   → editable budgets and goals → household views → fallback aggregator → the
-  integrations above. Keep `docs/ROADMAP.md` current as items ship.
+  integrations above. Keep `docs/ROADMAP.md` current as items ship. The owner
+  chose "not yet" on accounts (2026-09-27); if asked, the preferred region is
+  US East. Budgets and goals are editable ON THE DEVICE for now.
+- The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
+  overlay) + `src/lib/server/plan-store.ts` (cookies) +
+  `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,
+  so screens never read cookies themselves. Cookie values are untrusted:
+  validators are all-or-nothing. Editor forms submit via `onSubmit` +
+  `startTransition`, never `<form action>`, because React resets a form after
+  its action and would wipe the fields on a validation error.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
