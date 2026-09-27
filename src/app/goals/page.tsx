@@ -10,12 +10,14 @@ import { ChartCard } from "@/components/chart-card";
 import { Legend } from "@/components/charts/core";
 import { ProgressRing } from "@/components/charts/radial";
 import { TimeSeriesChart } from "@/components/charts/time-series";
+import { GoalEditor, RestoreGoals } from "@/components/goal-editor";
 import { GoalWhatIf } from "@/components/goal-what-if";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
 import { slotColor } from "@/lib/finance/categories";
 import { addMonths, lastMonths } from "@/lib/finance/dates";
 import { money0, monthShort, monthYear, percent } from "@/lib/finance/format";
 import { projectGoal } from "@/lib/finance/networth";
+import { goalSettings, MAX_GOALS } from "@/lib/finance/plan";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Goals" };
@@ -25,16 +27,19 @@ const AHEAD = 24;
 export default async function GoalsPage() {
   const data = await getFinance();
   const { goals, today } = data;
+  const settings = goals.map(goalSettings);
+  const restore = data.source === "demo" && data.planEdited.goals ? <RestoreGoals /> : null;
 
   if (goals.length === 0) {
     return (
       <div>
-        <PageHeader title="Goals" subtitle="What you're saving for, and when you'll get there." />
+        <PageHeader title="Goals" subtitle="What you're saving for, and when you'll get there." action={restore} />
         <Card>
           <EmptyState
             icon={PiggyBank}
             title="Your goals will live here"
             body="Name something you're saving for and a monthly amount — each goal gets a ring, a finish date, and a what-if slider."
+            action={<GoalEditor mode="empty" others={settings} today={today} />}
           />
         </Card>
       </div>
@@ -48,14 +53,30 @@ export default async function GoalsPage() {
   const months = [...past.map((m) => `${m}-01`), ...Array.from({ length: AHEAD }, (_, i) => addMonths(`${past.at(-1)}-01`, i + 1))];
   const labels = months.map((m) => monthYear(m));
   const series = goals.map((g) => {
-    const values: number[] = g.history.map((v) => v / g.target);
+    // A goal started on this device has less history than the window: its
+    // line begins where Prism first heard of it, not at an invented zero.
+    const known = g.history.slice(-past.length);
+    const values: (number | null)[] = [...Array<null>(past.length - known.length).fill(null), ...known.map((v) => v / g.target)];
     for (let k = 1; k <= AHEAD; k++) values.push(Math.min(1, (g.saved + g.monthlyContribution * k) / g.target));
     return { id: g.id, label: `${g.emoji} ${g.name}`, color: slotColor(g.colorSlot), values, dashFrom: 12 };
   });
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Goals" subtitle="What you're saving for, and when you'll get there." />
+      <PageHeader
+        title="Goals"
+        subtitle={data.planEdited.goals ? "What you're saving for, saved on this device, and when you'll get there." : "What you're saving for, and when you'll get there."}
+        action={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {restore}
+            {goals.length < MAX_GOALS ? (
+              <GoalEditor mode="new" others={settings} today={today} />
+            ) : (
+              <span className="text-xs text-ink-3">{MAX_GOALS} goals is the most Prism tracks at once.</span>
+            )}
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card hero className="p-5 sm:p-6 lg:col-span-4">
@@ -102,7 +123,10 @@ export default async function GoalsPage() {
           const p = projectGoal(g, today);
           const color = slotColor(g.colorSlot);
           return (
-            <Card as="li" key={g.id} className="flex flex-col items-center p-5 text-center">
+            <Card as="li" key={g.id} className="relative flex flex-col items-center p-5 text-center">
+              <div className="absolute top-3 right-3">
+                <GoalEditor mode="edit" goal={goalSettings(g)} others={settings} today={today} />
+              </div>
               <ProgressRing ratio={p.progress} color={color} size={128} stroke={13} label={`${g.name}: ${percent(p.progress)} saved`}>
                 <span aria-hidden className="text-3xl">
                   {g.emoji}
@@ -135,7 +159,7 @@ export default async function GoalsPage() {
         table={{
           caption: "Goal progress by month, as a share of target",
           columns: ["Month", ...goals.map((g) => g.name)],
-          rows: labels.map((l, i) => [i > 12 ? `${l} (projected)` : l, ...series.map((s) => percent(s.values[i] ?? 0))]),
+          rows: labels.map((l, i) => [i > 12 ? `${l} (projected)` : l, ...series.map((s) => (s.values[i] == null ? "—" : percent(s.values[i]!)))]),
         }}
       >
         <TimeSeriesChart

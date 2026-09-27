@@ -9,6 +9,7 @@
 
 import { categoryTotals } from "./cashflow";
 import { addDays, addMonths, dayOfMonth, daysInMonth, monthKey, startOfMonth } from "./dates";
+import { SPEND_CATEGORIES } from "./categories";
 import type { Budget, Cents, ISODate, SpendCategoryId, Transaction } from "./types";
 
 export type BudgetState = "on_track" | "at_risk" | "over";
@@ -87,4 +88,16 @@ export function daysLeftInMonth(today: ISODate): number {
 /** The last day of `today`'s month. */
 export function monthEnd(today: ISODate): ISODate {
   return addDays(addMonths(startOfMonth(today), 1), -1);
+}
+
+/**
+ * What each category usually costs a month: the average over the last three
+ * FULL months. The editor shows it beside every limit, so a person sets a
+ * budget against what's real rather than a guess.
+ */
+export function typicalMonthlySpend(txns: Transaction[], today: ISODate, months = HISTORY_MONTHS): Record<SpendCategoryId, Cents> {
+  const from = addMonths(startOfMonth(today), -months);
+  const to = addDays(startOfMonth(today), -1);
+  const totals = categoryTotals(txns, from, to);
+  return Object.fromEntries(SPEND_CATEGORIES.map((c) => [c, Math.max(0, Math.round(totals[c] / months))])) as Record<SpendCategoryId, Cents>;
 }

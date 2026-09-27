@@ -3,19 +3,25 @@
 // src/components/goal-what-if.tsx
 //
 // "What if I put in a bit more?" — drag the monthly amount and watch the
-// finish date move. Pure arithmetic from projectGoal; nothing is saved.
+// finish date move. Pure arithmetic from projectGoal; nothing is saved until
+// the person chooses "Plan on this amount", which writes it to the goal.
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
+import { CircleCheck } from "lucide-react";
 import clsx from "clsx";
+import { buttonPrimary } from "@/components/dialog";
 import { slotColor } from "@/lib/finance/categories";
 import { money0, monthYear } from "@/lib/finance/format";
 import { monthsUntil, projectGoal } from "@/lib/finance/networth";
+import { IDLE } from "@/lib/finance/plan";
 import type { Goal } from "@/lib/finance/types";
+import { setGoalMonthly } from "@/lib/server/plan-actions";
 
 export function GoalWhatIf({ goals, today }: { goals: Goal[]; today: string }) {
   const [id, setId] = useState(goals[0]?.id);
   const goal = goals.find((g) => g.id === id) ?? goals[0];
   const [monthly, setMonthly] = useState<Record<string, number>>({});
+  const [saved, save, saving] = useActionState(setGoalMonthly, IDLE);
   if (!goal) return null;
 
   const current = projectGoal(goal, today);
@@ -91,6 +97,26 @@ export function GoalWhatIf({ goals, today }: { goals: Goal[]; today: string }) {
           note={monthsUntil(today, goal.targetDate) <= 0 ? "Target date has passed" : tried.onTrack ? "You're on track" : "Needed to arrive on time"}
         />
       </div>
+
+      <form action={save} className="mt-4 flex min-h-10 flex-wrap items-center justify-end gap-3">
+        <input type="hidden" name="id" value={goal.id} />
+        <input type="hidden" name="monthly" value={amount} />
+        <p role="status" className="flex items-center gap-1 text-xs font-semibold text-good-ink">
+          {saved.status === "saved" && amount === goal.monthlyContribution ? (
+            <>
+              <CircleCheck aria-hidden className="size-3.5" />
+              {saved.message}
+            </>
+          ) : saved.status === "error" ? (
+            <span className="text-crit-ink">{saved.message}</span>
+          ) : null}
+        </p>
+        {amount !== goal.monthlyContribution ? (
+          <button type="submit" disabled={saving} className={buttonPrimary}>
+            {saving ? "Saving…" : `Plan on ${money0(amount)} a month`}
+          </button>
+        ) : null}
+      </form>
     </div>
   );
 }

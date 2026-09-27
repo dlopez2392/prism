@@ -7,11 +7,12 @@
 
 import type { Metadata } from "next";
 import { CircleCheck, OctagonAlert, Target, TriangleAlert } from "lucide-react";
+import { BudgetEditor } from "@/components/budget-editor";
 import { ProgressRing } from "@/components/charts/radial";
 import { Key } from "@/components/charts/core";
 import { CategoryIcon } from "@/components/category-icon";
 import { Card, CardHeader, EmptyState, Meter, PageHeader, StatusPill } from "@/components/ui";
-import { daysLeftInMonth, monthEnd, type BudgetStatus } from "@/lib/finance/budgets";
+import { daysLeftInMonth, monthEnd, typicalMonthlySpend, type BudgetStatus } from "@/lib/finance/budgets";
 import { CATEGORIES, categoryColor } from "@/lib/finance/categories";
 import { money0, monthLong, shortDate } from "@/lib/finance/format";
 import { analyze } from "@/lib/finance/model";
@@ -32,7 +33,11 @@ export default async function BudgetsPage() {
   const left = daysLeftInMonth(a.today);
   const end = monthEnd(a.today);
   const month = monthLong(a.today);
-  const drafted = data.source === "plaid";
+  const edited = data.planEdited.budgets;
+  const drafted = data.source === "plaid" && !edited;
+  const editor = (variant: "ghost" | "primary", label?: string) => (
+    <BudgetEditor budgets={data.budgets} typical={typicalMonthlySpend(data.transactions, a.today)} edited={edited} variant={variant} label={label} />
+  );
   const scale = Math.max(1, ...budgets.map((b) => Math.max(b.limit, b.projected, b.spent))) * 1.08;
   const sorted = [...budgets].sort((x, y) => y.limit - x.limit);
 
@@ -41,7 +46,21 @@ export default async function BudgetsPage() {
       <div>
         <PageHeader title="Budgets" subtitle={`Your plan for ${month}.`} />
         <Card>
-          <EmptyState icon={Target} title="Budgets appear once there's a month of spending" body="We draft a budget per category from your last three months, so you start from what's real." />
+          {edited ? (
+            <EmptyState
+              icon={Target}
+              title="No budgets set"
+              body="Give any category a monthly limit and we'll pace your spending against it all month."
+              action={editor("primary", "Set a budget")}
+            />
+          ) : (
+            <EmptyState
+              icon={Target}
+              title="Budgets appear once there's a month of spending"
+              body="We draft a budget per category from your last three months, so you start from what's real. Or set your own now."
+              action={editor("primary", "Set a budget")}
+            />
+          )}
         </Card>
       </div>
     );
@@ -52,7 +71,14 @@ export default async function BudgetsPage() {
       <PageHeader
         eyebrow={`${left} ${left === 1 ? "day" : "days"} left in ${month}`}
         title="Budgets"
-        subtitle={drafted ? "Drafted from your last three months — a starting point from what's real." : `Your plan for ${month}, and how it's going.`}
+        subtitle={
+          drafted
+            ? "Drafted from your last three months — a starting point from what's real. Change any line to make it yours."
+            : edited
+              ? `Your plan for ${month}, saved on this device, and how it's going.`
+              : `Your plan for ${month}, and how it's going.`
+        }
+        action={editor("ghost")}
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">

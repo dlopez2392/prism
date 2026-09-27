@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { budgetStatuses, budgetTotals, daysLeftInMonth } from "./budgets";
+import { budgetStatuses, budgetTotals, daysLeftInMonth, typicalMonthlySpend } from "./budgets";
 import { monthly, tx } from "./test-helpers";
 
 const history = ["2026-06", "2026-07", "2026-08"];
@@ -47,5 +47,21 @@ describe("daysLeftInMonth", () => {
   it("counts today", () => {
     expect(daysLeftInMonth("2026-09-30")).toBe(1);
     expect(daysLeftInMonth("2026-02-01")).toBe(28);
+  });
+});
+
+describe("typicalMonthlySpend", () => {
+  it("averages the last three FULL months and ignores the current one", () => {
+    const txns = [
+      ...monthly(history, 1, -195_000, "Rent", "housing"),
+      ...monthly(history, 10, [-30_000, -45_000, -60_000], "Groceries", "food"),
+      tx("2026-09-02", -999_999, "This month", "food"),
+      tx("2026-08-03", 500_000, "Paycheck", "income"),
+    ];
+    const typical = typicalMonthlySpend(txns, "2026-09-15");
+    expect(typical.housing).toBe(195_000);
+    expect(typical.food).toBe(45_000);
+    expect(typical.travel).toBe(0);
+    expect(Object.keys(typical)).toHaveLength(9);
   });
 });

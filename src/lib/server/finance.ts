@@ -11,7 +11,8 @@ import { categoryTotals } from "@/lib/finance/cashflow";
 import { SPEND_CATEGORIES } from "@/lib/finance/categories";
 import { addDays, addMonths, startOfMonth } from "@/lib/finance/dates";
 import { buildDemoData } from "@/lib/finance/demo";
-import type { FinanceData, Holding, Institution, ISODate } from "@/lib/finance/types";
+import { applyPlan } from "@/lib/finance/plan";
+import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/finance/types";
 import {
   getAccounts,
   getHoldings,
@@ -21,6 +22,7 @@ import {
   type PlaidConfig,
 } from "@/lib/plaid/client";
 import { mapAccount, mapHoldings, mapTransaction, suggestedLimit } from "@/lib/plaid/map";
+import { readPlan } from "./plan-store";
 import { open, VAULT_COOKIE, vaultKey, type VaultItem } from "./vault";
 
 export type Loaded = FinanceData & {
@@ -29,6 +31,8 @@ export type Loaded = FinanceData & {
   plaidReady: boolean;
   /** The viewer's local hour, for "Good morning". */
   localHour: number;
+  /** Which lists the person has edited on this device (vs. seeded or drafted). */
+  planEdited: { budgets: boolean; goals: boolean };
 };
 
 export function hourIn(zone: string | undefined, now = new Date()): number {
@@ -53,26 +57,51 @@ export function todayIn(zone: string | undefined, now = new Date()): ISODate {
   return now.toISOString().slice(0, 10);
 }
 
+/** The linked banks in this browser's vault — empty when there are none or no key. */
+function vaultItems(jar: Jar): VaultItem[] {
+  try {
+    const key = vaultKey();
+    return key ? (open(jar.get(VAULT_COOKIE)?.value, key)?.items ?? []) : [];
+  } catch {
+    return [];
+  }
+}
+
+type Jar = Awaited<ReturnType<typeof cookies>>;
+
+/** "Today" for this request, in the viewer's calendar. */
+export async function requestToday(): Promise<ISODate> {
+  return todayIn((await cookies()).get("prism-tz")?.value);
+}
+
+/**
+ * The goals the data source provides before any edit on this device — the
+ * demo household's, or none for a live bank. Cheap: never calls the bank.
+ */
+export async function sourceGoals(): Promise<Goal[]> {
+  const jar = await cookies();
+  const live = plaidConfig() !== null && vaultItems(jar).length > 0;
+  return live ? [] : buildDemoData(todayIn(jar.get("prism-tz")?.value)).goals;
+}
+
 export const getFinance = cache(async (): Promise<Loaded> => {
   const jar = await cookies();
   const zone = jar.get("prism-tz")?.value;
   const today = todayIn(zone);
   const localHour = hourIn(zone);
   const config = plaidConfig();
-  let items: VaultItem[] = [];
-  try {
-    const key = vaultKey();
-    items = key ? (open(jar.get(VAULT_COOKIE)?.value, key)?.items ?? []) : [];
-  } catch {
-    items = [];
-  }
-  if (!config || items.length === 0) {
-    return { ...buildDemoData(today), notice: null, plaidReady: config !== null, localHour };
-  }
-  return { ...(await loadPlaid(config, items, today)), localHour };
+  const items = vaultItems(jar);
+  const plan = readPlan(jar);
+  const planEdited = { budgets: plan.budgets !== null, goals: plan.goals !== null };
+  const base =
+    !config || items.length === 0
+      ? { ...buildDemoData(today), notice: null, plaidReady: config !== null }
+      : await loadPlaid(config, items, today);
+  // The person's own edits win over seeded or drafted budgets and goals.
+  return { ...applyPlan(base, plan), localHour, planEdited };
 });
 
-async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate): Promise<Omit<Loaded, "localHour">> {
+async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate): Promise<Omit<Loaded, "localHour" | "planEdited">> {
   const institutions: Institution[] = [];
   const accounts: FinanceData["accounts"] = [];
   const transactions: FinanceData["transactions"] = [];

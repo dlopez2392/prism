@@ -52,7 +52,7 @@ export function DisconnectButton({ itemId, name }: { itemId: string; name: strin
           onChange={(e) => setTyped(e.target.value)}
           aria-label={`Type ${name} to confirm`}
           placeholder={name}
-          className="mt-4 h-10 w-full rounded-ctl border border-line bg-surface-2 px-3 text-sm focus:border-[var(--focus)] focus:outline-none"
+          className="mt-4 h-10 w-full rounded-ctl border border-line bg-surface-2 px-3 text-sm focus:border-[var(--focus)]"
         />
         {error ? <p className="mt-2 text-xs font-semibold text-crit-ink">{error}</p> : null}
         <div className="mt-5 flex justify-end gap-2">

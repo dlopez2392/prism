@@ -45,7 +45,7 @@ export function TransactionsTable({ transactions, accountNames }: { transactions
               setShown(PAGE);
             }}
             placeholder="Search a merchant or amount"
-            className="h-10 w-full rounded-ctl border border-line bg-surface-2 pr-3 pl-9 text-sm text-ink-1 placeholder:text-ink-3 focus:border-[var(--focus)] focus:outline-none"
+            className="h-10 w-full rounded-ctl border border-line bg-surface-2 pr-3 pl-9 text-sm text-ink-1 placeholder:text-ink-3 focus:border-[var(--focus)]"
           />
         </label>
         <label className="sm:w-52">
@@ -56,7 +56,7 @@ export function TransactionsTable({ transactions, accountNames }: { transactions
               setCategory(e.target.value as CategoryId | "all");
               setShown(PAGE);
             }}
-            className="h-10 w-full rounded-ctl border border-line bg-surface-2 px-3 text-sm font-semibold text-ink-1 focus:border-[var(--focus)] focus:outline-none"
+            className="h-10 w-full rounded-ctl border border-line bg-surface-2 px-3 text-sm font-semibold text-ink-1 focus:border-[var(--focus)]"
           >
             {FILTERS.map((c) => (
               <option key={c} value={c}>
