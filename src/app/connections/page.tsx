@@ -1,4 +1,4 @@
-// apps/finance/src/app/connections/page.tsx — what's linked, how healthy each
+// src/app/connections/page.tsx — what's linked, how healthy each
 // link is, and everything Prism can connect to next.
 //
 // Hero (the one --gradient-prism card): the connect action and the promise

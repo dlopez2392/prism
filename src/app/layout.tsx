@@ -3,6 +3,8 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { BottomNav, PrismMark, Sidebar } from "@/components/shell";
 import { ThemeToggle, THEME_SCRIPT } from "@/components/theme-toggle";
 import { ConnectBank } from "@/components/connect-bank";
+import { BisMark } from "@/components/bis-mark";
+import { BRAND } from "@/lib/brand";
 import { getFinance } from "@/lib/server/finance";
 import { TriangleAlert } from "lucide-react";
 import Link from "next/link";
@@ -16,8 +18,12 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Prism — your money in full colour", template: "%s · Prism" },
-  description: "See where your money goes, what's coming next, and how far you've come — in one vivid picture.",
+  title: { default: `${BRAND.product} — your money in full colour`, template: `%s · ${BRAND.product}` },
+  description: `See where your money goes, what's coming next, and how far you've come — in one vivid picture. A ${BRAND.company} product.`,
+  applicationName: BRAND.product,
+  authors: [{ name: BRAND.company }],
+  creator: BRAND.company,
+  publisher: BRAND.company,
 };
 
 export const viewport: Viewport = {
@@ -42,7 +48,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-line bg-surface-0/75 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
               <Link href="/" className="flex items-center gap-2 lg:hidden">
                 <PrismMark className="size-7" />
-                <span className="text-lg font-extrabold tracking-tight">Prism</span>
+                <span className="text-lg font-extrabold tracking-tight">{BRAND.product}</span>
               </Link>
               <div className="hidden text-sm text-ink-3 lg:block">
                 {data.source === "demo" ? (
@@ -72,7 +78,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </Link>
               </div>
             ) : null}
-            <main className="px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-14 lg:pt-7">{children}</main>
+            <main className="px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-14 lg:pt-7">
+              {children}
+              <footer className="mt-12 flex flex-col gap-2 border-t border-line pt-5 text-xs text-ink-3 lg:flex-row lg:items-center lg:justify-between">
+                <span className="flex items-center gap-2">
+                  <BisMark size={14} className="shrink-0 text-ink-2" />
+                  {BRAND.product} is a product of {BRAND.company} ({BRAND.companyShort}). © {data.today.slice(0, 4)}
+                </span>
+                <span>Information, not financial advice. Prism can read your accounts but can never move money.</span>
+              </footer>
+            </main>
           </div>
         </div>
         <BottomNav />

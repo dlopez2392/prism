@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/categories.ts
+// src/lib/finance/categories.ts
 //
 // The category taxonomy and its colour assignment. A category's colour slot is
 // FIXED here — colour follows the entity, never its rank — so "Food & dining"

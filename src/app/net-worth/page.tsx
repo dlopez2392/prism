@@ -1,4 +1,4 @@
-// apps/finance/src/app/net-worth/page.tsx — everything you own, minus
+// src/app/net-worth/page.tsx — everything you own, minus
 // everything you owe.
 //
 // Hero (the one --gradient-prism card): net worth now. Then the 12-month

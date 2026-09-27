@@ -1,4 +1,4 @@
-// apps/finance/src/components/blocks.tsx
+// src/components/blocks.tsx
 //
 // Composite, server-rendered pieces shared by several screens: stat tiles,
 // insight cards (with their evidence one tap away), transaction rows and the

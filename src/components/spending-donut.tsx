@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/spending-donut.tsx
+// src/components/spending-donut.tsx
 //
 // The category donut and its legend list, sharing one highlight: hover a row
 // and its slice lifts; hover a slice and its row lights. ≤ 6 slices plus

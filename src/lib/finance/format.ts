@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/format.ts
+// src/lib/finance/format.ts
 //
 // Formatting happens only at the edge (DESIGN.md rule 8). Every formatter is
 // pinned to en-US and UTC so the server render and the browser hydrate to the

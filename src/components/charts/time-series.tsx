@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/charts/time-series.tsx
+// src/components/charts/time-series.tsx
 //
 // Lines and areas over time, with a crosshair that finds the X: readers aim
 // at a date, never at a 2px line. Supports a projection (dashed from an

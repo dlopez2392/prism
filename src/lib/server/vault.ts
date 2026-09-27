@@ -1,4 +1,4 @@
-// apps/finance/src/lib/server/vault.ts
+// src/lib/server/vault.ts
 //
 // Where a linked bank's Plaid access token lives in this prototype: an
 // AES-256-GCM sealed, httpOnly cookie. The token never reaches browser

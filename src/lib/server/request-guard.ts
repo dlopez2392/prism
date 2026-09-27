@@ -1,4 +1,4 @@
-// apps/finance/src/lib/server/request-guard.ts
+// src/lib/server/request-guard.ts
 //
 // The Plaid routes change what bank data this browser can see, so they accept
 // only same-origin JSON POSTs. SameSite=Lax already keeps the vault cookie off

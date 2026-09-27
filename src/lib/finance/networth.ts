@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/networth.ts
+// src/lib/finance/networth.ts
 //
 // Net worth, its history, and what it is made of. Account histories are
 // month-end balances (oldest first), so every series here has one point per

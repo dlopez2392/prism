@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/charts/treemap-chart.tsx
+// src/components/charts/treemap-chart.tsx
 //
 // Holdings as tiles sized by value, coloured by asset class (identity). A
 // label goes inside a tile only when it fits with room to spare; otherwise

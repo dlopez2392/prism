@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/dates.ts
+// src/lib/finance/dates.ts
 //
 // Calendar arithmetic on ISO dates. Everything goes through UTC midnight so
 // there is no DST hour to gain or lose: a "day" here is a calendar square,

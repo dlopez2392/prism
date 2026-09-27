@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/chart-card.tsx
+// src/components/chart-card.tsx
 //
 // A card that holds one chart and its table twin. The tooltip enhances; the
 // table guarantees — every value on the chart is reachable without hovering

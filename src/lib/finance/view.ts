@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/view.ts
+// src/lib/finance/view.ts
 //
 // Small presentational decisions shared by screens, kept out of components so
 // they can be tested: how categories fold for a donut, how a greeting reads.

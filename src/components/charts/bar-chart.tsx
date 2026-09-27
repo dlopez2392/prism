@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/charts/bar-chart.tsx
+// src/components/charts/bar-chart.tsx
 //
 // Columns over time — grouped (income vs spending) or stacked (spending by
 // category). Bars are capped at 24px and never fill their slot; each has a

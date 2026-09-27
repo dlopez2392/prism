@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/recurring.ts
+// src/lib/finance/recurring.ts
 //
 // Recurring-stream detection: paychecks, rent, bills and subscriptions found
 // from the transactions themselves, so the forecast works for any provider

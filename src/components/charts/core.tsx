@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/charts/core.tsx
+// src/components/charts/core.tsx
 //
 // Shared chart plumbing: measuring, value formats, the tooltip and the legend.
 // Values cross the server→client boundary as data, so formats travel as

@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/transactions-table.tsx
+// src/components/transactions-table.tsx
 //
 // Every transaction, searchable and filterable by category, newest first.
 // The list arrives with the page; filtering is instant because it is local.

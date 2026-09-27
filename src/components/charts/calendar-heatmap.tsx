@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/charts/calendar-heatmap.tsx
+// src/components/charts/calendar-heatmap.tsx
 //
 // Daily spending as a calendar — weeks across, weekdays down. Magnitude job,
 // so ONE hue light→dark (the --seq ramp, which flips in dark mode), binned by

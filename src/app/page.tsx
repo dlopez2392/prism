@@ -1,4 +1,4 @@
-// apps/finance/src/app/page.tsx — Overview: the one-glance picture.
+// src/app/page.tsx — Overview: the one-glance picture.
 //
 // Hero: net worth (the one --gradient-prism card on this screen). Then the
 // four numbers a person checks most, the month's spending pace against last

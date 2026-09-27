@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/forecast.ts
+// src/lib/finance/forecast.ts
 //
 // The forward view: where the checking balance is heading, day by day, and
 // how much is genuinely safe to spend before the next paycheck. Budgeting apps

@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/disconnect-button.tsx
+// src/components/disconnect-button.tsx
 //
 // Removing a bank is destructive (its history leaves the app), so it confirms
 // by typing the bank's name — never a reflexive "Are you sure?".

@@ -1,4 +1,4 @@
-// apps/finance/src/lib/plaid/map.ts
+// src/lib/plaid/map.ts
 //
 // Plaid → the domain model. Three conventions differ and each is a classic bug:
 //   1. Sign. Plaid amounts are POSITIVE when money leaves the account; ours are

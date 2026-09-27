@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/charts/radial.tsx
+// src/components/charts/radial.tsx
 //
 // The round charts: the category donut, activity-style budget rings, a single
 // progress ring (budgets, goals) and the credit-score gauge. Donut slices are

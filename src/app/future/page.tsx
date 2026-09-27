@@ -1,4 +1,4 @@
-// apps/finance/src/app/future/page.tsx — the forward view.
+// src/app/future/page.tsx — the forward view.
 //
 // Hero (the one --gradient-prism card): safe to spend until payday. The star
 // is the balance forecast — the last 30 days solid, the next 60 dashed, with

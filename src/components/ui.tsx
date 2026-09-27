@@ -1,4 +1,4 @@
-// apps/finance/src/components/ui.tsx
+// src/components/ui.tsx
 //
 // The small set of building blocks every screen is made of. Server-safe (no
 // client state); interactive pieces live in their own "use client" files.

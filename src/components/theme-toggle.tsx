@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/theme-toggle.tsx
+// src/components/theme-toggle.tsx
 //
 // Flips <html data-theme>. The choice is a per-device convenience, so it lives
 // in localStorage; the inline script in app/layout.tsx applies it before paint.

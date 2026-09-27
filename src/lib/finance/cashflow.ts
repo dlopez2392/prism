@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/cashflow.ts
+// src/lib/finance/cashflow.ts
 //
 // Where the money came from and where it went. Pure functions over
 // transactions; every screen that shows spending gets its numbers here, so the

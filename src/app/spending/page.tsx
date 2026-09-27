@@ -1,4 +1,4 @@
-// apps/finance/src/app/spending/page.tsx — the detail behind "where it went".
+// src/app/spending/page.tsx — the detail behind "where it went".
 //
 // Hero (the one --gradient-prism card): total spent in the window. Then the
 // composition over time, categories against the window before, the busiest

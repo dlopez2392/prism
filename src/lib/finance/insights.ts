@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/insights.ts
+// src/lib/finance/insights.ts
 //
 // Plain-language insights that SHOW THEIR WORK. Surveys in 2026 put daily AI
 // use for money questions near one in five Americans but "trust a great deal"

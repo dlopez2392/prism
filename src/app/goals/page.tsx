@@ -1,4 +1,4 @@
-// apps/finance/src/app/goals/page.tsx — what you're saving for.
+// src/app/goals/page.tsx — what you're saving for.
 //
 // Hero (the one --gradient-prism card): total saved toward every goal. Each
 // goal gets a ring; the chart shows progress as a share of each target (so a

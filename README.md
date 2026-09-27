@@ -1,18 +1,24 @@
 # Prism — personal finance, in full colour
 
-A consumer budgeting and money app: link a bank, then see where money came
-from, where it went, what's coming next, and how far you've come. Every screen
-leads with a chart.
+**A Bespoke Intelligence Solutions (BIS) product.**
 
-It is a separate product from the BIS Platform (`apps/web`) and shares only the
-monorepo's tooling. Design contract: [`DESIGN.md`](./DESIGN.md). Market and
-integration research: [`docs/research/2026-09-27-personal-finance-app-research.md`](../../docs/research/2026-09-27-personal-finance-app-research.md).
+A standalone consumer budgeting and money app: link a bank, then see where
+money came from, where it went, what's coming next, and how far you've come.
+Every screen leads with a chart.
+
+Prism is its own product. It shares no code, database, authentication or
+deployment with any other BIS software.
+
+- Design contract: [`DESIGN.md`](./DESIGN.md)
+- Market and integration research: [`docs/research-2026-09-27.md`](./docs/research-2026-09-27.md)
 
 ## Run it
 
+Requires Node 22+ and pnpm 10.
+
 ```bash
 pnpm install
-pnpm --filter finance dev        # http://localhost:3100
+pnpm dev            # http://localhost:3100
 ```
 
 With no configuration it runs on a **demo household**: thirteen months of one
@@ -22,20 +28,25 @@ before anyone shares real data.
 ## Link a real bank (Plaid)
 
 1. Create a free Plaid account and copy the **sandbox** keys.
-2. `cp apps/finance/.env.example apps/finance/.env.local` and fill in
-   `PLAID_CLIENT_ID` and `PLAID_SECRET`.
-3. Restart `dev`, press **Connect a bank**, pick any test bank and sign in with
-   `user_good` / `pass_good`.
+2. `cp .env.example .env.local` and fill in `PLAID_CLIENT_ID` and `PLAID_SECRET`.
+3. Restart `pnpm dev`, press **Connect a bank**, pick any test bank and sign in
+   with `user_good` / `pass_good`.
 
 For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 (`openssl rand -base64 32`); the app refuses to store tokens without one.
+
+## Deploy
+
+Any Next.js host works. On Vercel: import the repository, keep the detected
+Next.js settings, and add the environment variables from `.env.example`. With
+no Plaid keys the deployment serves the demo household.
 
 ## Screens
 
 | Screen | What it shows |
 |---|---|
 | **Overview** | Net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
-| **Cash flow** | Income → categories → saved **Sankey**, money in vs out by month, what you kept each month (diverging), savings-rate trend |
+| **Cash flow** | Income → categories → saved **Sankey**, money in vs out by month, what you kept each month, savings-rate trend |
 | **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, searchable ledger |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags |
@@ -45,7 +56,10 @@ For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 
 ## How it's built
 
+Next.js 16 (App Router), React 19, Tailwind 4, TypeScript, Vitest.
+
 ```
+src/lib/brand.ts   product and company names — one place to rename
 src/lib/finance/   provider-neutral model + pure analytics (cash flow, budget
                    pacing, recurring detection, forecast, Sankey, insights)
 src/lib/charts/    chart geometry (scales, curves, bars, arcs, treemap)
@@ -70,23 +84,24 @@ src/app/           the eight screens + /api/plaid/{link-token,exchange,disconnec
 ## Gates
 
 ```bash
-pnpm --filter finance typecheck
-pnpm --filter finance lint
-pnpm --filter finance test       # vitest — analytics, geometry, Plaid mapping, vault
-pnpm --filter finance build
+pnpm typecheck
+pnpm lint
+pnpm test          # vitest — analytics, geometry, Plaid mapping, vault
+pnpm build
 ```
 
-The first three also run under the repository's `pnpm check`.
+CI (`.github/workflows/ci.yml`) runs all four on every push.
 
 ## Prototype limits (deliberate) and next steps
 
 - **Storage:** linked-bank tokens live in an AES-256-GCM sealed, httpOnly
   cookie so the prototype needs no database. Production moves them to a
-  per-user, KMS-encrypted server-side store with auth, and persists the
+  per-user, KMS-encrypted server-side store with sign-in, and persists the
   `/transactions/sync` cursor so each load fetches only what changed.
 - **Budgets and goals** are drafted from history (live) or seeded (demo) and
   are not yet editable or saved.
-- **Next features, in order:** Plaid webhooks + stored cursor → editable
-  budgets/goals with persistence → household ("yours, mine, ours") views →
-  a fallback aggregator (Finicity or MX) → read-only MCP server so people can
-  ask their AI assistant about their money, with the transactions cited.
+- **Next features, in order:** accounts and sign-in → Plaid webhooks + stored
+  cursor → editable budgets and goals → household ("yours, mine, ours")
+  views → a fallback aggregator (Finicity or MX) → a read-only MCP server so
+  people can ask their AI assistant about their money, with the transactions
+  cited.

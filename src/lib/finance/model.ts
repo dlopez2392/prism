@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/model.ts
+// src/lib/finance/model.ts
 //
 // One pass from raw FinanceData to everything the screens draw. Screens call
 // `analyze` and read fields; they never re-derive a number, so two cards on

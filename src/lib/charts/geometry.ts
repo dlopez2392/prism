@@ -1,4 +1,4 @@
-// apps/finance/src/lib/charts/geometry.ts
+// src/lib/charts/geometry.ts
 //
 // Chart geometry with no React and no DOM — scales, ticks, curve and mark
 // paths, arcs. The components in components/charts only render what these

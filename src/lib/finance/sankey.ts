@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/sankey.ts
+// src/lib/finance/sankey.ts
 //
 // The cash-flow Sankey: income sources → "Income" → where it went (spending
 // categories, plus what was saved). Reviewers call Monarch's version its most

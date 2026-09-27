@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/charts/sankey-chart.tsx
+// src/components/charts/sankey-chart.tsx
 //
 // Income → where it went. Geometry comes from `layoutSankey`; this renders it,
 // labels the outer columns in gutters (so no label ever sits on a band), and

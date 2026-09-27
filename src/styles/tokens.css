@@ -1,4 +1,4 @@
-/* apps/finance/src/styles/tokens.css
+/* src/styles/tokens.css
  *
  * Prism's design tokens — the ONLY place a colour, radius, shadow or duration
  * is written as a literal. Components consume these through the Tailwind

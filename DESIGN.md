@@ -1,9 +1,8 @@
 # Prism — Design Contract
 
-> Prism is the consumer personal-finance app in `apps/finance`. It is a
-> separate product from the BIS Platform and has its own identity; the root
-> `DESIGN.md` (BIS: violet-only accent, operator UI) does **not** govern this
-> app. This file does. If a change conflicts with it, stop and flag it.
+> Prism is a standalone consumer personal-finance app from Bespoke
+> Intelligence Solutions (BIS). This file governs every UI change in it; if a
+> change conflicts with it, stop and flag it.
 > Tokens: `src/styles/tokens.css`. Components consume tokens ONLY.
 
 ## Identity
@@ -11,6 +10,9 @@
 - **Vibrant, visual, optimistic.** Money apps default to anxious reds and
   spreadsheet greys; Prism shows a person's money in full colour. Every screen
   leads with a picture, then the numbers, then the rows.
+- **A BIS product, with its own face.** Prism leads with the BIS violet and
+  carries the company's mark in exactly two places: the "by BIS" line under
+  the wordmark and the footer credit. Names come from `src/lib/brand.ts`.
 - Dark and light are both first-class. The OS preference picks the first-run
   theme; the toggle in the top bar remembers the choice per device.
 - Voice: plain words a person reads on their phone in line for coffee.

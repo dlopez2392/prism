@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/types.ts
+// src/lib/finance/types.ts
 //
 // The provider-neutral domain model. Every data source — the demo household,
 // Plaid, and any future aggregator (Finicity, MX) or direct link (Coinbase,

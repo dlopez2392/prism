@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/test-helpers.ts — fixtures for the unit suite.
+// src/lib/finance/test-helpers.ts — fixtures for the unit suite.
 import type { CategoryId, Transaction } from "./types";
 
 let n = 0;

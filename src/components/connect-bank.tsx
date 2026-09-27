@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/connect-bank.tsx
+// src/components/connect-bank.tsx
 //
 // "Connect a bank": fetch a Link token, load Plaid Link from Plaid's CDN on
 // demand (nothing third-party loads until the person asks to link), then trade

@@ -1,15 +1,13 @@
-# Prism (apps/finance)
+# Prism
 
 @DESIGN.md
 
-- This app is a separate consumer product. Its design contract is
-  `apps/finance/DESIGN.md` above; the repository-root `DESIGN.md` is the BIS
-  Platform's and does not apply to anything under `apps/finance`.
-- It shares no runtime code, database, auth or deploy with `apps/web`. Do not
-  import from `@bis/db` or `apps/web`.
-- Gates for this app: `pnpm --filter finance typecheck`, `lint`, `test`
-  (all three also run under the root `pnpm check`), and
-  `pnpm --filter finance build`.
+- Prism is a standalone consumer finance app, a product of Bespoke
+  Intelligence Solutions (BIS). It is not part of any other BIS software and
+  shares no code, database, authentication or deployment with it.
+- Product and company names live in `src/lib/brand.ts`; never hard-code them.
+- Gates before any merge: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
+  `pnpm build`. CI runs all four (`.github/workflows/ci.yml`).
 - Bank data: Plaid through `src/lib/plaid/*`, mapped onto
   `src/lib/finance/types.ts`. Without `PLAID_CLIENT_ID`/`PLAID_SECRET` the app
   runs on the deterministic demo household in `src/lib/finance/demo.ts`.

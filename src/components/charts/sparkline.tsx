@@ -1,4 +1,4 @@
-// apps/finance/src/components/charts/sparkline.tsx
+// src/components/charts/sparkline.tsx
 //
 // A stat tile's trend line. Decorative — the tile's value and delta already
 // say what it shows — so it is aria-hidden and needs no client JS.

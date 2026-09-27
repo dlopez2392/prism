@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/goal-what-if.tsx
+// src/components/goal-what-if.tsx
 //
 // "What if I put in a bit more?" — drag the monthly amount and watch the
 // finish date move. Pure arithmetic from projectGoal; nothing is saved.

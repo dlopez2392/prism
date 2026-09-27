@@ -1,4 +1,4 @@
-// apps/finance/src/lib/server/finance.ts
+// src/lib/server/finance.ts
 //
 // The one place a screen gets its data. Linked banks (a sealed vault cookie
 // plus Plaid keys) → live data; otherwise the demo household. Wrapped in

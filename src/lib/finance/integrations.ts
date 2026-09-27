@@ -1,9 +1,9 @@
-// apps/finance/src/lib/finance/integrations.ts
+// src/lib/finance/integrations.ts
 //
 // What Prism can connect to, and honestly how. Each entry records the real
-// access path as researched in September 2026 (docs/research/
-// 2026-09-27-personal-finance-app-research.md), so the Connections screen
-// never promises an integration that has no API behind it.
+// access path as researched in September 2026 (docs/research-2026-09-27.md),
+// so the Connections screen never promises an integration that has no API
+// behind it.
 
 export type IntegrationStatus = "live" | "planned" | "partner" | "limited";
 

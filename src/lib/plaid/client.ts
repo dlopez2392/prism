@@ -1,4 +1,4 @@
-// apps/finance/src/lib/plaid/client.ts
+// src/lib/plaid/client.ts
 //
 // A minimal, dependency-free Plaid client: JSON over HTTPS, server-only. The
 // official SDK is a large generated package; this app uses seven endpoints,
@@ -9,6 +9,8 @@
 //   PLAID_ENV                       — "sandbox" (default) or "production"
 //   PLAID_REDIRECT_URI              — optional; required for OAuth banks in production
 //   PLAID_WEBHOOK_URL               — optional; SYNC_UPDATES_AVAILABLE lands here
+
+import { BRAND } from "@/lib/brand";
 
 /** Just the variables read here — a plain record, so tests can pass one. */
 export type Env = Record<string, string | undefined>;
@@ -108,7 +110,8 @@ export type PlaidSecurity = {
 export async function createLinkToken(config: PlaidConfig, clientUserId: string, env: Env = process.env) {
   const body: Record<string, unknown> = {
     user: { client_user_id: clientUserId },
-    client_name: "Prism",
+    // The name Plaid Link shows: "Prism uses Plaid to connect your account".
+    client_name: BRAND.product,
     language: "en",
     country_codes: ["US"],
     products: ["transactions"],

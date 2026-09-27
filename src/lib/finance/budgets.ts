@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/budgets.ts
+// src/lib/finance/budgets.ts
 //
 // Budget pacing. The naive projection — spent ÷ days elapsed × days in month —
 // cries wolf every month on the 2nd, because rent lands on the 1st and a

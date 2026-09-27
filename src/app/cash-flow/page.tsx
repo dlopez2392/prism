@@ -1,4 +1,4 @@
-// apps/finance/src/app/cash-flow/page.tsx — where the money came from and went.
+// src/app/cash-flow/page.tsx — where the money came from and went.
 //
 // Hero (the one --gradient-prism card): what you kept. The star chart is the
 // Sankey. Everything on the screen is scoped by the range row.

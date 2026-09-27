@@ -1,4 +1,4 @@
-// apps/finance/src/app/budgets/page.tsx — this month's budgets.
+// src/app/budgets/page.tsx — this month's budgets.
 //
 // Hero (the one --gradient-prism card): how much of the month's plan is left.
 // Each budget then gets a ring with a "today" tick — if the colour is behind

@@ -1,4 +1,4 @@
-// apps/finance/src/lib/finance/demo.ts
+// src/lib/finance/demo.ts
 //
 // The demo household: thirteen months of one believable person's money,
 // generated from a fixed seed relative to `today`. It exists so every chart has

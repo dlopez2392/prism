@@ -1,4 +1,4 @@
-// apps/finance/src/components/range-tabs.tsx
+// src/components/range-tabs.tsx
 //
 // The one filter row above a screen's charts: a date range, as links, so the
 // choice is in the URL and every chart below re-renders against the same slice.

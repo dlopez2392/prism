@@ -1,6 +1,6 @@
 "use client";
 
-// apps/finance/src/components/shell.tsx
+// src/components/shell.tsx
 //
 // Navigation: a sidebar at ≥1024px, a bottom tab bar below it (DESIGN.md
 // rule 9). The bottom bar's "More" sheet uses the native Popover API, so it
@@ -21,6 +21,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
+import { BisMark } from "@/components/bis-mark";
+import { BRAND } from "@/lib/brand";
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
@@ -92,9 +94,14 @@ export function Sidebar({ householdName, sourceLabel }: { householdName: string;
   };
   return (
     <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface-1/70 px-3 py-5 backdrop-blur-xl lg:flex">
-      <Link href="/" className="mb-7 flex items-center gap-2.5 px-3">
+      <Link href="/" className="mb-7 flex items-center gap-2.5 px-3" aria-label={`${BRAND.product} by ${BRAND.company} — overview`}>
         <PrismMark className="size-8" />
-        <span className="text-xl font-extrabold tracking-tight text-ink-1">Prism</span>
+        <span className="leading-tight">
+          <span className="block text-xl font-extrabold tracking-tight text-ink-1">{BRAND.product}</span>
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">
+            <BisMark size={10} /> by {BRAND.companyShort}
+          </span>
+        </span>
       </Link>
       <nav aria-label="Main" className="-mx-3 flex-1 overflow-y-auto px-3">
         {NAV.map((g) => (

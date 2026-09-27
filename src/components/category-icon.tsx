@@ -1,4 +1,4 @@
-// apps/finance/src/components/category-icon.tsx
+// src/components/category-icon.tsx
 //
 // A category's icon in a tinted chip of its own colour — identity from the
 // mark beside the text, never from coloured text.
