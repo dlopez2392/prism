@@ -6,43 +6,16 @@
 // demand (nothing third-party loads until the person asks to link), then trade
 // the one-time public token for a sealed access token server-side and refresh.
 // Without Plaid keys the button explains demo mode instead of failing.
+//
+// A bank that signs people in on its own website may take the whole page there
+// (phones, in-app browsers); it sends them back to /connections/return, which
+// finishes the job and returns them to the page named in `from`.
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Landmark, Lock, Plus, X } from "lucide-react";
 import clsx from "clsx";
-
-type PlaidHandler = { open: () => void; destroy: () => void };
-type PlaidLinkFactory = {
-  create: (opts: {
-    token: string;
-    onSuccess: (publicToken: string, metadata: { institution?: { name?: string } | null }) => void;
-    onExit: (err: { display_message?: string | null; error_message?: string } | null) => void;
-  }) => PlaidHandler;
-};
-
-declare global {
-  interface Window {
-    Plaid?: PlaidLinkFactory;
-  }
-}
-
-const LINK_SCRIPT = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
-
-function loadLink(): Promise<PlaidLinkFactory> {
-  if (window.Plaid) return Promise.resolve(window.Plaid);
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${LINK_SCRIPT}"]`);
-    const s = existing ?? document.createElement("script");
-    s.addEventListener("load", () => (window.Plaid ? resolve(window.Plaid) : reject(new Error("Plaid Link failed to load."))));
-    s.addEventListener("error", () => reject(new Error("Plaid Link failed to load.")));
-    if (!existing) {
-      s.src = LINK_SCRIPT;
-      s.async = true;
-      document.head.appendChild(s);
-    }
-  });
-}
+import { loadLink, saveBank } from "@/lib/plaid/link";
 
 type State = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "error"; message: string } | { kind: "done"; message: string };
 
@@ -50,11 +23,14 @@ export function ConnectBank({
   variant = "ghost",
   label = "Connect a bank",
   className,
+  landOn,
 }: {
   /** "hero" is the white button that sits on the --gradient-prism card. */
   variant?: "primary" | "ghost" | "hero";
   label?: string;
   className?: string;
+  /** Where the person lands once the bank is saved (a full load), instead of a refresh of the page the button is on. */
+  landOn?: string;
 }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -63,7 +39,11 @@ export function ConnectBank({
   async function start() {
     setState({ kind: "busy", label: "Opening secure link…" });
     try {
-      const res = await fetch("/api/plaid/link-token", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const res = await fetch("/api/plaid/link-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: landOn ?? `${window.location.pathname}${window.location.search}` }),
+      });
       const json = (await res.json().catch(() => ({}))) as { linkToken?: string; error?: string; message?: string };
       if (res.status === 503 && json.error === "not_configured") {
         setState({ kind: "idle" });
@@ -76,19 +56,15 @@ export function ConnectBank({
         token: json.linkToken,
         onSuccess: async (publicToken, metadata) => {
           setState({ kind: "busy", label: `Securing ${metadata.institution?.name ?? "your bank"}…` });
-          const ex = await fetch("/api/plaid/exchange", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ publicToken }),
-          });
-          const exJson = (await ex.json().catch(() => ({}))) as { message?: string; institutionName?: string | null };
-          if (!ex.ok) {
-            setState({ kind: "error", message: exJson.message ?? "The bank linked, but we couldn't save it. Try again." });
+          const saved = await saveBank(publicToken);
+          if (!saved.ok) {
+            setState({ kind: "error", message: saved.message });
             return;
           }
-          setState({ kind: "done", message: `${exJson.institutionName ?? "Your bank"} is connected. Pulling in your transactions…` });
-          router.refresh();
+          setState({ kind: "done", message: `${saved.institutionName ?? "Your bank"} is connected. Pulling in your transactions…` });
           handler.destroy();
+          if (landOn) window.location.replace(landOn);
+          else router.refresh();
         },
         onExit: (err) => {
           setState(err ? { kind: "error", message: err.display_message ?? "The connection was cancelled." } : { kind: "idle" });

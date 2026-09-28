@@ -77,6 +77,18 @@
   `agentFinance` passes no saver. The webhook (`/api/plaid/webhook`) must
   verify Plaid's signature and may only call `plaid_item_changed` — it has
   no key to anyone's bank and must never gain one.
+- Bank redirects (OAuth banks): `/connections/return` is the address
+  allow-listed with Plaid (`RETURN_PATH`), so never move or rename it. It
+  resumes Link with the SAME Link token, kept in the httpOnly
+  `__Host-prism-bank-return` cookie (`src/lib/plaid/return.ts`), never in
+  script-readable storage, and with `window.location.href` untouched.
+  `redirectUriFor` sends `PLAID_REDIRECT_URI` only when it is exactly this
+  request's origin + `RETURN_PATH`. Plaid refuses Link for any address it
+  hasn't allow-listed, so when it does, link-token retries once without the
+  address and logs why: a missed dashboard step must never stop linking.
+  Clear the cookie with `clearedReturnCookie()`, never a bare delete, because
+  a browser ignores a `__Host-` clear that isn't Secure with Path=/.
+  `exchange` clears it once a bank is saved.
 - The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
   overlay) + `src/lib/server/plan-store.ts` (cookies) +
   `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,

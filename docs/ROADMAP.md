@@ -1,6 +1,6 @@
 # Prism roadmap
 
-Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts live on Supabase project `prism`, sign-in email through Resend, name asked after sign-in; MCP server built; bank sync keeps its place (roadmap item 2); Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
+Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts live on Supabase project `prism`, sign-in email through Resend, name asked after sign-in; MCP server built; bank sync keeps its place (roadmap item 2), live on Plaid's sandbox, with bank redirects for OAuth banks; Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
 
 ## Committed integrations
 
@@ -46,8 +46,20 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    and never save. Verified end to end against the live project with a strict
    fake Plaid (first read, a reload with zero Plaid calls, tampered webhook refused,
    signed webhook flags, cursor pickup, last copy shown through a Plaid
-   outage, Claude catch-up saves nothing). **Waits on
-   the owner's Plaid keys** to link a bank in production.
+   outage, Claude catch-up saves nothing). **Live on Plaid's sandbox
+   (2026-09-28):** the owner's sandbox keys are set in Vercel; a test bank
+   linked on a demo account was stored sealed, Plaid's own signed webhooks
+   were verified in production, and the next visit fetched only what changed.
+   **Bank redirects (OAuth banks) built the same day:** `/connections/return`
+   resumes Link with the same token after a bank's own sign-in, for phones and
+   in-app browsers that block pop-ups; switched on by allow-listing that
+   address with Plaid and setting `PLAID_REDIRECT_URI`. Real banks wait on
+   Plaid's production approval and its OAuth-institution registration.
+   Known limits: one connection in flight per browser (a second tab's attempt
+   replaces the first), and a bank app that returns people to a DIFFERENT
+   browser finds nothing to resume and asks them to start again. Plaid's
+   answer is to keep the Link token server-side by person, which suits
+   signed-in accounts later.
 3. **Editable budgets and goals**, saved per person. **Built on the device
    (2026-09-27):** people set every budget line, add, edit and delete goals,
    and save a what-if amount; the plan lives in two validated cookies on this

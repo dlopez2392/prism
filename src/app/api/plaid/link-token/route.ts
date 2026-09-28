@@ -1,10 +1,15 @@
 // POST /api/plaid/link-token — a short-lived token that opens Plaid Link for
 // this browser's household. 503 with `not_configured` when no Plaid keys are
 // set, which the client turns into the "you're on demo data" explanation.
+//
+// Body: `{ from }`, the page the person is on, so that a bank which signs
+// them in on its own website can send them back to it
+// (/connections/return).
 
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createLinkToken, plaidConfig, PlaidError } from "@/lib/plaid/client";
+import { createLinkToken, plaidConfig, PlaidError, redirectUriFor } from "@/lib/plaid/client";
+import { clearedReturnCookie, packReturn, RETURN_COOKIE, returnCookieOptions, returnPath } from "@/lib/plaid/return";
 import { requestOrigin } from "@/lib/server/origin";
 import { sameOriginJson } from "@/lib/server/request-guard";
 import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey } from "@/lib/server/vault";
@@ -24,17 +29,37 @@ export async function POST(req: Request) {
   }
   if (!key) return NextResponse.json({ error: "vault_key_missing", message: "Set PRISM_VAULT_KEY to link banks in production." }, { status: 500 });
 
+  const body = (await req.json().catch(() => null)) as { from?: unknown } | null;
   const account = await currentAccount();
   const jar = await cookies();
   const vault = account ? null : (open(jar.get(VAULT_COOKIE)?.value, key) ?? emptyVault());
+  // The origin as the browser saw it (a TLS-terminating proxy makes req.url say http).
+  const origin = await requestOrigin();
+  const redirect = redirectUriFor(process.env, origin, config.env);
+  if (redirect.problem) console.warn(`Plaid redirect left out: ${redirect.problem}.`);
   try {
     // One Plaid user per person: the account's id when signed in, else this browser's household id.
     // Plaid announces new transactions to this site's webhook — over HTTPS only, so not from a laptop.
-    // The origin as the browser saw it (a TLS-terminating proxy makes req.url say http).
-    const hook = new URL("/api/plaid/webhook", await requestOrigin());
-    const { link_token } = await createLinkToken(config, account?.userId ?? vault!.userId, hook.protocol === "https:" ? hook.href : null);
+    const hook = new URL("/api/plaid/webhook", origin);
+    const userId = account?.userId ?? vault!.userId;
+    const webhookUrl = hook.protocol === "https:" ? hook.href : null;
+    let redirectUri = redirect.uri;
+    let linkToken: string;
+    try {
+      linkToken = (await createLinkToken(config, userId, { webhookUrl, redirectUri })).link_token;
+    } catch (e) {
+      // Plaid refuses an address missing from its allow-list, and a setting made before (or
+      // without) that step must never stop anyone linking: without it the bank opens in a pop-up.
+      if (!redirectUri || !(e instanceof PlaidError) || !["INVALID_FIELD", "INVALID_REQUEST"].includes(e.code)) throw e;
+      console.error(`Plaid refused PLAID_REDIRECT_URI (${redirectUri}): ${e.message}. Add it to Allowed redirect URIs in Plaid's dashboard. Linking without it.`);
+      redirectUri = null;
+      linkToken = (await createLinkToken(config, userId, { webhookUrl })).link_token;
+    }
     if (vault) jar.set(VAULT_COOKIE, seal(vault, key), cookieOptions());
-    return NextResponse.json({ linkToken: link_token, env: config.env });
+    // Only a token Plaid may redirect with needs remembering; any older one is dropped either way.
+    if (redirectUri) jar.set(RETURN_COOKIE, packReturn({ linkToken, back: returnPath(body?.from) }), returnCookieOptions());
+    else if (jar.has(RETURN_COOKIE)) jar.set(RETURN_COOKIE, "", clearedReturnCookie());
+    return NextResponse.json({ linkToken, env: config.env });
   } catch (e) {
     const message = e instanceof PlaidError ? (e.displayMessage ?? e.code) : "Plaid is unreachable right now.";
     return NextResponse.json({ error: "plaid_error", message }, { status: 502 });

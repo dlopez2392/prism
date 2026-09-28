@@ -7,7 +7,8 @@
 // Configuration (all server-side, never NEXT_PUBLIC):
 //   PLAID_CLIENT_ID, PLAID_SECRET   — from the Plaid dashboard
 //   PLAID_ENV                       — "sandbox" (default) or "production"
-//   PLAID_REDIRECT_URI              — optional; required for OAuth banks in production
+//   PLAID_REDIRECT_URI              — optional; <this site>/connections/return, once it's on
+//                                     Plaid's allow-list (see redirectUriFor)
 //   PLAID_WEBHOOK_URL               — optional; defaults to this site's /api/plaid/webhook
 //   PLAID_API_URL                   — TEST HOOK, sandbox only: point at a fake Plaid
 
@@ -113,8 +114,54 @@ export type PlaidSecurity = {
   type: string | null;
 };
 
-/** `webhookUrl` is where Plaid announces new transactions; PLAID_WEBHOOK_URL overrides it. */
-export async function createLinkToken(config: PlaidConfig, clientUserId: string, webhookUrl: string | null = null, env: Env = process.env) {
+/** The page a bank that signs people in on its own website sends them back to (src/app/connections/return). */
+export const RETURN_PATH = "/connections/return";
+
+/**
+ * The redirect URI to give Plaid for this request, or null — with the reason
+ * when the setting is wrong rather than merely absent.
+ *
+ * Plaid refuses to create a Link token whose redirect URI isn't on the
+ * dashboard's allow-list, so nothing is sent until the operator sets
+ * PLAID_REDIRECT_URI, which they do after allow-listing it. Even then it is
+ * sent only when it is exactly this site's return page, in a form Plaid
+ * accepts: HTTPS (plain http for localhost, sandbox only), and no query,
+ * fragment or trailing slash. The page resumes with `window.location.href`,
+ * which must equal this URI plus Plaid's `oauth_state_id`. A request reaching
+ * Prism on another hostname gets none: the return would land where this
+ * browser's cookies aren't. Without one, the bank's site opens in a pop-up,
+ * which is how desktop browsers already work.
+ */
+export function redirectUriFor(env: Env, origin: string, plaidEnv: PlaidEnv): { uri: string | null; problem: string | null } {
+  const raw = env.PLAID_REDIRECT_URI?.trim();
+  if (!raw) return { uri: null, problem: null };
+  const expected = `must be exactly ${origin}${RETURN_PATH}`;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return { uri: null, problem: `PLAID_REDIRECT_URI isn't a URL; it ${expected}` };
+  }
+  const localSandbox = url.protocol === "http:" && plaidEnv === "sandbox" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+  if (url.protocol !== "https:" && !localSandbox) return { uri: null, problem: `PLAID_REDIRECT_URI must use https; it ${expected}` };
+  if (/[?#]/.test(raw) || url.href !== raw || url.username || url.password || url.pathname !== RETURN_PATH) {
+    return { uri: null, problem: `PLAID_REDIRECT_URI ${expected}` };
+  }
+  if (url.origin !== origin) return { uri: null, problem: `PLAID_REDIRECT_URI points at ${url.origin}, so it is left out for requests to ${origin}` };
+  return { uri: url.href, problem: null };
+}
+
+/**
+ * `webhookUrl` is where Plaid announces new transactions (PLAID_WEBHOOK_URL
+ * overrides it); `redirectUri` is where a bank's own sign-in page sends the
+ * person back (see redirectUriFor).
+ */
+export async function createLinkToken(
+  config: PlaidConfig,
+  clientUserId: string,
+  opts: { webhookUrl?: string | null; redirectUri?: string | null } = {},
+  env: Env = process.env,
+) {
   const body: Record<string, unknown> = {
     user: { client_user_id: clientUserId },
     // The name Plaid Link shows: "Prism uses Plaid to connect your account".
@@ -126,8 +173,8 @@ export async function createLinkToken(config: PlaidConfig, clientUserId: string,
     optional_products: ["investments", "liabilities"],
     transactions: { days_requested: 730 },
   };
-  if (env.PLAID_REDIRECT_URI) body.redirect_uri = env.PLAID_REDIRECT_URI;
-  const webhook = env.PLAID_WEBHOOK_URL?.trim() || webhookUrl;
+  if (opts.redirectUri) body.redirect_uri = opts.redirectUri;
+  const webhook = env.PLAID_WEBHOOK_URL?.trim() || opts.webhookUrl;
   if (webhook) body.webhook = webhook;
   return plaidRequest<{ link_token: string; expiration: string }>(config, "/link/token/create", body);
 }

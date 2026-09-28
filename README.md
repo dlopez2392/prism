@@ -35,6 +35,25 @@ before anyone shares real data.
 For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 (`openssl rand -base64 32`); the app refuses to store tokens without one.
 
+**Banks that sign you in on their own website** (Chase, Bank of America,
+Wells Fargo, Capital One and most large banks; Plaid calls this OAuth):
+
+- On a computer, Plaid opens the bank's site in a pop-up, and nothing more
+  is needed.
+- Phones and in-app browsers (a link opened from Mail, Facebook or Google
+  Maps) block pop-ups, so Plaid takes the whole page to the bank, and the
+  bank sends the person back to **`/connections/return`**. That page reopens
+  Link with the same Link token, which was kept in an httpOnly cookie for up
+  to an hour. It saves the bank and returns the person to the page they
+  started on.
+- To switch it on, add `https://<your-domain>/connections/return` to Plaid's
+  **Allowed redirect URIs** (Developers → API), then set
+  `PLAID_REDIRECT_URI` to exactly that address.
+- Plaid refuses to open Link with an address it hasn't allow-listed, so Prism
+  sends nothing until the variable is set. It also ignores a value that isn't
+  exactly this site's return page over HTTPS, and says why in the server log.
+- In the sandbox, test with **Platypus OAuth Bank**; any credentials work.
+
 **How a signed-in person's banks stay current (roadmap item 2):**
 
 - **Each bank keeps its place.** Plaid's sync cursor, the transactions

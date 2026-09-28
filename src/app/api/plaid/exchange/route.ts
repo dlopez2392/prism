@@ -6,6 +6,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { exchangePublicToken, getAccounts, getInstitutionName, plaidConfig, PlaidError } from "@/lib/plaid/client";
+import { clearedReturnCookie, RETURN_COOKIE } from "@/lib/plaid/return";
 import { addAccountPlaidItem, loadAccount } from "@/lib/server/account-store";
 import { sameOriginJson } from "@/lib/server/request-guard";
 import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey, type VaultItem } from "@/lib/server/vault";
@@ -51,6 +52,8 @@ export async function POST(req: Request) {
       vault!.items = [...vault!.items.filter((i) => i.itemId !== item_id), entry];
       jar.set(VAULT_COOKIE, seal(vault!, key), cookieOptions());
     }
+    // A bank that sent the person back to /connections/return is done with the saved Link token.
+    if (jar.has(RETURN_COOKIE)) jar.set(RETURN_COOKIE, "", clearedReturnCookie());
     return NextResponse.json({ ok: true, institutionName });
   } catch (e) {
     const message = e instanceof PlaidError ? (e.displayMessage ?? e.code) : "Plaid is unreachable right now.";
