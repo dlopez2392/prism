@@ -17,6 +17,8 @@ import type { Env } from "@/lib/plaid/client";
 
 export const BUDGETS_COOKIE = "prism-budgets";
 export const GOALS_COOKIE = "prism-goals";
+/** Set to "later" when a signed-in person defers moving this device's data into their account. */
+export const CARRYOVER_COOKIE = "prism-carryover";
 /** Browsers cap a cookie's lifetime at 400 days. */
 const PLAN_MAX_AGE = 60 * 60 * 24 * 400;
 /** Room under the 4,096-byte cookie limit for the name and attributes. */

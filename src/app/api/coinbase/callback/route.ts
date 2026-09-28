@@ -18,6 +18,8 @@ import {
   sealLink,
 } from "@/lib/server/coinbase-store";
 import { vaultKey } from "@/lib/server/vault";
+import { liveCoinbaseToken, loadAccount, saveAccountCoinbase } from "@/lib/server/account-store";
+import { currentAccount } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
@@ -50,6 +52,23 @@ export async function GET(req: NextRequest) {
     tokens = await exchangeCode(config, { code, verifier: pending.verifier, redirectUri: pending.redirectUri });
   } catch {
     return back("failed");
+  }
+
+  const account = await currentAccount();
+  if (account) {
+    // Signed in: the link belongs to the account. Revoke any earlier one first.
+    const earlier = (await loadAccount(account, key)).coinbase;
+    if (earlier) {
+      const live = await liveCoinbaseToken(account, earlier, config, key).catch(() => null);
+      if (live) await revokeToken(config, live).catch(() => undefined);
+    }
+    try {
+      await saveAccountCoinbase(account, tokens, key);
+    } catch {
+      await revokeToken(config, tokens.accessToken).catch(() => undefined);
+      return back("failed");
+    }
+    return back("connected");
   }
 
   const previous = readLink(req.cookies.get(COINBASE_COOKIE)?.value, key);

@@ -1,8 +1,10 @@
 // src/lib/server/finance.ts
 //
-// The one place a screen gets its data. Linked banks (a sealed vault cookie
-// plus Plaid keys) → live data; otherwise the demo household. Wrapped in
-// React's `cache`, so a layout and a page in the same request share one load.
+// The one place a screen gets its data. First: WHERE this person's money
+// lives — their account when signed in, otherwise this device's sealed
+// cookies. Then: anything real linked → live data; nothing → the demo
+// household. Wrapped in React's `cache`, so a layout and a page in the same
+// request share one load.
 
 import "server-only";
 import { cache } from "react";
@@ -11,7 +13,8 @@ import { categoryTotals } from "@/lib/finance/cashflow";
 import { SPEND_CATEGORIES } from "@/lib/finance/categories";
 import { addDays, addMonths, startOfMonth } from "@/lib/finance/dates";
 import { buildDemoData } from "@/lib/finance/demo";
-import { applyPlan } from "@/lib/finance/plan";
+import { applyPlan, type Plan } from "@/lib/finance/plan";
+import { feedSnapshot } from "@/lib/finance/calendar";
 import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/finance/types";
 import {
   getAccounts,
@@ -24,8 +27,11 @@ import {
 import { mapAccount, mapHoldings, mapTransaction, suggestedLimit } from "@/lib/plaid/map";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
 import { coinbaseNeedsSignIn, mapCoinbase } from "@/lib/coinbase/map";
-import { COINBASE_COOKIE, isExpired, readLink, type CoinbaseLink } from "./coinbase-store";
-import { readPlan } from "./plan-store";
+import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
+import { currentAccount, type Account } from "@/lib/supabase/server";
+import { supabaseEnv } from "@/lib/supabase/config";
+import { liveCoinbaseToken, loadAccount, saveFeedSnapshot } from "./account-store";
+import { BUDGETS_COOKIE, CARRYOVER_COOKIE, GOALS_COOKIE, readPlan } from "./plan-store";
 import { open, VAULT_COOKIE, vaultKey, type VaultItem } from "./vault";
 
 export type Loaded = FinanceData & {
@@ -34,8 +40,14 @@ export type Loaded = FinanceData & {
   plaidReady: boolean;
   /** The viewer's local hour, for "Good morning". */
   localHour: number;
-  /** Which lists the person has edited on this device (vs. seeded or drafted). */
+  /** Which lists the person has edited (vs. seeded or drafted). */
   planEdited: { budgets: boolean; goals: boolean };
+  /** Accounts are switched on for this deployment. */
+  accountsEnabled: boolean;
+  /** The signed-in person, or null on a device-only visit. */
+  account: { email: string | null; calendarFeed: boolean } | null;
+  /** Signed in, with money or plans still sitting on this device from before: what they are. */
+  carryover: string[];
 };
 
 export function hourIn(zone: string | undefined, now = new Date()): number {
@@ -77,30 +89,88 @@ export async function requestToday(): Promise<ISODate> {
   return todayIn((await cookies()).get("prism-tz")?.value);
 }
 
-/**
- * The goals the data source provides before any edit on this device — the
- * demo household's, or none for a live bank. Cheap: never calls the bank.
- */
-export async function sourceGoals(): Promise<Goal[]> {
-  const jar = await cookies();
-  const live = (plaidConfig() !== null && vaultItems(jar).length > 0) || coinbaseLinkOf(jar) !== null;
-  return live ? [] : buildDemoData(todayIn(jar.get("prism-tz")?.value)).goals;
-}
+/** Where this request's money lives, before anything is fetched from a bank. */
+export type Sources = {
+  account: Account | null;
+  firstName: string | null;
+  plan: Plan;
+  items: VaultItem[];
+  /** A live Coinbase access token — or null for a dead link — fetched on demand. */
+  coinbase: { config: CoinbaseConfig; token: () => Promise<string | null> } | null;
+  feedUpdatedAt: string | null;
+};
 
-/** This browser's Coinbase link, when this deployment has Coinbase keys and a vault key to open it. */
-function coinbaseLinkOf(jar: Jar): { config: CoinbaseConfig; link: CoinbaseLink } | null {
-  const config = coinbaseConfig();
-  if (!config) return null;
+function safeVaultKey(): Buffer | null {
   try {
-    const key = vaultKey();
-    const link = key ? readLink(jar.get(COINBASE_COOKIE)?.value, key) : null;
-    return link ? { config, link } : null;
+    return vaultKey();
   } catch {
     return null;
   }
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited">;
+/**
+ * Uncached on purpose: Server Actions read through this, so a save is never
+ * checked against a copy of the data cached earlier in the same request.
+ */
+export async function readSources(): Promise<Sources> {
+  const jar = await cookies();
+  const plaid = plaidConfig();
+  const cb = coinbaseConfig();
+  const key = safeVaultKey();
+  const account = await currentAccount();
+
+  if (account) {
+    const a = await loadAccount(account, key);
+    const record = a.coinbase;
+    return {
+      account,
+      firstName: a.firstName,
+      plan: a.plan,
+      items: plaid ? a.items : [],
+      coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
+      feedUpdatedAt: a.feedUpdatedAt,
+    };
+  }
+
+  // This device: the proxy keeps a Coinbase cookie fresh, so an expired one
+  // here means its refresh failed.
+  const link = cb && key ? readLink(jar.get(COINBASE_COOKIE)?.value, key) : null;
+  return {
+    account: null,
+    firstName: null,
+    plan: readPlan(jar),
+    items: plaid ? vaultItems(jar) : [],
+    coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
+    feedUpdatedAt: null,
+  };
+}
+
+const getSources = cache(readSources);
+
+const isLive = (s: Sources) => s.items.length > 0 || s.coinbase !== null;
+
+/**
+ * The goals the data source provides before any edit — the demo household's,
+ * or none once anything real is linked. Cheap: never calls a bank.
+ */
+export async function sourceGoals(sources?: Sources): Promise<Goal[]> {
+  const s = sources ?? (await readSources());
+  return isLive(s) ? [] : buildDemoData(await requestToday()).goals;
+}
+
+/** Money or plans a signed-in person still has on this device from before they signed in. */
+function carryoverOf(jar: Jar, signedIn: boolean): string[] {
+  if (!signedIn || jar.get(CARRYOVER_COOKIE)?.value === "later") return [];
+  const out: string[] = [];
+  const banks = plaidConfig() ? vaultItems(jar).length : 0;
+  if (banks) out.push(banks === 1 ? "a linked bank" : `${banks} linked banks`);
+  if (coinbaseConfig() && safeVaultKey() && readLink(jar.get(COINBASE_COOKIE)?.value, safeVaultKey()!)) out.push("Coinbase");
+  if (jar.get(BUDGETS_COOKIE)) out.push("your budgets");
+  if (jar.get(GOALS_COOKIE)) out.push("your goals");
+  return out;
+}
+
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover">;
 
 export const getFinance = cache(async (): Promise<Loaded> => {
   const jar = await cookies();
@@ -108,26 +178,44 @@ export const getFinance = cache(async (): Promise<Loaded> => {
   const today = todayIn(zone);
   const localHour = hourIn(zone);
   const config = plaidConfig();
-  const items = config ? vaultItems(jar) : [];
-  const coinbase = coinbaseLinkOf(jar);
-  const plan = readPlan(jar);
-  const planEdited = { budgets: plan.budgets !== null, goals: plan.goals !== null };
+  const src = await getSources();
+  const planEdited = { budgets: src.plan.budgets !== null, goals: src.plan.goals !== null };
 
   let base: Live;
-  if (items.length === 0 && !coinbase) {
+  if (!isLive(src)) {
     // Nothing real is linked: the demo household. Real and made-up money are
     // never shown together, so linking anything at all ends the demo.
     base = { ...buildDemoData(today), notice: null, plaidReady: config !== null };
   } else {
     const [banks, crypto] = await Promise.all([
-      config && items.length ? loadPlaid(config, items, today) : Promise.resolve(emptyLive(today, config !== null)),
-      coinbase ? loadCoinbase(coinbase.config, coinbase.link) : Promise.resolve(null),
+      config && src.items.length ? loadPlaid(config, src.items, today) : Promise.resolve(emptyLive(today, config !== null)),
+      src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t)) : Promise.resolve(null),
     ]);
     base = crypto ? withCoinbase(banks, crypto) : banks;
+    if (src.firstName) base = { ...base, household: { name: `${src.firstName}'s household`, firstName: src.firstName } };
+    if (src.account) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
   }
   // The person's own edits win over seeded or drafted budgets and goals.
-  return { ...applyPlan(base, plan), localHour, planEdited };
+  return {
+    ...applyPlan(base, src.plan),
+    localHour,
+    planEdited,
+    accountsEnabled: supabaseEnv() !== null,
+    account: src.account ? { email: src.account.email, calendarFeed: src.feedUpdatedAt !== null } : null,
+    carryover: carryoverOf(jar, src.account !== null),
+  };
 });
+
+const FEED_STALE_MS = 6 * 60 * 60_000;
+
+async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live): Promise<void> {
+  if (!updatedAt || Date.now() - Date.parse(updatedAt) < FEED_STALE_MS) return;
+  try {
+    await saveFeedSnapshot(account, feedSnapshot(data));
+  } catch {
+    // A stale calendar is better than a broken page.
+  }
+}
 
 function emptyLive(today: ISODate, plaidReady: boolean): Live {
   return {
@@ -148,12 +236,11 @@ function emptyLive(today: ISODate, plaidReady: boolean): Live {
 
 type CoinbaseLoad = { institution: Institution; account: FinanceData["accounts"][number] | null; holdings: Holding[]; problem: string | null };
 
-async function loadCoinbase(config: CoinbaseConfig, link: CoinbaseLink): Promise<CoinbaseLoad> {
-  // The proxy refreshes a token before it lapses; reaching here expired means
-  // that refresh failed, and only a fresh sign-in will fix it.
-  if (isExpired(link)) return { institution: coinbaseNeedsSignIn(), account: null, holdings: [], problem: "Coinbase needs you to sign in again." };
+async function loadCoinbase(config: CoinbaseConfig, accessToken: string | null): Promise<CoinbaseLoad> {
+  // No live token means the refresh failed, and only a fresh sign-in will fix it.
+  if (!accessToken) return { institution: coinbaseNeedsSignIn(), account: null, holdings: [], problem: "Coinbase needs you to sign in again." };
   try {
-    const [wallets, rates] = await Promise.all([listAccounts(config, link.accessToken), usdRates(config)]);
+    const [wallets, rates] = await Promise.all([listAccounts(config, accessToken), usdRates(config)]);
     const snap = mapCoinbase(wallets, rates, new Date().toISOString());
     // A coin Coinbase can't price is left out of the total; that is not a
     // problem the person can fix, so it never raises the "Fix it" banner.

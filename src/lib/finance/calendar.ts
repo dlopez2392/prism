@@ -13,8 +13,8 @@
 
 import { addDays, dayOfMonth } from "./dates";
 import { money, money0, shortDate } from "./format";
-import { nthAfter, type Cadence, type RecurringStream } from "./recurring";
-import type { Account, ISODate } from "./types";
+import { detectRecurring, nthAfter, type Cadence, type RecurringStream } from "./recurring";
+import type { Account, ISODate, Transaction } from "./types";
 
 export type Reminder = "none" | "same_day" | "day_before" | "three_days";
 
@@ -230,3 +230,16 @@ export function buildCalendar(opts: CalendarOptions): string {
   return lines.map(foldLine).join("\r\n") + "\r\n";
 }
 
+
+/**
+ * What a person's calendar feed publishes: their repeating bills and paydays
+ * and the few account labels those name — never a balance, a transaction or
+ * which transactions formed a stream. Stored, then served to calendar apps
+ * that never sign in, so it holds exactly what the calendar shows and no more.
+ */
+export function feedSnapshot(data: { transactions: Transaction[]; accounts: CalendarOptions["accounts"]; today: ISODate }) {
+  const streams = remindable(detectRecurring(data.transactions, data.today), data.accounts, true).map((s) => ({ ...s, transactionIds: [] as string[] }));
+  const used = new Set(streams.map((s) => s.accountId));
+  const accounts = data.accounts.filter((a) => used.has(a.id)).map(({ id, name, mask, kind }) => ({ id, name, mask, kind }));
+  return { v: 1 as const, builtOn: data.today, streams, accounts };
+}

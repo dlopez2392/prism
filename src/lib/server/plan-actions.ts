@@ -3,12 +3,15 @@
 // src/lib/server/plan-actions.ts
 //
 // The Server Actions behind the budget and goal editors. Each one validates
-// the whole form, writes one cookie, and returns a message; setting a cookie
-// makes Next.js re-render the page in the same response, so every chart moves
-// with the edit. Next checks each action's Origin against the host (CSRF), and
-// nothing here trusts the browser: the form is re-parsed and the resulting
-// list is re-validated before it is written.
+// the whole form, writes ONE place — the signed-in person's account, or this
+// device's cookie — and returns a message. Either way the page re-renders in
+// the same response (a cookie write does that by itself; an account write
+// calls refresh()), so every chart moves with the edit. Next checks each
+// action's Origin against the host (CSRF), and nothing here trusts the
+// browser: the form is re-parsed and the resulting list is re-validated
+// before it is written.
 
+import { refresh } from "next/cache";
 import { cookies } from "next/headers";
 import {
   goalId,
@@ -22,35 +25,75 @@ import {
   type GoalSettings,
   type PlanFormState,
 } from "@/lib/finance/plan";
-import { requestToday, sourceGoals } from "./finance";
-import { BUDGETS_COOKIE, encodePlanValue, GOALS_COOKIE, PLAN_COOKIE_MAX, planCookieOptions, readPlan } from "./plan-store";
+import type { Budget } from "@/lib/finance/types";
+import { currentAccount } from "@/lib/supabase/server";
+import { saveAccountBudgets, saveAccountGoals } from "./account-store";
+import { readSources, requestToday, sourceGoals } from "./finance";
+import { BUDGETS_COOKIE, encodePlanValue, GOALS_COOKIE, PLAN_COOKIE_MAX, planCookieOptions } from "./plan-store";
 
 const saved = (message: string): PlanFormState => ({ status: "saved", message, at: Date.now() });
 const failed = (message: string, fields?: Record<string, string | undefined>): PlanFormState => ({ status: "error", message, fields });
 
+/** Budgets go to the account when signed in, else to this device. Null means "back to suggested". */
+async function writeBudgets(budgets: Budget[] | null): Promise<void> {
+  const account = await currentAccount();
+  if (account) {
+    await saveAccountBudgets(account, budgets);
+    refresh();
+    return;
+  }
+  const jar = await cookies();
+  if (budgets) jar.set(BUDGETS_COOKIE, encodePlanValue(budgets), planCookieOptions());
+  else jar.delete(BUDGETS_COOKIE);
+}
+
 export async function saveBudgets(_prev: PlanFormState, form: FormData): Promise<PlanFormState> {
   const read = readBudgetForm(form);
   if ("errors" in read) return failed("Check the highlighted amounts.", read.errors);
-  (await cookies()).set(BUDGETS_COOKIE, encodePlanValue(read.budgets), planCookieOptions());
-  return saved(read.budgets.length ? "Budgets saved on this device." : "Budgets cleared on this device.");
+  try {
+    await writeBudgets(read.budgets);
+  } catch {
+    return failed("That didn't save. Try again in a moment.");
+  }
+  const where = (await currentAccount()) ? "to your account" : "on this device";
+  return saved(read.budgets.length ? `Budgets saved ${where}.` : `Budgets cleared ${where}.`);
 }
 
 export async function resetBudgets(): Promise<PlanFormState> {
-  (await cookies()).delete(BUDGETS_COOKIE);
+  try {
+    await writeBudgets(null);
+  } catch {
+    return failed("That didn't save. Try again in a moment.");
+  }
   return saved("Back to the suggested budgets.");
 }
 
-/** The goals as they stand: this device's edits if any, else the source's. */
+/** The goals as they stand: the person's own edits if any, else the source's. */
 async function currentGoals(): Promise<GoalSettings[]> {
-  const plan = readPlan(await cookies());
-  return plan.goals ?? (await sourceGoals()).map(goalSettings);
+  const sources = await readSources();
+  return sources.plan.goals ?? (await sourceGoals(sources)).map(goalSettings);
 }
 
-async function writeGoals(goals: GoalSettings[], message: string): Promise<PlanFormState> {
-  if (validGoals(goals) === null) return failed("Something in that goal didn't check out. Try again.");
+async function writeGoals(goals: GoalSettings[] | null, message: string): Promise<PlanFormState> {
+  if (goals && validGoals(goals) === null) return failed("Something in that goal didn't check out. Try again.");
+  const account = await currentAccount();
+  if (account) {
+    try {
+      await saveAccountGoals(account, goals);
+    } catch {
+      return failed("That didn't save. Try again in a moment.");
+    }
+    refresh();
+    return saved(message.replace("on this device", "to your account"));
+  }
+  const jar = await cookies();
+  if (!goals) {
+    jar.delete(GOALS_COOKIE);
+    return saved(message);
+  }
   const value = encodePlanValue(goals);
   if (value.length > PLAN_COOKIE_MAX) return failed("That's more than this device can hold. Try shorter goal names.");
-  (await cookies()).set(GOALS_COOKIE, value, planCookieOptions());
+  jar.set(GOALS_COOKIE, value, planCookieOptions());
   return saved(message);
 }
 
@@ -82,8 +125,7 @@ export async function deleteGoal(_prev: PlanFormState, form: FormData): Promise<
 }
 
 export async function restoreGoals(): Promise<PlanFormState> {
-  (await cookies()).delete(GOALS_COOKIE);
-  return saved("The example goals are back.");
+  return writeGoals(null, "The example goals are back.");
 }
 
 /** "Use this amount" from the what-if slider: the value arrives in cents. */

@@ -20,7 +20,10 @@ import { dayDate, money, money0, shortDate } from "@/lib/finance/format";
 import { analyze, FORECAST_DAYS } from "@/lib/finance/model";
 import { monthlyCost } from "@/lib/finance/recurring";
 import { dailyBalances } from "@/lib/finance/view";
+import { accountFeedToken } from "@/lib/server/account-store";
 import { getFinance } from "@/lib/server/finance";
+import { vaultKey } from "@/lib/server/vault";
+import { currentAccount } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Future" };
 
@@ -63,6 +66,7 @@ export default async function FuturePage() {
   const subs = a.streams.filter((s) => s.kind === "subscription" && s.amount < 0).sort((x, y) => monthlyCost(y) - monthlyCost(x));
   const subsMonthly = subs.reduce((s, x) => s + monthlyCost(x), 0);
   const reminders = remindable(a.streams, data.accounts, true).length;
+  const personal = data.account ? { path: await ownFeedPath() } : undefined;
   const lowest = forecast.lowest;
   const end = forecast.points.at(-1)!;
 
@@ -136,7 +140,11 @@ export default async function FuturePage() {
           <CardHeader
             title="The next 30 days"
             subtitle="Paydays, bills and transfers we found repeating"
-            action={reminders > 0 ? <AddToCalendar demo={data.source === "demo"} count={reminders} /> : undefined}
+            action={
+              reminders > 0 ? (
+                <AddToCalendar demo={data.source === "demo"} count={reminders} personal={personal} signIn={data.accountsEnabled && !data.account} />
+              ) : undefined
+            }
           />
           <div className="mt-2">
             {next30.length ? (
@@ -190,4 +198,18 @@ function Figure({ label, value, note, status }: { label: string; value: string; 
       </div>
     </Card>
   );
+}
+
+/** The signed-in person's calendar feed path, if they've made one. */
+async function ownFeedPath(): Promise<string | null> {
+  const account = await currentAccount();
+  let key: Buffer | null = null;
+  try {
+    key = vaultKey();
+  } catch {
+    key = null;
+  }
+  if (!account || !key) return null;
+  const token = await accountFeedToken(account, key, { create: false }).catch(() => null);
+  return token ? `/calendar/feed/${token}.ics` : null;
 }

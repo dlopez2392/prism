@@ -17,6 +17,7 @@ import {
   PlugZap,
   Target,
   Telescope,
+  UserRound,
   Waves,
   type LucideIcon,
 } from "lucide-react";
@@ -70,7 +71,15 @@ export function PrismMark({ className }: { className?: string }) {
   );
 }
 
-export function Sidebar({ householdName, sourceLabel }: { householdName: string; sourceLabel: string }) {
+/** Where the person goes for their account: Account when signed in, Sign in when accounts exist, nothing otherwise. */
+export type AccountNav = { signedIn: boolean; email: string | null } | null;
+
+function accountItem(account: AccountNav): NavItem | null {
+  if (!account) return null;
+  return account.signedIn ? { href: "/account", label: "Account", icon: UserRound } : { href: "/sign-in", label: "Sign in", icon: UserRound };
+}
+
+export function Sidebar({ householdName, sourceLabel, account }: { householdName: string; sourceLabel: string; account: AccountNav }) {
   const pathname = usePathname();
   const link = (item: NavItem) => {
     const active = isActive(pathname, item.href);
@@ -112,22 +121,44 @@ export function Sidebar({ householdName, sourceLabel }: { householdName: string;
         ))}
       </nav>
       <ul className="border-t border-line pt-3">{link(CONNECTIONS)}</ul>
-      <div className="mt-3 flex items-center gap-3 rounded-ctl bg-surface-2 p-3">
-        <div className="bg-prism grid size-9 place-items-center rounded-full text-sm font-bold text-[var(--on-hero)]">{householdName.slice(0, 1)}</div>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-ink-1">{householdName}</div>
-          <div className="truncate text-xs text-ink-3">{sourceLabel}</div>
+      {account?.signedIn ? (
+        <Link href="/account" className="mt-3 flex items-center gap-3 rounded-ctl bg-surface-2 p-3 transition-colors duration-150 hover:bg-surface-3">
+          <div className="bg-prism grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold text-[var(--on-hero)]">{householdName.slice(0, 1)}</div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-ink-1">{householdName}</div>
+            <div className="truncate text-xs text-ink-3">{account.email ?? sourceLabel}</div>
+          </div>
+        </Link>
+      ) : (
+        <div className="mt-3 rounded-ctl bg-surface-2 p-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-prism grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold text-[var(--on-hero)]">{householdName.slice(0, 1)}</div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-ink-1">{householdName}</div>
+              <div className="truncate text-xs text-ink-3">{sourceLabel}</div>
+            </div>
+          </div>
+          {account ? (
+            <Link
+              href="/sign-in"
+              className="mt-3 flex h-9 items-center justify-center gap-1.5 rounded-ctl border border-line-strong text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
+            >
+              <UserRound aria-hidden className="size-4" />
+              Sign in
+            </Link>
+          ) : null}
         </div>
-      </div>
+      )}
     </aside>
   );
 }
 
-export function BottomNav() {
+export function BottomNav({ account }: { account: AccountNav }) {
   const pathname = usePathname();
   const all = NAV.flatMap((g) => g.items);
   const tabs = TABS.map((h) => all.find((i) => i.href === h)!);
-  const more = [...all.filter((i) => !TABS.includes(i.href)), CONNECTIONS];
+  const you = accountItem(account);
+  const more = [...all.filter((i) => !TABS.includes(i.href)), CONNECTIONS, ...(you ? [you] : [])];
   const moreActive = more.some((i) => isActive(pathname, i.href));
   return (
     <>

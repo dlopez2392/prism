@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
-import { BottomNav, PrismMark, Sidebar } from "@/components/shell";
+import { BottomNav, PrismMark, Sidebar, type AccountNav } from "@/components/shell";
+import { CarryoverBanner } from "@/components/carryover-banner";
 import { ThemeToggle, THEME_SCRIPT } from "@/components/theme-toggle";
 import { ConnectBank } from "@/components/connect-bank";
 import { BisMark } from "@/components/bis-mark";
@@ -36,6 +37,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const data = await getFinance();
   const sourceLabel = data.source === "demo" ? "Demo household" : `${data.institutions.length} ${data.institutions.length === 1 ? "connection" : "connections"}`;
+  const accountNav: AccountNav = data.accountsEnabled ? { signedIn: data.account !== null, email: data.account?.email ?? null } : null;
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -43,7 +45,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className={`${jakarta.variable} font-sans`}>
         <div className="mx-auto flex max-w-[1480px]">
-          <Sidebar householdName={data.household.name} sourceLabel={sourceLabel} />
+          <Sidebar householdName={data.household.name} sourceLabel={sourceLabel} account={accountNav} />
           <div className="min-w-0 flex-1">
             <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-line bg-surface-0/75 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
               <Link href="/" className="flex items-center gap-2 lg:hidden">
@@ -78,6 +80,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </Link>
               </div>
             ) : null}
+            {data.carryover.length ? <CarryoverBanner items={data.carryover} /> : null}
             <main className="px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-14 lg:pt-7">
               {children}
               <footer className="mt-12 flex flex-col gap-2 border-t border-line pt-5 text-xs text-ink-3 lg:flex-row lg:items-center lg:justify-between">
@@ -90,7 +93,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </main>
           </div>
         </div>
-        <BottomNav />
+        <BottomNav account={accountNav} />
       </body>
     </html>
   );

@@ -84,3 +84,13 @@ describe("the proxy matcher", () => {
     expect(proxy).toContain(`key: "${COINBASE_COOKIE}"`);
   });
 });
+
+describe("the proxy matcher and the session cookie", () => {
+  it("names the account session cookie and its first chunk", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { AUTH_COOKIE } = await import("@/lib/supabase/config");
+    const proxy = readFileSync(new URL("../../proxy.ts", import.meta.url), "utf8");
+    expect(proxy).toContain(`key: "${AUTH_COOKIE}"`);
+    expect(proxy).toContain(`key: "${AUTH_COOKIE}.0"`);
+  });
+});

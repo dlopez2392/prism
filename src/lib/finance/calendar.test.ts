@@ -184,3 +184,27 @@ describe("parseReminder", () => {
     expect(parseReminder(null)).toBe("day_before");
   });
 });
+
+describe("feedSnapshot", () => {
+  it("publishes bills and paydays only — no balances, no transactions, no stray accounts", async () => {
+    const { feedSnapshot } = await import("./calendar");
+    const data = buildDemoData(TODAY);
+    const snap = feedSnapshot(data);
+    expect(snap.v).toBe(1);
+    expect(snap.streams).toHaveLength(17);
+    expect(snap.streams.every((s) => s.transactionIds.length === 0)).toBe(true);
+    for (const a of snap.accounts) expect(Object.keys(a).sort()).toEqual(["id", "kind", "mask", "name"]);
+    const used = new Set(snap.streams.map((s) => s.accountId));
+    expect(snap.accounts.every((a) => used.has(a.id))).toBe(true);
+    expect(JSON.stringify(snap)).not.toMatch(/"balance"|"history"/);
+    // The snapshot is exactly what the calendar needs: rebuilding from it gives the same file.
+    const fromData = buildCalendar(options({ streams: detectRecurring(data.transactions, TODAY), accounts: data.accounts }));
+    const fromSnap = buildCalendar(options({ streams: snap.streams, accounts: snap.accounts }));
+    expect(fromSnap).toBe(fromData);
+  });
+
+  it("is empty for a household with nothing repeating", async () => {
+    const { feedSnapshot } = await import("./calendar");
+    expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY })).toEqual({ v: 1, builtOn: TODAY, streams: [], accounts: [] });
+  });
+});

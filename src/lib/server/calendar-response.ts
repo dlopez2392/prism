@@ -1,24 +1,30 @@
 // src/lib/server/calendar-response.ts
 //
-// The shared half of the two calendar routes: read the person's choices from
+// The shared half of the calendar routes: read the person's choices from
 // the query string, build the file, and send it with headers every calendar
 // app accepts. Choices arrive from a URL, so each is parsed to a closed set.
 
 import { BRAND } from "@/lib/brand";
-import { buildCalendar, parseReminder } from "@/lib/finance/calendar";
+import { buildCalendar, parseReminder, type CalendarOptions } from "@/lib/finance/calendar";
 import { detectRecurring } from "@/lib/finance/recurring";
 import type { FinanceData } from "@/lib/finance/types";
 
+/** From transactions (a download, the demo feed) or from a stored snapshot's streams (a person's feed). */
+type Source = { accounts: CalendarOptions["accounts"]; today: FinanceData["today"] } & (
+  | { transactions: FinanceData["transactions"] }
+  | { streams: CalendarOptions["streams"] }
+);
+
 export function calendarResponse(
   req: Request,
-  data: Pick<FinanceData, "transactions" | "accounts" | "today">,
+  data: Source,
   mode: { feed: boolean; filename: string; cacheControl: string; demo: boolean },
 ): Response {
   const url = new URL(req.url);
   const q = url.searchParams;
   const paydays = q.get("paydays") !== "0";
   const body = buildCalendar({
-    streams: detectRecurring(data.transactions, data.today),
+    streams: "streams" in data ? data.streams : detectRecurring(data.transactions, data.today),
     accounts: data.accounts,
     today: data.today,
     now: new Date(),
