@@ -35,7 +35,7 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const data = await getFinance();
-  const sourceLabel = data.source === "demo" ? "Demo household" : `${data.institutions.length} linked ${data.institutions.length === 1 ? "bank" : "banks"}`;
+  const sourceLabel = data.source === "demo" ? "Demo household" : `${data.institutions.length} ${data.institutions.length === 1 ? "connection" : "connections"}`;
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

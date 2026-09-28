@@ -71,14 +71,27 @@ export default async function NetWorthPage() {
             <div className="text-sm font-semibold text-[var(--on-hero-soft)]">Net worth today</div>
             <div className="mt-1 text-[48px] font-extrabold leading-none tracking-tight">{money0(now.net)}</div>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-              <Change onHero text={signedMoney0(now.net - prev.net)} up={now.net >= prev.net} suffix="this month" />
-              <Change onHero text={signedMoney0(now.net - first.net)} up={now.net >= first.net} suffix="in a year" />
+              {series.length >= 2 ? (
+                <>
+                  <Change onHero text={signedMoney0(now.net - prev.net)} up={now.net >= prev.net} suffix="this month" />
+                  <Change
+                    onHero
+                    text={signedMoney0(now.net - first.net)}
+                    up={now.net >= first.net}
+                    suffix={series.length >= 13 ? "in a year" : `in ${series.length - 1} ${series.length === 2 ? "month" : "months"}`}
+                  />
+                </>
+              ) : (
+                <span className="text-xs font-semibold text-[var(--on-hero-soft)]">Tracking from today — the change shows after your first month</span>
+              )}
             </div>
           </div>
-          <div className="mt-6" aria-hidden>
-            <div className="mb-2 text-xs font-semibold text-[var(--on-hero-soft)]">Change each month</div>
-            <MonthlyChange values={series.slice(1).map((p, i) => p.net - series[i]!.net)} />
-          </div>
+          {series.length >= 2 ? (
+            <div className="mt-6" aria-hidden>
+              <div className="mb-2 text-xs font-semibold text-[var(--on-hero-soft)]">Change each month</div>
+              <MonthlyChange values={series.slice(1).map((p, i) => p.net - series[i]!.net)} />
+            </div>
+          ) : null}
           <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-ctl bg-[var(--on-hero-faint)] p-3">
               <dt className="text-xs text-[var(--on-hero-soft)]">You own</dt>
@@ -128,7 +141,7 @@ export default async function NetWorthPage() {
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <Card className="p-5 sm:p-6 lg:col-span-7">
-          <CardHeader title="Accounts" subtitle={`${data.accounts.length} accounts across ${data.institutions.length} institutions`} />
+          <CardHeader title="Accounts" subtitle={`${data.accounts.length} ${data.accounts.length === 1 ? "account" : "accounts"} across ${data.institutions.length} ${data.institutions.length === 1 ? "institution" : "institutions"}`} />
           <div className="mt-3 space-y-5">
             {groups.map((g) => (
               <section key={g.label}>

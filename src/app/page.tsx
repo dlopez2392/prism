@@ -69,8 +69,15 @@ export default async function OverviewPage() {
               <div className="text-sm font-semibold text-[var(--on-hero-soft)]">Net worth</div>
               <div className="mt-1 text-[44px] font-extrabold leading-none tracking-tight sm:text-[56px]">{money0(nowNet)}</div>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-                <Change onHero text={signedMoney0(nowNet - lastMonthNet)} up={nowNet >= lastMonthNet} suffix="this month" />
-                <Change onHero text={signedMoney0(nowNet - yearAgoNet)} up={nowNet >= yearAgoNet} suffix="in 12 months" />
+                {nw.length >= 2 ? (
+                  <>
+                    <Change onHero text={signedMoney0(nowNet - lastMonthNet)} up={nowNet >= lastMonthNet} suffix="this month" />
+                    <Change onHero text={signedMoney0(nowNet - yearAgoNet)} up={nowNet >= yearAgoNet} suffix={nw.length >= 13 ? "in 12 months" : `in ${nw.length - 1} ${nw.length === 2 ? "month" : "months"}`} />
+                  </>
+                ) : (
+                  // A just-linked account has one month-end: a "+$0" arrow would be a claim, not a fact.
+                  <span className="text-xs font-semibold text-[var(--on-hero-soft)]">Tracking from today — the change shows after your first month</span>
+                )}
               </div>
             </div>
             <Link href="/net-worth" className="rounded-pill bg-[var(--on-hero-faint)] px-3 py-1.5 text-xs font-bold text-[var(--on-hero)] transition-opacity duration-150 hover:opacity-80">
@@ -131,9 +138,19 @@ export default async function OverviewPage() {
         <StatTile
           label="Left in budgets"
           value={money0(Math.max(0, a.budgetTotals.remaining))}
-          foot={<span>of {money0(a.budgetTotals.limit)} for {monthLong(a.today)}</span>}
+          foot={
+            a.budgetTotals.limit > 0 ? (
+              <span>of {money0(a.budgetTotals.limit)} for {monthLong(a.today)}</span>
+            ) : (
+              <Link href="/budgets" className="font-semibold text-accent-ink hover:underline">
+                Set a budget
+              </Link>
+            )
+          }
           change={
-            a.budgetTotals.projected > a.budgetTotals.limit ? (
+            a.budgetTotals.limit === 0 ? (
+              <StatusPill status="neutral">No budgets yet</StatusPill>
+            ) : a.budgetTotals.projected > a.budgetTotals.limit ? (
               <StatusPill status="warn">On pace to go over</StatusPill>
             ) : (
               <StatusPill status="good">On track</StatusPill>
