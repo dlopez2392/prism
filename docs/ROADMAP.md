@@ -28,8 +28,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    applied live), sealed tokens, device data moved in only when the person
    agrees, and delete-account that revokes every link first. Verified end to
    end against the live project with a throwaway user (deleted by the app's
-   own Delete account). **Owner steps left:** Auth URL configuration, the
-   code in the email template, a real SMTP sender, and `PRISM_VAULT_KEY`.
+   own Delete account). `PRISM_VAULT_KEY` set in Vercel (sensitive) on
+   2026-09-28 — replace freely until customers link banks, never after.
+   **Owner steps left:** Auth URL configuration, the code in the email
+   template, and a real SMTP sender.
 2. **Plaid webhooks and a stored sync cursor** — each load fetches only what
    changed.
 3. **Editable budgets and goals**, saved per person. **Built on the device
