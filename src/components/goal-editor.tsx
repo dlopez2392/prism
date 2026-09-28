@@ -2,7 +2,8 @@
 
 // src/components/goal-editor.tsx
 //
-// Add, edit and delete a savings goal, saved on this device. The same form
+// Add, edit and delete a savings goal, saved to the account (or this device
+// when signed out). The same form
 // serves all three: a new goal starts blank with a finish line a year out; an
 // existing one opens with its numbers and a two-step delete, because a goal's
 // history is the one thing an edit can't bring back.
@@ -34,7 +35,19 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 
 type Mode = "new" | "edit" | "empty";
 
-export function GoalEditor({ goal, others, today, mode }: { goal?: GoalSettings; others: GoalSettings[]; today: string; mode: Mode }) {
+export function GoalEditor({
+  goal,
+  others,
+  today,
+  mode,
+  signedIn = false,
+}: {
+  goal?: GoalSettings;
+  others: GoalSettings[];
+  today: string;
+  mode: Mode;
+  signedIn?: boolean;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
@@ -80,6 +93,7 @@ export function GoalEditor({ goal, others, today, mode }: { goal?: GoalSettings;
           goal={goal}
           others={others}
           today={today}
+          signedIn={signedIn}
           onDone={(message) => {
             setNotice(message);
             dialog.current?.close();
@@ -95,12 +109,14 @@ function GoalForm({
   goal,
   others,
   today,
+  signedIn,
   onDone,
   onCancel,
 }: {
   goal?: GoalSettings;
   others: GoalSettings[];
   today: string;
+  signedIn: boolean;
   onDone: (message: string) => void;
   onCancel: () => void;
 }) {
@@ -217,7 +233,9 @@ function GoalForm({
           </button>
         </div>
       </div>
-      <p className="mt-4 text-xs text-ink-3">Saved in this browser only — update what you&apos;ve saved whenever you like.</p>
+      <p className="mt-4 text-xs text-ink-3">
+        {signedIn ? "Saved to your account. " : "Saved in this browser only. "}Update what you&apos;ve saved whenever you like.
+      </p>
     </form>
   );
 }

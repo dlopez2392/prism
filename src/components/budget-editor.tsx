@@ -4,7 +4,8 @@
 //
 // "Edit budgets": one money field per category, each beside what that
 // category usually costs a month, so a limit is set against what's real. Blank
-// means "don't budget this". Saving writes this device's plan and the page
+// means "don't budget this". Saving writes the person's plan (their account,
+// or this device when signed out) and the page
 // re-renders around it — rings, pacing and the overview all move together.
 
 import { startTransition, useActionState, useRef, useState, type FormEvent } from "react";
@@ -21,13 +22,15 @@ import { resetBudgets, saveBudgets } from "@/lib/server/plan-actions";
 type Props = {
   budgets: Budget[];
   typical: TypicalSpend;
-  /** True once the person has saved their own budgets on this device. */
+  /** True once the person has saved their own budgets. */
   edited: boolean;
+  /** Signed in: saves go to the account, and the footer says so. */
+  signedIn?: boolean;
   variant?: "ghost" | "primary";
   label?: string;
 };
 
-export function BudgetEditor({ budgets, typical, edited, variant = "ghost", label = "Edit budgets" }: Props) {
+export function BudgetEditor({ budgets, typical, edited, signedIn = false, variant = "ghost", label = "Edit budgets" }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   // A fresh form every time the editor opens: nothing half-typed or stale
   // from a cancelled visit survives into the next one.
@@ -62,6 +65,7 @@ export function BudgetEditor({ budgets, typical, edited, variant = "ghost", labe
           budgets={budgets}
           typical={typical}
           edited={edited}
+          signedIn={signedIn}
           onDone={(message) => {
             setNotice(message);
             dialog.current?.close();
@@ -77,6 +81,7 @@ function BudgetForm({
   budgets,
   typical,
   edited,
+  signedIn,
   onDone,
   onCancel,
 }: Omit<Props, "variant" | "label"> & { onDone: (message: string) => void; onCancel: () => void }) {
@@ -149,7 +154,9 @@ function BudgetForm({
           </button>
         </div>
       </div>
-      <p className="mt-4 text-xs text-ink-3">Saved in this browser only — they won&apos;t follow you to another device.</p>
+      <p className="mt-4 text-xs text-ink-3">
+        {signedIn ? "Saved to your account — on every device you sign in on." : "Saved in this browser only — they won't follow you to another device."}
+      </p>
     </form>
   );
 }

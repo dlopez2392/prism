@@ -36,7 +36,14 @@ export default async function BudgetsPage() {
   const edited = data.planEdited.budgets;
   const drafted = data.source === "plaid" && !edited;
   const editor = (variant: "ghost" | "primary", label?: string) => (
-    <BudgetEditor budgets={data.budgets} typical={typicalMonthlySpend(data.transactions, a.today)} edited={edited} variant={variant} label={label} />
+    <BudgetEditor
+      budgets={data.budgets}
+      typical={typicalMonthlySpend(data.transactions, a.today)}
+      edited={edited}
+      signedIn={data.account !== null}
+      variant={variant}
+      label={label}
+    />
   );
   const scale = Math.max(1, ...budgets.map((b) => Math.max(b.limit, b.projected, b.spent))) * 1.08;
   const sorted = [...budgets].sort((x, y) => y.limit - x.limit);
@@ -75,7 +82,7 @@ export default async function BudgetsPage() {
           drafted
             ? "Drafted from your last three months — a starting point from what's real. Change any line to make it yours."
             : edited
-              ? `Your plan for ${month}, saved on this device, and how it's going.`
+              ? `Your plan for ${month}, saved ${data.account ? "to your account" : "on this device"}, and how it's going.`
               : `Your plan for ${month}, and how it's going.`
         }
         action={editor("ghost")}

@@ -39,7 +39,7 @@ export default async function GoalsPage() {
             icon={PiggyBank}
             title="Your goals will live here"
             body="Name something you're saving for and a monthly amount — each goal gets a ring, a finish date, and a what-if slider."
-            action={<GoalEditor mode="empty" others={settings} today={today} />}
+            action={<GoalEditor mode="empty" others={settings} today={today} signedIn={data.account !== null} />}
           />
         </Card>
       </div>
@@ -65,12 +65,16 @@ export default async function GoalsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Goals"
-        subtitle={data.planEdited.goals ? "What you're saving for, saved on this device, and when you'll get there." : "What you're saving for, and when you'll get there."}
+        subtitle={
+          data.planEdited.goals
+            ? `What you're saving for, saved ${data.account ? "to your account" : "on this device"}, and when you'll get there.`
+            : "What you're saving for, and when you'll get there."
+        }
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
             {restore}
             {goals.length < MAX_GOALS ? (
-              <GoalEditor mode="new" others={settings} today={today} />
+              <GoalEditor mode="new" others={settings} today={today} signedIn={data.account !== null} />
             ) : (
               <span className="text-xs text-ink-3">{MAX_GOALS} goals is the most Prism tracks at once.</span>
             )}
@@ -125,7 +129,7 @@ export default async function GoalsPage() {
           return (
             <Card as="li" key={g.id} className="relative flex flex-col items-center p-5 text-center">
               <div className="absolute top-3 right-3">
-                <GoalEditor mode="edit" goal={goalSettings(g)} others={settings} today={today} />
+                <GoalEditor mode="edit" goal={goalSettings(g)} others={settings} today={today} signedIn={data.account !== null} />
               </div>
               <ProgressRing ratio={p.progress} color={color} size={128} stroke={13} label={`${g.name}: ${percent(p.progress)} saved`}>
                 <span aria-hidden className="text-3xl">

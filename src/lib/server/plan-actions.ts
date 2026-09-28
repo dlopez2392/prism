@@ -92,7 +92,7 @@ async function writeGoals(goals: GoalSettings[] | null, message: string): Promis
     return saved(message);
   }
   const value = encodePlanValue(goals);
-  if (value.length > PLAN_COOKIE_MAX) return failed("That's more than this device can hold. Try shorter goal names.");
+  if (value.length > PLAN_COOKIE_MAX) return failed("That's more than this browser can hold. Try shorter goal names, or sign in to keep them in an account.");
   jar.set(GOALS_COOKIE, value, planCookieOptions());
   return saved(message);
 }
