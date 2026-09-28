@@ -40,7 +40,8 @@ describe("plan cookies", () => {
     expect(readPlan(jar({}))).toEqual({ budgets: null, goals: null });
     const tampered = encodePlanValue([{ category: "food", limit: -5 }]);
     const unversioned = Buffer.from(JSON.stringify([{ category: "food", limit: 5 }])).toString("base64url");
-    for (const value of [tampered, unversioned, "1.%%%", "1.", "2.W10"]) {
+    // "" is how a cookie deleted earlier in the same request reads back during the re-render.
+    for (const value of [tampered, unversioned, "1.%%%", "1.", "2.W10", ""]) {
       expect(readPlan(jar({ [BUDGETS_COOKIE]: value })).budgets).toBeNull();
     }
   });

@@ -31,7 +31,7 @@ import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
 import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { liveCoinbaseToken, loadAccount, saveFeedSnapshot } from "./account-store";
-import { BUDGETS_COOKIE, CARRYOVER_COOKIE, GOALS_COOKIE, readPlan } from "./plan-store";
+import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { open, VAULT_COOKIE, vaultKey, type VaultItem } from "./vault";
 
 export type Loaded = FinanceData & {
@@ -165,8 +165,11 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   const banks = plaidConfig() ? vaultItems(jar).length : 0;
   if (banks) out.push(banks === 1 ? "a linked bank" : `${banks} linked banks`);
   if (coinbaseConfig() && safeVaultKey() && readLink(jar.get(COINBASE_COOKIE)?.value, safeVaultKey()!)) out.push("Coinbase");
-  if (jar.get(BUDGETS_COOKIE)) out.push("your budgets");
-  if (jar.get(GOALS_COOKIE)) out.push("your goals");
+  // Decoded, not merely present: a cookie deleted by an action in this same
+  // request is still listed during the re-render, with an empty value.
+  const plan = readPlan(jar);
+  if (plan.budgets) out.push("your budgets");
+  if (plan.goals) out.push("your goals");
   return out;
 }
 
