@@ -19,21 +19,15 @@ import type { AgentData } from "@/lib/agent/tools";
 import { applyPlan, type Plan } from "@/lib/finance/plan";
 import { feedSnapshot } from "@/lib/finance/calendar";
 import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/finance/types";
-import {
-  getAccounts,
-  getHoldings,
-  plaidConfig,
-  PlaidError,
-  syncAllTransactions,
-  type PlaidConfig,
-} from "@/lib/plaid/client";
+import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
+import { needsSync, syncTransactions, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction, suggestedLimit } from "@/lib/plaid/map";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
 import { coinbaseNeedsSignIn, mapCoinbase } from "@/lib/coinbase/map";
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
 import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
-import { liveCoinbaseToken, loadAccount, saveAccountTimeZone, saveFeedSnapshot } from "./account-store";
+import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveAccountTimeZone, saveFeedSnapshot } from "./account-store";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { open, VAULT_COOKIE, vaultKey, type VaultItem } from "./vault";
 
@@ -114,9 +108,14 @@ export type Sources = {
   feedUpdatedAt: string | null;
   /** The zone the account last saw the person in. */
   timeZone: string | null;
+  /** Each bank's stored sync, and whether a new one may be saved (never for a connected app). Null on a device-only visit. */
+  plaidSync: PlaidSync | null;
 };
 
-type Money = Pick<Sources, "items" | "coinbase">;
+/** Where a bank's sync starts from, and where a newer one goes — `save` is null when nothing may be written. */
+type PlaidSync = { stored: Map<string, StoredSync>; save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null };
+
+type Money = Pick<Sources, "items" | "coinbase" | "plaidSync">;
 
 function safeVaultKey(): Buffer | null {
   try {
@@ -130,7 +129,7 @@ function safeVaultKey(): Buffer | null {
  * Uncached on purpose: Server Actions read through this, so a save is never
  * checked against a copy of the data cached earlier in the same request.
  */
-export async function readSources(): Promise<Sources> {
+export async function readSources({ withSync = false }: { withSync?: boolean } = {}): Promise<Sources> {
   const jar = await cookies();
   const plaid = plaidConfig();
   const cb = coinbaseConfig();
@@ -138,7 +137,8 @@ export async function readSources(): Promise<Sources> {
   const account = await currentAccount();
 
   if (account) {
-    const a = await loadAccount(account, key);
+    // Stored bank copies are loaded (and opened) only for what draws money — never for a plan edit.
+    const a = await loadAccount(account, key, { withSync });
     const record = a.coinbase;
     return {
       account,
@@ -148,6 +148,19 @@ export async function readSources(): Promise<Sources> {
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
       timeZone: a.timeZone,
+      plaidSync: {
+        stored: a.plaidSync,
+        // After the response: the page already has the new transactions; the saved copy is for next time.
+        save: key
+          ? (itemId, state, fromVersion, startedAt) =>
+              after(() =>
+                saveAccountPlaidSync(account, itemId, state, key, fromVersion, startedAt).catch((e: unknown) =>
+                  // No bank data in the message — only that a copy wasn't kept (the next visit syncs again).
+                  console.error("Prism: a bank's sync wasn't saved:", e instanceof Error ? e.message : "unknown error"),
+                ),
+              )
+          : null,
+      },
     };
   }
 
@@ -162,10 +175,12 @@ export async function readSources(): Promise<Sources> {
     coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
     feedUpdatedAt: null,
     timeZone: null,
+    // A device keeps no sync: its banks are read in full each time, as before accounts.
+    plaidSync: null,
   };
 }
 
-const getSources = cache(readSources);
+const getSources = cache(() => readSources({ withSync: true }));
 
 const isLive = (s: Money) => s.items.length > 0 || s.coinbase !== null;
 
@@ -204,7 +219,7 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
   const config = plaidConfig();
   if (!isLive(src)) return { ...buildDemoData(today), notice: null, plaidReady: config !== null };
   const [banks, crypto] = await Promise.all([
-    config && src.items.length ? loadPlaid(config, src.items, today) : Promise.resolve(emptyLive(today, config !== null)),
+    config && src.items.length ? loadPlaid(config, src.items, today, src.plaidSync) : Promise.resolve(emptyLive(today, config !== null)),
     src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed)) : Promise.resolve(null),
   ]);
   return crypto ? withCoinbase(banks, crypto) : banks;
@@ -262,12 +277,14 @@ export async function agentFinance(account: Account): Promise<AgentData> {
   const plaid = plaidConfig();
   const cb = coinbaseConfig();
   const key = safeVaultKey();
-  const a = await loadAccount(account, key, { strict: true });
+  const a = await loadAccount(account, key, { strict: true, withSync: true });
   const timeZone = validZone(a.timeZone) ?? "UTC";
   const today = todayIn(timeZone);
   const record = a.coinbase;
   const src: Money = {
     items: plaid ? a.items : [],
+    // Catch up from the stored cursor in memory; a connected app never saves (and the database wouldn't let it).
+    plaidSync: { stored: a.plaidSync, save: null },
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
   };
   const base = greeted(await moneyFor(src, today, "Coinbase balances update the next time you open Prism."), a.firstName, isLive(src));
@@ -352,24 +369,56 @@ function withCoinbase(base: Live, cb: CoinbaseLoad): Live {
   };
 }
 
-async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate): Promise<Live> {
+const isReauth = (e: unknown) => e instanceof PlaidError && (e.code === "ITEM_LOGIN_REQUIRED" || e.code === "PENDING_EXPIRATION");
+
+/**
+ * A bank as of now: the stored copy — balances and transactions — while it's
+ * fresh and Plaid has been quiet (no Plaid call at all); else the balances
+ * plus only what changed since its cursor, or the whole history the first
+ * time. If Plaid can't be reached, the last copy still stands (and the page
+ * says so), unless the bank needs the person to sign in again.
+ */
+async function bankFor(
+  config: PlaidConfig,
+  item: VaultItem,
+  sync: PlaidSync | null,
+  today: ISODate,
+): Promise<{ accounts: PlaidAccount[]; transactions: PlaidTransaction[]; ready: boolean; syncedAt: string; fromCopy: boolean }> {
+  const stored = sync?.stored.get(item.itemId) ?? null;
+  const copy = stored?.state ?? null;
+  if (copy?.accounts && !needsSync(stored)) return { accounts: copy.accounts, transactions: copy.transactions, ready: copy.ready, syncedAt: stored!.syncedAt!, fromCopy: false };
+  const startedAt = new Date().toISOString();
+  let next: SyncState;
+  try {
+    const [acc, synced] = await Promise.all([getAccounts(config, item.accessToken), syncTransactions(config, item.accessToken, copy, { today })]);
+    next = { ...synced, accounts: acc.accounts };
+  } catch (e) {
+    if (copy?.accounts && stored?.syncedAt && !isReauth(e)) return { accounts: copy.accounts, transactions: copy.transactions, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true };
+    throw e;
+  }
+  // Outside the try: a problem keeping the copy is never mistaken for Plaid being down.
+  sync?.save?.(item.itemId, next, stored?.version ?? 0, startedAt);
+  return { accounts: next.accounts ?? [], transactions: next.transactions, ready: next.ready, syncedAt: startedAt, fromCopy: false };
+}
+
+async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate, sync: PlaidSync | null = null): Promise<Live> {
   const institutions: Institution[] = [];
   const accounts: FinanceData["accounts"] = [];
   const transactions: FinanceData["transactions"] = [];
   const holdings: Holding[] = [];
   const problems: string[] = [];
-  const now = new Date().toISOString();
 
   await Promise.all(
     items.map(async (item) => {
       const name = item.institutionName ?? "Your bank";
       try {
-        const [acc, sync] = await Promise.all([getAccounts(config, item.accessToken), syncAllTransactions(config, item.accessToken)]);
-        const txns = sync.transactions.map(mapTransaction);
+        const bank = await bankFor(config, item, sync, today);
+        const txns = bank.transactions.map(mapTransaction);
         transactions.push(...txns);
-        accounts.push(...acc.accounts.map((a) => mapAccount(a, item.itemId, txns, today)));
-        institutions.push({ id: item.itemId, name, health: sync.ready ? "healthy" : "syncing", lastSyncedAt: now, source: "plaid" });
-        if (acc.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
+        accounts.push(...bank.accounts.map((a) => mapAccount(a, item.itemId, txns, today)));
+        institutions.push({ id: item.itemId, name, health: bank.ready ? "healthy" : "syncing", lastSyncedAt: bank.syncedAt, source: "plaid" });
+        if (bank.fromCopy) problems.push(`${name} couldn't be updated just now — showing it as of the last sync.`);
+        if (bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
           try {
             const h = await getHoldings(config, item.accessToken);
             holdings.push(...mapHoldings(h.holdings, h.securities));
@@ -378,7 +427,7 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
           }
         }
       } catch (e) {
-        const reauth = e instanceof PlaidError && (e.code === "ITEM_LOGIN_REQUIRED" || e.code === "PENDING_EXPIRATION");
+        const reauth = isReauth(e);
         institutions.push({ id: item.itemId, name, health: "needs_attention", lastSyncedAt: null, source: "plaid" });
         problems.push(reauth ? `${name} needs you to sign in again.` : `We couldn't reach ${name} just now.`);
       }

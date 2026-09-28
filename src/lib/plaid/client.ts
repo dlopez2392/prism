@@ -8,7 +8,8 @@
 //   PLAID_CLIENT_ID, PLAID_SECRET   — from the Plaid dashboard
 //   PLAID_ENV                       — "sandbox" (default) or "production"
 //   PLAID_REDIRECT_URI              — optional; required for OAuth banks in production
-//   PLAID_WEBHOOK_URL               — optional; SYNC_UPDATES_AVAILABLE lands here
+//   PLAID_WEBHOOK_URL               — optional; defaults to this site's /api/plaid/webhook
+//   PLAID_API_URL                   — TEST HOOK, sandbox only: point at a fake Plaid
 
 import { BRAND } from "@/lib/brand";
 
@@ -29,7 +30,9 @@ export function plaidConfig(env: Env = process.env): PlaidConfig | null {
   const secret = env.PLAID_SECRET?.trim();
   if (!clientId || !secret) return null;
   const which: PlaidEnv = env.PLAID_ENV?.trim() === "production" ? "production" : "sandbox";
-  return { clientId, secret, env: which, host: HOSTS[which] };
+  // Tests may stand a fake Plaid in for the sandbox; production always talks to Plaid.
+  const fake = which === "sandbox" ? env.PLAID_API_URL?.trim().replace(/\/+$/, "") : "";
+  return { clientId, secret, env: which, host: fake || HOSTS[which] };
 }
 
 export class PlaidError extends Error {
@@ -50,12 +53,15 @@ export async function plaidRequest<T>(
   path: string,
   body: Record<string, unknown>,
   fetchImpl: typeof fetch = fetch,
+  // A hung Plaid call must not hang a page (or a webhook) with it.
+  timeoutMs = 30_000,
 ): Promise<T> {
   const res = await fetchImpl(`${config.host}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Plaid-Version": "2020-09-14" },
     body: JSON.stringify({ client_id: config.clientId, secret: config.secret, ...body }),
     cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
@@ -107,7 +113,8 @@ export type PlaidSecurity = {
   type: string | null;
 };
 
-export async function createLinkToken(config: PlaidConfig, clientUserId: string, env: Env = process.env) {
+/** `webhookUrl` is where Plaid announces new transactions; PLAID_WEBHOOK_URL overrides it. */
+export async function createLinkToken(config: PlaidConfig, clientUserId: string, webhookUrl: string | null = null, env: Env = process.env) {
   const body: Record<string, unknown> = {
     user: { client_user_id: clientUserId },
     // The name Plaid Link shows: "Prism uses Plaid to connect your account".
@@ -120,7 +127,8 @@ export async function createLinkToken(config: PlaidConfig, clientUserId: string,
     transactions: { days_requested: 730 },
   };
   if (env.PLAID_REDIRECT_URI) body.redirect_uri = env.PLAID_REDIRECT_URI;
-  if (env.PLAID_WEBHOOK_URL) body.webhook = env.PLAID_WEBHOOK_URL;
+  const webhook = env.PLAID_WEBHOOK_URL?.trim() || webhookUrl;
+  if (webhook) body.webhook = webhook;
   return plaidRequest<{ link_token: string; expiration: string }>(config, "/link/token/create", body);
 }
 
@@ -134,36 +142,6 @@ export async function getAccounts(config: PlaidConfig, accessToken: string) {
   return plaidRequest<{ accounts: PlaidAccount[]; item: { institution_id: string | null } }>(config, "/accounts/get", {
     access_token: accessToken,
   });
-}
-
-/**
- * Pages /transactions/sync to the end. Without a stored cursor this replays
- * the Item's whole history every time — fine for the prototype's stateless
- * vault, and exactly what a persisted cursor removes in production.
- */
-export async function syncAllTransactions(config: PlaidConfig, accessToken: string, fetchImpl?: typeof fetch) {
-  let cursor: string | undefined;
-  const added: PlaidTransaction[] = [];
-  const removed = new Set<string>();
-  let status = "COMPLETE";
-  for (let page = 0; page < 40; page++) {
-    const res = await plaidRequest<{
-      added: PlaidTransaction[];
-      modified: PlaidTransaction[];
-      removed: { transaction_id: string }[];
-      next_cursor: string;
-      has_more: boolean;
-      transactions_update_status?: string;
-    }>(config, "/transactions/sync", { access_token: accessToken, cursor, count: 500 }, fetchImpl);
-    added.push(...res.added, ...res.modified);
-    for (const r of res.removed) removed.add(r.transaction_id);
-    status = res.transactions_update_status ?? status;
-    cursor = res.next_cursor;
-    if (!res.has_more) break;
-  }
-  const latest = new Map<string, PlaidTransaction>();
-  for (const t of added) if (!removed.has(t.transaction_id)) latest.set(t.transaction_id, t);
-  return { transactions: [...latest.values()], ready: status !== "NOT_READY" };
 }
 
 export async function getHoldings(config: PlaidConfig, accessToken: string) {

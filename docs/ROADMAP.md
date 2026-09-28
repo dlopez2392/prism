@@ -1,6 +1,6 @@
 # Prism roadmap
 
-Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts live on Supabase project `prism`, sign-in email through Resend, name asked after sign-in; MCP server built; Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
+Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts live on Supabase project `prism`, sign-in email through Resend, name asked after sign-in; MCP server built; bank sync keeps its place (roadmap item 2); Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
 
 ## Committed integrations
 
@@ -37,7 +37,17 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    visit, and the Account page) and must read as a name — an optional field
    beside the email box collected a password by mistake, which was erased.
 2. **Plaid webhooks and a stored sync cursor** — each load fetches only what
-   changed.
+   changed. **Built (2026-09-28):** each bank's cursor, synced
+   transactions and balances are stored sealed (gzip + AES-256-GCM, ciphertext only) with a
+   version guard; a fresh copy is served with no Plaid call, a stale or
+   flagged one fetches only what changed; Plaid's signed webhook
+   (`/api/plaid/webhook`, ES256 verified) flags the bank through an anon
+   function that can touch nothing else; connected apps catch up in memory
+   and never save. Verified end to end against the live project with a strict
+   fake Plaid (first read, a reload with zero Plaid calls, tampered webhook refused,
+   signed webhook flags, cursor pickup, last copy shown through a Plaid
+   outage, Claude catch-up saves nothing). **Waits on
+   the owner's Plaid keys** to link a bank in production.
 3. **Editable budgets and goals**, saved per person. **Built on the device
    (2026-09-27):** people set every budget line, add, edit and delete goals,
    and save a what-if amount; the plan lives in two validated cookies on this

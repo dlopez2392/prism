@@ -11,6 +11,7 @@
 // seal/open functions below are the part that carries over unchanged.
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
+import { gunzipSync, gzipSync } from "node:zlib";
 import type { Env } from "@/lib/plaid/client";
 
 export const VAULT_COOKIE = "prism-vault";
@@ -58,6 +59,39 @@ export function openJson(token: string | undefined, key: Buffer): unknown {
     const decipher = createDecipheriv("aes-256-gcm", key, buf.subarray(0, 12));
     decipher.setAuthTag(buf.subarray(12, 28));
     return JSON.parse(Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * For what's too big for sealJson to keep cheaply — a bank's synced
+ * transactions: gzip, then AES-256-GCM. "z1." marks the format. Opening
+ * refuses to inflate past PACKED_MAX, so a forged or corrupt blob can never
+ * balloon in memory (and a forged one fails authentication before that).
+ */
+const PACKED_PREFIX = "z1.";
+const PACKED_MAX = 64 * 1024 * 1024;
+
+export function sealPacked(value: unknown, key: Buffer): string {
+  const json = Buffer.from(JSON.stringify(value), "utf8");
+  // Never seal what openPacked would refuse to inflate: it could never be opened again.
+  if (json.length > PACKED_MAX) throw new Error(`Too large to seal (${json.length} bytes).`);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const body = Buffer.concat([cipher.update(gzipSync(json)), cipher.final()]);
+  return PACKED_PREFIX + Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
+}
+
+export function openPacked(token: string | null | undefined, key: Buffer): unknown {
+  if (!token?.startsWith(PACKED_PREFIX)) return null;
+  try {
+    const buf = Buffer.from(token.slice(PACKED_PREFIX.length), "base64url");
+    if (buf.length < 29) return null;
+    const decipher = createDecipheriv("aes-256-gcm", key, buf.subarray(0, 12));
+    decipher.setAuthTag(buf.subarray(12, 28));
+    const packed = Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]);
+    return JSON.parse(gunzipSync(packed, { maxOutputLength: PACKED_MAX }).toString("utf8"));
   } catch {
     return null;
   }

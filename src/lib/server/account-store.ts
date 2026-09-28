@@ -13,10 +13,21 @@ import type { Budget } from "@/lib/finance/types";
 import type { Account } from "@/lib/supabase/server";
 import { needsRefresh } from "./coinbase-store";
 import { feedTokenHash } from "./feed-token";
-import { openJson, sealJson, type VaultItem } from "./vault";
+import { validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
+import { openJson, openPacked, sealJson, sealPacked, type VaultItem } from "./vault";
 
 type ProfileRow = { first_name: string | null; plan_budgets: unknown; plan_goals: unknown; time_zone: string | null };
-type PlaidRow = { item_id: string; sealed_token: string; institution_id: string | null; institution_name: string | null; linked_at: string };
+type PlaidRow = {
+  item_id: string;
+  sealed_token: string;
+  institution_id: string | null;
+  institution_name: string | null;
+  linked_at: string;
+  sealed_sync: string | null;
+  sync_version: number;
+  synced_at: string | null;
+  changed_at: string | null;
+};
 type CoinbaseRow = { sealed_tokens: string; expires_at: string; version: number; linked_at: string };
 type FeedRow = { updated_at: string };
 
@@ -27,6 +38,8 @@ export type AccountSources = {
   timeZone: string | null;
   plan: Plan;
   items: VaultItem[];
+  /** Each linked bank's stored sync (cursor, transactions, balances), by item id — empty unless asked for. */
+  plaidSync: Map<string, StoredSync>;
   coinbase: CoinbaseRecord | null;
   feedUpdatedAt: string | null;
 };
@@ -44,26 +57,36 @@ function openCoinbase(row: CoinbaseRow | null, key: Buffer | null): CoinbaseReco
  * instead of an empty account — for a connected app, which must never be told
  * "nothing is linked" (and shown the example household) because a query failed.
  */
-export async function loadAccount(account: Account, key: Buffer | null, { strict = false } = {}): Promise<AccountSources> {
+export async function loadAccount(account: Account, key: Buffer | null, { strict = false, withSync = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
   const [profile, plaid, coinbase, feed] = await Promise.all([
     db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
-    db.from("plaid_items").select("item_id, sealed_token, institution_id, institution_name, linked_at").eq("user_id", account.userId).returns<PlaidRow[]>(),
+    db
+      .from("plaid_items")
+      .select(withSync ? "item_id, sealed_token, institution_id, institution_name, linked_at, sealed_sync, sync_version, synced_at, changed_at" : "item_id, sealed_token, institution_id, institution_name, linked_at")
+      .eq("user_id", account.userId)
+      .returns<PlaidRow[]>(),
     db.from("coinbase_links").select("sealed_tokens, expires_at, version, linked_at").eq("user_id", account.userId).maybeSingle<CoinbaseRow>(),
     db.from("calendar_feeds").select("updated_at").eq("user_id", account.userId).maybeSingle<FeedRow>(),
   ]);
   if (strict && (profile.error || plaid.error || coinbase.error || feed.error)) throw new Error("Couldn't read the account.");
   const items: VaultItem[] = [];
+  const plaidSync = new Map<string, StoredSync>();
   for (const r of plaid.data ?? []) {
     const opened = key ? (openJson(r.sealed_token, key) as { accessToken?: unknown } | null) : null;
     if (typeof opened?.accessToken !== "string") continue; // sealed under another key: unusable, so unseen
     items.push({ itemId: r.item_id, accessToken: opened.accessToken, institutionId: r.institution_id, institutionName: r.institution_name, linkedAt: r.linked_at });
+    if (!withSync) continue;
+    // A copy that won't open or doesn't read as one starts over at the next sync.
+    const state = key ? validState(openPacked(r.sealed_sync, key)) : null;
+    plaidSync.set(r.item_id, { state, version: r.sync_version ?? 0, syncedAt: state ? r.synced_at : null, changedAt: r.changed_at ?? null });
   }
   return {
     firstName: profile.data?.first_name ?? null,
     timeZone: profile.data?.time_zone ?? null,
     plan: { budgets: validBudgets(profile.data?.plan_budgets ?? undefined), goals: validGoals(profile.data?.plan_goals ?? undefined) },
     items,
+    plaidSync,
     coinbase: openCoinbase(coinbase.data ?? null, key),
     feedUpdatedAt: feed.data?.updated_at ?? null,
   };
@@ -105,6 +128,29 @@ export async function addAccountPlaidItem(account: Account, item: VaultItem, key
     { onConflict: "user_id,item_id" },
   );
   if (error) throw new Error(`Couldn't save the bank link: ${error.message}`);
+}
+
+/**
+ * Keep a bank's new sync — only over the version it started from. If another
+ * tab saved first, its copy is as new as this one or newer, and this one is
+ * dropped. `startedAt` is when the sync began, so news Plaid announced while
+ * it ran still reads as news next time. True when this copy landed.
+ */
+/** Under the column's own limit, with room to spare; a copy bigger than this isn't kept (the next visit syncs again). */
+const SEALED_SYNC_MAX = 15_000_000;
+
+export async function saveAccountPlaidSync(account: Account, itemId: string, state: SyncState, key: Buffer, fromVersion: number, startedAt: string): Promise<boolean> {
+  const sealed = sealPacked(state, key);
+  if (sealed.length > SEALED_SYNC_MAX) throw new Error(`A bank's sync is too large to keep (${sealed.length} characters).`);
+  const { data, error } = await account.supabase
+    .from("plaid_items")
+    .update({ sealed_sync: sealed, sync_version: fromVersion + 1, synced_at: startedAt })
+    .eq("user_id", account.userId)
+    .eq("item_id", itemId)
+    .eq("sync_version", fromVersion)
+    .select("item_id");
+  if (error) throw new Error(`Couldn't save the bank's sync: ${error.message}`);
+  return (data?.length ?? 0) > 0;
 }
 
 export async function removeAccountPlaidItem(account: Account, itemId: string): Promise<void> {

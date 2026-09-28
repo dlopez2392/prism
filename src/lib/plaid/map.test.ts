@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { plaidConfig, plaidRequest, PlaidError, syncAllTransactions } from "./client";
+import { plaidConfig, plaidRequest, PlaidError } from "./client";
+import { syncTransactions } from "./sync";
 import { accountKind, mapAccount, mapCategory, mapHoldings, mapTransaction, reconstructHistory, signedBalance, suggestedLimit } from "./map";
 import type { PlaidAccount, PlaidTransaction } from "./client";
 
@@ -103,6 +104,9 @@ describe("the Plaid client", () => {
     expect(plaidConfig({ PLAID_CLIENT_ID: "id", PLAID_SECRET: "" })).toBeNull();
     expect(plaidConfig({ PLAID_CLIENT_ID: "id", PLAID_SECRET: "s" })).toMatchObject({ env: "sandbox", host: "https://sandbox.plaid.com" });
     expect(plaidConfig({ PLAID_CLIENT_ID: "id", PLAID_SECRET: "s", PLAID_ENV: "production" })!.host).toBe("https://production.plaid.com");
+    // A test's fake Plaid stands in for the sandbox only — never for production.
+    expect(plaidConfig({ PLAID_CLIENT_ID: "id", PLAID_SECRET: "s", PLAID_API_URL: "http://localhost:4010/" })!.host).toBe("http://localhost:4010");
+    expect(plaidConfig({ PLAID_CLIENT_ID: "id", PLAID_SECRET: "s", PLAID_ENV: "production", PLAID_API_URL: "http://localhost:4010" })!.host).toBe("https://production.plaid.com");
   });
 
   it("surfaces Plaid's error code and user-safe message", async () => {
@@ -127,7 +131,7 @@ describe("the Plaid client", () => {
       bodies.push(JSON.parse(String(init?.body)));
       return new Response(JSON.stringify(pages[bodies.length - 1]), { status: 200 });
     }) as typeof fetch;
-    const { transactions, ready } = await syncAllTransactions(config, "access-sandbox-x", fake);
+    const { transactions, ready } = await syncTransactions(config, "access-sandbox-x", null, { today: "2026-09-28", fetchImpl: fake });
     expect(transactions.map((t) => [t.transaction_id, t.amount])).toEqual([
       ["a", 99],
       ["c", 12.34],

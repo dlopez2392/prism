@@ -67,6 +67,13 @@
   (RLS doesn't apply there), so a trigger on `auth.users` freezes password,
   email and phone (migrations `no_passwords`, `freeze_sign_in_details`).
   A future change-email feature must re-verify the person, then lift it.
+- Bank sync (`src/lib/plaid/sync.ts`): a signed-in person's banks keep
+  Plaid's cursor and transactions SEALED on `plaid_items.sealed_sync`
+  (`sealPacked`); never store a readable transaction in the database. Saves
+  go through `saveAccountPlaidSync` (version-guarded) after the response;
+  `agentFinance` passes no saver. The webhook (`/api/plaid/webhook`) must
+  verify Plaid's signature and may only call `plaid_item_changed` — it has
+  no key to anyone's bank and must never gain one.
 - The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
   overlay) + `src/lib/server/plan-store.ts` (cookies) +
   `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,

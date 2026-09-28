@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { cookieOptions, emptyVault, open, seal, vaultKey, type Vault } from "./vault";
+import { cookieOptions, emptyVault, open, openPacked, seal, sealJson, sealPacked, type Vault, vaultKey } from "./vault";
 
 const key = randomBytes(32);
 const vault: Vault = {
@@ -52,5 +52,36 @@ describe("vaultKey", () => {
 describe("cookieOptions", () => {
   it("keeps the vault away from scripts and cross-site requests", () => {
     expect(cookieOptions({ NODE_ENV: "production" })).toMatchObject({ httpOnly: true, secure: true, sameSite: "lax" });
+  });
+});
+
+describe("packed sealing (a bank's synced transactions)", () => {
+  const key = randomBytes(32);
+  const txns = Array.from({ length: 2000 }, (_, i) => ({
+    transaction_id: `txn-${i}`,
+    account_id: "acc-1",
+    amount: 12.34 + i,
+    date: "2026-09-01",
+    name: "Green Basket Market",
+    merchant_name: "Green Basket Market",
+    pending: false,
+  }));
+
+  it("round-trips, smaller than it went in, and unreadable at rest", () => {
+    const sealed = sealPacked({ cursor: "c-1", transactions: txns }, key);
+    expect(openPacked(sealed, key)).toEqual({ cursor: "c-1", transactions: txns });
+    expect(sealed.startsWith("z1.")).toBe(true);
+    expect(sealed.length).toBeLessThan(JSON.stringify(txns).length / 4);
+    expect(sealed).not.toContain("Green");
+    expect(Buffer.from(sealed.slice(3), "base64url").toString("latin1")).not.toContain("Green Basket");
+  });
+
+  it("opens nothing it didn't seal: another key, tampering, the unpacked format, junk", () => {
+    const sealed = sealPacked({ a: 1 }, key);
+    expect(openPacked(sealed, randomBytes(32))).toBeNull();
+    const flipped = `z1.${Buffer.from(Buffer.from(sealed.slice(3), "base64url").map((b, i) => (i === 40 ? b ^ 1 : b))).toString("base64url")}`;
+    expect(openPacked(flipped, key)).toBeNull();
+    expect(openPacked(sealJson({ a: 1 }, key), key)).toBeNull();
+    for (const junk of [null, undefined, "", "z1.", "z1.%%%", "nope"]) expect(openPacked(junk, key)).toBeNull();
   });
 });

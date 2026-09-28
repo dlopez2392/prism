@@ -166,6 +166,52 @@ describe("a connected app, holding a token issued on the person's behalf", () =>
   });
 });
 
+describe("a bank's stored sync", () => {
+  const packed = "z1." + "s".repeat(60);
+
+  it("is saved only over the version it started from, so an older copy never wins", async () => {
+    await as("authenticated", B, async () => {
+      const first = await rows(`update public.plaid_items set sealed_sync = $2, sync_version = sync_version + 1, synced_at = now() where user_id = $1 and item_id = 'item-b' and sync_version = 0 returning sync_version`, [B, packed]);
+      const late = await rows(`update public.plaid_items set sealed_sync = $2, sync_version = sync_version + 1, synced_at = now() where user_id = $1 and item_id = 'item-b' and sync_version = 0 returning sync_version`, [B, "old".padEnd(40, "x")]);
+      expect(first).toEqual([{ sync_version: 1 }]);
+      expect(late).toEqual([]);
+    });
+    expect((await rows(`select sealed_sync from public.plaid_items where item_id = 'item-b'`))[0]!.sealed_sync).toBe(packed);
+  });
+
+  it("can't be written by a connected app", async () => {
+    await as(
+      "authenticated",
+      B,
+      async () => {
+        expect(await rows(`update public.plaid_items set sealed_sync = null where user_id = $1 returning item_id`, [B])).toEqual([]);
+      },
+      CONNECTED_APP,
+    );
+    expect((await rows(`select sealed_sync from public.plaid_items where item_id = 'item-b'`))[0]!.sealed_sync).toBe(packed);
+  });
+
+  it("is flagged by Plaid's webhook — which can stamp 'news' on that bank and do nothing else", async () => {
+    await as("anon", null, async () => {
+      expect(await refused(`select public.plaid_item_changed('item-b')`)).toBe(false);
+      expect(await refused(`select public.plaid_item_changed('no-such-item')`)).toBe(false);
+      expect(await refused(`select public.plaid_item_changed($1)`, ["' or 1=1 --"])).toBe(false);
+      // Still can't read a thing.
+      expect(await refused(`select * from public.plaid_items`)).toBe(true);
+    });
+    // Only the bank it named, and only that one column.
+    const after = await rows(`select item_id, changed_at is not null as flagged, sealed_sync from public.plaid_items order by item_id`);
+    expect(after).toEqual([
+      { item_id: "item-a", flagged: false, sealed_sync: null },
+      { item_id: "item-b", flagged: true, sealed_sync: packed },
+    ]);
+    // Signed-in people (and connected apps) have no use for it.
+    await as("authenticated", B, async () => {
+      expect(await refused(`select public.plaid_item_changed('item-b')`)).toBe(true);
+    });
+  });
+});
+
 describe("what an account signs in with", () => {
   it("its password can never be set or changed — Prism signs in by email code only", async () => {
     // Supabase gives a code-created account a random password at sign-up (an insert); after that it is frozen.

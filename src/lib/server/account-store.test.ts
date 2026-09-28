@@ -135,3 +135,49 @@ describe("a failed read", () => {
     await expect(loadAccount(account(failing), key, { strict: true })).rejects.toThrow(/Couldn't read/);
   });
 });
+
+describe("a bank's stored sync", () => {
+  const syncState = { v: 1 as const, cursor: "c9", ready: true, transactions: [{ transaction_id: "t1", account_id: "a1", amount: 4.5, date: "2026-09-20", name: "Corner Café", merchant_name: null, pending: false, personal_finance_category: null }] };
+
+  it("opens with the linked bank, and a copy that won't open simply starts over", async () => {
+    const { sealPacked } = await import("./vault");
+    const row = (item_id: string, sealed_sync: string | null) => ({
+      user_id: "u1", item_id, sealed_token: sealJson({ accessToken: `at-${item_id}` }, key), institution_id: null, institution_name: "Bank",
+      linked_at: "2026-09-01T00:00:00Z", sealed_sync, sync_version: 3, synced_at: "2026-09-28T10:00:00Z", changed_at: null,
+    });
+    const { db } = fakeDb({ plaid_items: [row("good", sealPacked(syncState, key)), row("foreign", sealPacked(syncState, randomBytes(32)))] });
+    const loaded = await loadAccount(account(db), key, { withSync: true });
+    expect(loaded.plaidSync.get("good")).toEqual({ state: syncState, version: 3, syncedAt: "2026-09-28T10:00:00Z", changedAt: null });
+    expect(loaded.plaidSync.get("foreign")).toEqual({ state: null, version: 3, syncedAt: null, changedAt: null });
+    // A plan edit or a disconnect doesn't need (or open) any bank's copy.
+    expect((await loadAccount(account(db), key)).plaidSync.size).toBe(0);
+  });
+
+  it("is saved sealed, and only over the version it started from", async () => {
+    const { openPacked } = await import("./vault");
+    const { saveAccountPlaidSync } = await import("./account-store");
+    const updates: { values: Row; filters: Row }[] = [];
+    const db = {
+      from: () => {
+        const filters: Row = {};
+        let values: Row = {};
+        const b = {
+          update: (v: Row) => ((values = v), b),
+          eq: (k: string, v: unknown) => ((filters[k] = v), b),
+          select: async () => {
+            updates.push({ values, filters: { ...filters } });
+            return { data: filters.sync_version === 3 ? [{ item_id: "i1" }] : [], error: null };
+          },
+        };
+        return b;
+      },
+    };
+    expect(await saveAccountPlaidSync(account(db), "i1", syncState, key, 3, "2026-09-28T11:00:00Z")).toBe(true);
+    expect(await saveAccountPlaidSync(account(db), "i1", syncState, key, 2, "2026-09-28T11:00:00Z")).toBe(false);
+    const first = updates[0]!;
+    expect(first.filters).toEqual({ user_id: "u1", item_id: "i1", sync_version: 3 });
+    expect(first.values).toMatchObject({ sync_version: 4, synced_at: "2026-09-28T11:00:00Z" });
+    expect(String(first.values.sealed_sync)).not.toContain("Corner");
+    expect(openPacked(String(first.values.sealed_sync), key)).toEqual(syncState);
+  });
+});

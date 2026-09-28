@@ -35,6 +35,32 @@ before anyone shares real data.
 For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 (`openssl rand -base64 32`); the app refuses to store tokens without one.
 
+**How a signed-in person's banks stay current (roadmap item 2):**
+
+- **Each bank keeps its place.** Plaid's sync cursor, the transactions
+  synced so far and the balances at that sync are stored on the bank's row —
+  packed and sealed with
+  `PRISM_VAULT_KEY`, so the database holds ciphertext only, never a merchant
+  or an amount. A page view uses that copy while it's fresh and Plaid has been
+  quiet (no Plaid call at all); otherwise it asks Plaid only for what changed
+  since the cursor. The first visit after linking is the only full read.
+- **Plaid's webhook says when there's news.** New links register
+  `https://<your-domain>/api/plaid/webhook` (override with
+  `PLAID_WEBHOOK_URL`). The endpoint believes only Plaid's ES256 signature
+  over the exact body, and then does one thing: flags that bank. Prism holds
+  no privileged key, so the person's own next visit — or their next question
+  to a connected app — does the sync, as them. With no webhook, a copy older
+  than 15 minutes is refreshed anyway.
+- **A save never goes backwards**: it lands only over the version it started
+  from. If Plaid is unreachable, the last copy is shown and the page says so;
+  a bank that needs the person to sign in again still says that. If Plaid
+  ever refuses the saved cursor (it only promises one for a year), the bank
+  starts over with a full read instead of staying stuck on the old copy.
+- **Connected apps catch up but never save.** Plaid's cursor is safe to
+  replay, so Claude gets what's new, in memory, and the stored copy is left
+  for the person's own visits.
+- A signed-out device keeps no copy and reads its banks in full, as before.
+
 ## Link Coinbase (read-only)
 
 1. On the Coinbase Developer Platform, create an OAuth client and register

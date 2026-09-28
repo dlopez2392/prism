@@ -12,6 +12,8 @@ export default defineConfig({
       PLAID_CLIENT_ID: "",
       PLAID_SECRET: "",
       PLAID_ENV: "",
+      PLAID_API_URL: "",
+      PLAID_WEBHOOK_URL: "",
       PRISM_VAULT_KEY: "",
       COINBASE_CLIENT_ID: "",
       COINBASE_CLIENT_SECRET: "",
