@@ -1,5 +1,5 @@
 // Prism's MCP server, spoken to over HTTP exactly as a client would: the
-// 2025-era stateless JSON-RPC exchange that Claude and ChatGPT use today.
+// 2025-era stateless JSON-RPC exchange, and the 2026-07-28 one Claude speaks.
 
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
@@ -38,6 +38,46 @@ function serve(load: () => Promise<AgentData>) {
 
 const HANDSHAKE = { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } };
 
+/** A 2026-07-28 request, shaped as the SDK's own client sends it: the method and version in headers, the client in `_meta`. */
+function modern(method: string, params: Record<string, unknown> = {}): Request {
+  return new Request("http://localhost/mcp", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-method": method, "mcp-protocol-version": "2026-07-28" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: method,
+      method,
+      params: {
+        ...params,
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientInfo": { name: "test", version: "1" },
+          "io.modelcontextprotocol/clientCapabilities": {},
+        },
+      },
+    }),
+  });
+}
+
+/** The first message of a reply — a JSON body, or the first event of a stream, without waiting for the stream to end. */
+async function firstEvent(res: Response): Promise<Record<string, unknown>> {
+  if (!res.headers.get("content-type")?.includes("text/event-stream")) return (await res.json()) as Record<string, unknown>;
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    while (!text.includes("\n\n")) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    await reader.cancel();
+  }
+  const data = text.split("\n").find((l) => l.startsWith("data:"));
+  return JSON.parse(data!.slice(5).trim()) as Record<string, unknown>;
+}
+
 describe("the MCP endpoint", () => {
   it("introduces itself with read-only instructions and never loads money for a handshake or a tool list", async () => {
     const load = vi.fn(async () => data);
@@ -58,6 +98,19 @@ describe("the MCP endpoint", () => {
       "upcoming_bills",
     ]);
     expect(load).not.toHaveBeenCalled();
+  });
+
+  it("tells a 2026-era client its tools never change, so the client has nothing to hold a listen stream open for", async () => {
+    const handler = createMcpHandler(() => prismMcpServer(async () => data), { legacy: "stateless" });
+    const discover = await firstEvent(await handler.fetch(modern("server/discover")));
+    const result = discover.result as { capabilities?: { tools?: { listChanged?: boolean } } };
+    expect(result.capabilities?.tools).toEqual({ listChanged: false });
+
+    // A client that listens anyway is told, in the acknowledgement, that none of what it asked for will come.
+    const listen = await handler.fetch(modern("subscriptions/listen", { notifications: { toolsListChanged: true } }));
+    const ack = await firstEvent(listen);
+    expect(ack).toMatchObject({ method: "notifications/subscriptions/acknowledged", params: { notifications: {} } });
+    await handler.close();
   });
 
   it("marks every tool read-only and closed-world", async () => {

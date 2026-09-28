@@ -87,7 +87,14 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       websiteUrl: "https://prism.bis-rgv.com",
       icons: [{ src: "https://prism.bis-rgv.com/icon.svg", mimeType: "image/svg+xml" }],
     },
-    { instructions: INSTRUCTIONS },
+    {
+      instructions: INSTRUCTIONS,
+      // The tool list never changes, so say so. The SDK otherwise claims it can, and a
+      // 2026-era client (Claude's) answers that by holding a subscriptions/listen stream
+      // open for news that never comes — one serverless function pinned for its whole
+      // time limit, reopened every minute the client is connected.
+      capabilities: { tools: { listChanged: false } },
+    },
   );
 
   server.registerTool(

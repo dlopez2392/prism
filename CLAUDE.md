@@ -63,6 +63,9 @@
   actions that act outside the database (Plaid unlink, Coinbase revoke or
   refresh) before RLS can refuse anything. Return paths go through
   `safeNext`, which accepts only already-normalised same-site paths.
+  The server declares `tools.listChanged: false` — keep it: the SDK's default
+  `true` makes a 2026-era client hold a `subscriptions/listen` stream open,
+  pinning a function to its 60-second limit every minute it stays connected.
   Supabase Auth lets ANY valid token for an account call `PUT /auth/v1/user`
   (RLS doesn't apply there), so a trigger on `auth.users` freezes password,
   email and phone (migrations `no_passwords`, `freeze_sign_in_details`).
