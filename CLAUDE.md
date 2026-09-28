@@ -42,6 +42,11 @@
   `supabase/migrations/` and must keep `src/lib/supabase/schema.test.ts`
   (PGlite) green. `getFinance()` reads the account when signed in, the device
   otherwise; actions read through the UNCACHED `readSources()`.
+- The sign-in form asks for the email and NOTHING else — an optional field
+  beside it is where people type passwords (it happened). Anything more about
+  the person is asked after sign-in and validated for what it is: the first
+  name goes through `readFirstName` in `src/lib/profile.ts` (letters only),
+  and sign-up metadata never becomes profile data.
 - The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
   overlay) + `src/lib/server/plan-store.ts` (cookies) +
   `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,

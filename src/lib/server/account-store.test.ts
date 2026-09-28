@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const { liveCoinbaseToken, loadAccount } = await import("./account-store");
+const { liveCoinbaseToken, loadAccount, saveAccountFirstName } = await import("./account-store");
 const { sealJson } = await import("./vault");
 
 const key = randomBytes(32);
@@ -103,5 +103,23 @@ describe("liveCoinbaseToken", () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 401 }));
     const { db } = fakeDb({ coinbase_links: [coinbaseRow(1, 1, NOW + 60_000)] });
     expect(await liveCoinbaseToken(account(db), record(1, NOW + 60_000), config, key, fetchImpl as unknown as typeof fetch, NOW)).toBeNull();
+  });
+});
+
+describe("the name Prism greets you by", () => {
+  it("is written to the person's own profile, and cleared with null", async () => {
+    const upserts: { table: string; row: Row; options: unknown }[] = [];
+    const db = { from: (table: string) => ({ upsert: async (row: Row, options: unknown) => (upserts.push({ table, row, options }), { error: null }) }) };
+    await saveAccountFirstName(account(db), "María");
+    await saveAccountFirstName(account(db), null);
+    expect(upserts).toEqual([
+      { table: "profiles", row: { user_id: "u1", first_name: "María" }, options: { onConflict: "user_id" } },
+      { table: "profiles", row: { user_id: "u1", first_name: null }, options: { onConflict: "user_id" } },
+    ]);
+  });
+
+  it("reports a refused write instead of pretending it saved", async () => {
+    const db = { from: () => ({ upsert: async () => ({ error: { message: "denied" } }) }) };
+    await expect(saveAccountFirstName(account(db), "Dan")).rejects.toThrow(/Couldn't save/);
   });
 });

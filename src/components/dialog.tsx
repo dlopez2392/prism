@@ -110,8 +110,28 @@ export function MoneyInput({
   );
 }
 
-export function TextInput({ name, defaultValue, label, error, maxLength }: { name: string; defaultValue: string; label: string; error?: string; maxLength?: number }) {
+export function TextInput({
+  name,
+  defaultValue,
+  label,
+  error,
+  maxLength,
+  hint,
+  autoComplete = "off",
+  autoFocus,
+}: {
+  name: string;
+  defaultValue: string;
+  label: string;
+  error?: string;
+  maxLength?: number;
+  /** A standing line under the field; an error takes its place. */
+  hint?: string;
+  autoComplete?: string;
+  autoFocus?: boolean;
+}) {
   const id = useId();
+  const note = error ?? hint;
   return (
     <div>
       <label htmlFor={id} className="mb-1 block text-[13px] font-semibold text-ink-2">
@@ -122,14 +142,15 @@ export function TextInput({ name, defaultValue, label, error, maxLength }: { nam
         name={name}
         defaultValue={defaultValue}
         maxLength={maxLength}
-        autoComplete="off"
+        autoComplete={autoComplete}
+        autoFocus={autoFocus}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-note` : undefined}
+        aria-describedby={note ? `${id}-note` : undefined}
         className={clsx(control, "border-line-strong px-3")}
       />
-      {error ? (
-        <p id={`${id}-note`} className="mt-1 text-xs font-medium text-crit-ink">
-          {error}
+      {note ? (
+        <p id={`${id}-note`} className={clsx("mt-1 text-xs", error ? "font-medium text-crit-ink" : "text-ink-3")}>
+          {note}
         </p>
       ) : null}
     </div>

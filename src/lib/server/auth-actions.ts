@@ -4,18 +4,21 @@
 //
 // Sign in with a one-time code by email — no password to leak or forget.
 // The same email also carries a link that signs in on the device it's opened
-// on (/auth/callback). Sign out, and delete the account for good.
+// on (/auth/callback). The form asks for the email and nothing else: the
+// first name is asked for after sign-in (see src/lib/profile.ts). Sign out,
+// and delete the account for good.
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { coinbaseConfig, revokeToken } from "@/lib/coinbase/client";
 import { plaidConfig, removeItem } from "@/lib/plaid/client";
+import { landingAfterSignIn } from "@/lib/profile";
 import { currentAccount, supabaseServer } from "@/lib/supabase/server";
 import { liveCoinbaseToken, loadAccount } from "./account-store";
 import { vaultKey } from "./vault";
 
 export type SignInState =
-  | { step: "email"; email?: string; firstName?: string; error?: string }
+  | { step: "email"; email?: string; error?: string }
   | { step: "code"; email: string; error?: string; resent?: boolean };
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@.]{2,}$/;
@@ -25,11 +28,6 @@ async function origin(): Promise<string> {
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3100";
   const proto = h.get("x-forwarded-proto") ?? (/^(localhost|127\.)/.test(host) ? "http" : "https");
   return `${proto}://${host}`;
-}
-
-function cleanFirstName(x: FormDataEntryValue | null): string | null {
-  const s = typeof x === "string" ? x.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim() : "";
-  return s && [...s].length <= 40 ? s : null;
 }
 
 /** Supabase's reasons, in words a person can act on. */
@@ -53,13 +51,12 @@ export async function signInStep(prev: SignInState, form: FormData): Promise<Sig
   if (intent === "change") return { step: "email", email };
 
   if (intent === "send" || intent === "resend") {
-    const firstName = cleanFirstName(form.get("firstName"));
-    if (email.length > 254 || !EMAIL.test(email)) return { step: "email", email, firstName: firstName ?? undefined, error: "Enter an email address like you@example.com." };
+    if (email.length > 254 || !EMAIL.test(email)) return { step: "email", email, error: "Enter an email address like you@example.com." };
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true, emailRedirectTo: `${await origin()}/auth/callback`, data: firstName ? { first_name: firstName } : undefined },
+      options: { shouldCreateUser: true, emailRedirectTo: `${await origin()}/auth/callback` },
     });
-    if (error) return intent === "resend" ? { step: "code", email, error: sendError(error) } : { step: "email", email, firstName: firstName ?? undefined, error: sendError(error) };
+    if (error) return intent === "resend" ? { step: "code", email, error: sendError(error) } : { step: "email", email, error: sendError(error) };
     return { step: "code", email, resent: intent === "resend" };
   }
 
@@ -67,9 +64,9 @@ export async function signInStep(prev: SignInState, form: FormData): Promise<Sig
     const code = String(form.get("code") ?? "").replace(/[\s-]/g, "");
     if (!EMAIL.test(email)) return { step: "email", error: "Start again with your email address." };
     if (!/^\d{6,10}$/.test(code)) return { step: "code", email, error: "Enter the code from the email — just the digits." };
-    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
+    const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     if (error) return { step: "code", email, error: "That code didn't work. Check it, or send a new one — each code works once." };
-    redirect("/");
+    redirect(landingAfterSignIn(data.user));
   }
   return prev;
 }

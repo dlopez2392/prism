@@ -45,7 +45,7 @@ export type Loaded = FinanceData & {
   /** Accounts are switched on for this deployment. */
   accountsEnabled: boolean;
   /** The signed-in person, or null on a device-only visit. */
-  account: { email: string | null; calendarFeed: boolean } | null;
+  account: { email: string | null; firstName: string | null; calendarFeed: boolean } | null;
   /** Signed in, with money or plans still sitting on this device from before: what they are. */
   carryover: string[];
 };
@@ -195,8 +195,13 @@ export const getFinance = cache(async (): Promise<Loaded> => {
       src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t)) : Promise.resolve(null),
     ]);
     base = crypto ? withCoinbase(banks, crypto) : banks;
-    if (src.firstName) base = { ...base, household: { name: `${src.firstName}'s household`, firstName: src.firstName } };
     if (src.account) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
+  }
+  if (src.account) {
+    // The greeting belongs to whoever is signed in — even over the demo's
+    // example money, which is still Alex's household.
+    const own = src.firstName;
+    base = { ...base, household: { name: own && isLive(src) ? `${own}'s household` : base.household.name, firstName: own ?? "there" } };
   }
   // The person's own edits win over seeded or drafted budgets and goals.
   return {
@@ -204,7 +209,7 @@ export const getFinance = cache(async (): Promise<Loaded> => {
     localHour,
     planEdited,
     accountsEnabled: supabaseEnv() !== null,
-    account: src.account ? { email: src.account.email, calendarFeed: src.feedUpdatedAt !== null } : null,
+    account: src.account ? { email: src.account.email, firstName: src.firstName, calendarFeed: src.feedUpdatedAt !== null } : null,
     carryover: carryoverOf(jar, src.account !== null),
   };
 });

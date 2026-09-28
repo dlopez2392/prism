@@ -2,10 +2,12 @@
 
 // src/components/sign-in-form.tsx
 //
-// Two steps, one card: an email address (and, the first time, a name to greet
-// you by), then the code from the email. Each field keeps what was typed when
-// a step comes back with a correction — React resets a form after its action,
-// so every default value is fed from the action's returned state.
+// Two steps, one card: an email address, then the code from the email. The
+// email is the only thing asked for here — an optional field beside it is
+// where people type passwords by mistake, so the name to greet you by is
+// asked for after sign-in. The email keeps what was typed when a step comes
+// back with a correction — React resets a form after its action, so its
+// default value is fed from the action's returned state.
 
 import { useActionState } from "react";
 import { Mail } from "lucide-react";
@@ -83,10 +85,6 @@ export function SignInForm({ linkError }: { linkError: boolean }) {
         aria-describedby={state.error ? "email-error" : undefined}
         className={input}
       />
-      <label htmlFor="firstName" className="mt-4 mb-1 block text-[13px] font-semibold text-ink-2">
-        First name <span className="font-normal text-ink-3">(optional, for the greeting)</span>
-      </label>
-      <input id="firstName" name="firstName" autoComplete="given-name" maxLength={40} defaultValue={state.firstName ?? ""} className={input} />
       {state.error ? (
         <p id="email-error" role="alert" className="mt-3 text-sm font-medium text-crit-ink">
           {state.error}

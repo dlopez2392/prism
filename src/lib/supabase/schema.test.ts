@@ -49,9 +49,9 @@ beforeAll(async () => {
 }, 60_000);
 
 describe("sign-up", () => {
-  it("creates a profile, keeping a sensible first name and dropping an over-long one", async () => {
+  it("creates an empty profile, never copying a name out of sign-up metadata", async () => {
     expect(await rows(`select user_id, first_name from public.profiles order by user_id`)).toEqual([
-      { user_id: A, first_name: "Dana" },
+      { user_id: A, first_name: null },
       { user_id: B, first_name: null },
     ]);
   });

@@ -66,6 +66,11 @@ async function upsertProfile(account: Account, patch: Record<string, unknown>): 
   if (error) throw new Error(`Couldn't save to your account: ${error.message}`);
 }
 
+/** The first name Prism greets them by — already read by `readFirstName`. Null goes without one. */
+export function saveAccountFirstName(account: Account, firstName: string | null) {
+  return upsertProfile(account, { first_name: firstName });
+}
+
 export function saveAccountBudgets(account: Account, budgets: Budget[] | null) {
   return upsertProfile(account, { plan_budgets: budgets });
 }

@@ -1,6 +1,6 @@
 # Prism roadmap
 
-Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts live on Supabase project `prism`; Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
+Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts live on Supabase project `prism`, sign-in email through Resend, name asked after sign-in; Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
 
 ## Committed integrations
 
@@ -30,8 +30,12 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    end against the live project with a throwaway user (deleted by the app's
    own Delete account). `PRISM_VAULT_KEY` set in Vercel (sensitive) on
    2026-09-28 — replace freely until customers link banks, never after.
-   **Owner steps left:** Auth URL configuration, the code in the email
-   template, and a real SMTP sender.
+   Owner setup done the same day: Auth URL configuration, the code in the
+   email template, and sign-in email sent from `no-reply@bis-rgv.com` through
+   Resend (verified delivered). The sign-in form asks for the email ONLY; the
+   first name is asked after sign-in (a welcome step on an account's first
+   visit, and the Account page) and must read as a name — an optional field
+   beside the email box collected a password by mistake, which was erased.
 2. **Plaid webhooks and a stored sync cursor** — each load fetches only what
    changed.
 3. **Editable budgets and goals**, saved per person. **Built on the device
