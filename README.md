@@ -35,6 +35,19 @@ before anyone shares real data.
 For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 (`openssl rand -base64 32`); the app refuses to store tokens without one.
 
+## Link Coinbase (read-only)
+
+1. On the Coinbase Developer Platform, create an OAuth client and register
+   the redirect URI `https://<your-domain>/api/coinbase/callback`.
+2. Set `COINBASE_CLIENT_ID`, `COINBASE_CLIENT_SECRET` and `PRISM_VAULT_KEY`.
+3. **Connect Coinbase** appears on Connections. Prism asks only for
+   `wallet:accounts:read` (plus `offline_access` to stay connected) and never
+   for anything that can send, buy or sell.
+
+Coinbase refresh tokens can be used once, so `src/proxy.ts` refreshes a link
+shortly before its hour is up and stores the new pair in the same response.
+It runs only for browsers holding a Coinbase link.
+
 ## Deploy
 
 Production: **https://prism.bis-rgv.com** (Vercel, auto-deploys every push to
@@ -68,10 +81,13 @@ src/lib/finance/   provider-neutral model + pure analytics (cash flow, budget
                    pacing, recurring detection, forecast, Sankey, insights)
 src/lib/charts/    chart geometry (scales, curves, bars, arcs, treemap)
 src/lib/plaid/     dependency-free Plaid client + mapping onto the model
+src/lib/coinbase/  dependency-free Coinbase client (OAuth2 + PKCE) + mapping
+src/proxy.ts       keeps a Coinbase link alive (single-use refresh tokens)
 src/lib/server/    data loading (demo vs live), the sealed token vault, the
                    on-device plan (cookies + Server Actions)
 src/components/    chart kit (SVG, no chart library) and UI blocks
 src/app/           the eight screens + /api/plaid/{link-token,exchange,disconnect}
+                   + /api/coinbase/{connect,callback,disconnect}
                    + /calendar/{bills,demo}.ics
 ```
 
@@ -102,7 +118,7 @@ src/app/           the eight screens + /api/plaid/{link-token,exchange,disconnec
 ```bash
 pnpm typecheck
 pnpm lint
-pnpm test          # vitest — analytics, geometry, Plaid mapping, vault
+pnpm test          # vitest — analytics, geometry, Plaid + Coinbase, vault, plans, calendar
 pnpm build
 ```
 

@@ -11,10 +11,14 @@
 - Bank data: Plaid through `src/lib/plaid/*`, mapped onto
   `src/lib/finance/types.ts`. Without `PLAID_CLIENT_ID`/`PLAID_SECRET` the app
   runs on the deterministic demo household in `src/lib/finance/demo.ts`.
+  Linking ANYTHING real (a bank or Coinbase) ends the demo: real and made-up
+  money are never shown together.
 - **Committed integrations (owner-approved, do not drop or substitute without
   the owner's sign-off)** — full notes in `docs/ROADMAP.md`:
   1. Investment accounts through Plaid (already built in).
-  2. Coinbase for crypto (read-only OAuth).
+  2. Coinbase for crypto (read-only OAuth). Built: `src/lib/coinbase/*`,
+     `/api/coinbase/*`, token refresh in `src/proxy.ts` (refresh tokens are
+     single-use: never refresh anywhere the new pair can't be stored).
   3. A credit-score partner such as Experian or SavvyMoney. Credit Karma has
      no way for other apps to read its data.
   4. A home-value service such as ATTOM, since Zillow closed its public data

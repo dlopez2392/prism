@@ -1,6 +1,6 @@
 # Prism roadmap
 
-Owner: Bespoke Intelligence Solutions. Last updated 2026-09-27 (calendar reminders and on-device budgets and goals shipped).
+Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
 
 ## Committed integrations
 
@@ -12,7 +12,7 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
 | # | Integration | Access path | Status |
 |---|---|---|---|
 | 1 | **Investment accounts through Plaid** | Plaid Investments, requested as an optional product in the same Link flow as banking. | Built: holdings map onto `Holding`, shown in the Net worth treemap |
-| 2 | **Coinbase for crypto** | Coinbase sign-in (OAuth2) with the read-only `wallet:accounts:read` scope. Self-custody wallets later, read by public address. | Planned |
+| 2 | **Coinbase for crypto** | Coinbase sign-in (OAuth2) with the read-only `wallet:accounts:read` scope. Self-custody wallets later, read by public address. | **Built (2026-09-28):** OAuth2 with PKCE and state, `wallet:accounts:read,offline_access` only; tokens sealed in an httpOnly cookie like the Plaid vault; `src/proxy.ts` refreshes them before they lapse, because Coinbase refresh tokens work once; every wallet priced in dollars from Coinbase's public rates and shown as one crypto account with a holding per coin. **Goes live when the owner** creates an OAuth client on the Coinbase Developer Platform and sets `COINBASE_CLIENT_ID` / `COINBASE_CLIENT_SECRET` in Vercel. Self-custody wallets are still to do. |
 | 3 | **A credit-score partner such as Experian or SavvyMoney** | A bureau partner: Experian Connect or SavvyMoney. Brings permissible-purpose and FCRA compliance work. **Credit Karma has no way for other apps to read its data** — do not plan around it. | Planned (needs a partner agreement) |
 | 4 | **A home-value service such as ATTOM** | ATTOM (or Estated) automated valuation. **Zillow closed its public data access in 2021**, and its successor, Bridge, serves MLS members only — do not plan around Zillow. | Planned (paid data provider) |
 | 5 | **Bill reminders in your calendar** | A private, per-person calendar feed (ICS) that works in Google, Apple and Outlook calendars; the Google Calendar API only if a two-way sync is ever needed. | **Stage 1 built:** "Add to calendar" on Future downloads the person's bills and paydays as an iCalendar file (one repeating series per bill, an alert they choose, amounts optionally kept off the lock screen), and the demo household has a real subscribable feed at `/calendar/demo.ics`. **Stage 2 waits for accounts:** a live feed of real bills needs a revocable per-person feed token, because a calendar app fetches the URL without the person's cookies. |
