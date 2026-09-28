@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 // src/components/shell.tsx
 //
 // Navigation: a sidebar at ≥1024px, a bottom tab bar below it (DESIGN.md
@@ -55,16 +57,20 @@ function isActive(pathname: string, href: string) {
 }
 
 export function PrismMark({ className }: { className?: string }) {
+  // Each mark owns its gradient. With one shared id, every copy points at the
+  // first — and on a phone that one sits in the hidden sidebar, where a
+  // display:none gradient paints nothing, so the other marks went blank.
+  const gradient = `prism-mark-${useId().replace(/[^A-Za-z0-9_-]/g, "")}`;
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden>
       <defs>
-        <linearGradient id="prism-mark" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="var(--c-1)" />
           <stop offset="55%" stopColor="var(--c-2)" />
           <stop offset="100%" stopColor="var(--c-5)" />
         </linearGradient>
       </defs>
-      <rect width="32" height="32" rx="9" fill="url(#prism-mark)" />
+      <rect width="32" height="32" rx="9" fill={`url(#${gradient})`} />
       <path d="M16 7 L25 23 H7 Z" fill="none" stroke="var(--on-hero)" strokeWidth="2.4" strokeLinejoin="round" />
       <path d="M16 7 L19.5 23" stroke="var(--on-hero-soft)" strokeWidth="1.6" />
     </svg>

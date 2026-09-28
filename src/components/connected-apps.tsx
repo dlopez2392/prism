@@ -5,10 +5,12 @@
 // "Ask AI about your money": the address to paste into Claude or ChatGPT,
 // how to do it, and every app the person has let in — each one a click from
 // being cut off. Disconnecting is reversible (connect again from the app),
-// so it runs at once, with no "Are you sure?".
+// so it runs at once, with no "Are you sure?". Its confirmation lives on the
+// list, not the row: the row is gone the moment the app is.
 
 import { useActionState, useState } from "react";
-import { Check, Copy, Unplug } from "lucide-react";
+import { useFormStatus } from "react-dom";
+import { CircleCheck, Check, Copy, Unplug } from "lucide-react";
 import { buttonSmall } from "@/components/dialog";
 import { disconnectApp, type DisconnectState } from "@/lib/server/connected-apps-actions";
 
@@ -50,8 +52,17 @@ function CopyAddress({ endpoint }: { endpoint: string }) {
   );
 }
 
-function AppRow({ app }: { app: ConnectedApp }) {
-  const [state, action, pending] = useActionState(disconnectApp, IDLE);
+function DisconnectButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" disabled={pending} className={buttonSmall}>
+      <Unplug aria-hidden className="size-4" />
+      {pending ? "Disconnecting…" : "Disconnect"}
+    </button>
+  );
+}
+
+function AppRow({ app, action }: { app: ConnectedApp; action: (form: FormData) => void }) {
   const since = new Date(app.grantedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   return (
     <li className="flex flex-wrap items-center gap-3 py-3">
@@ -63,25 +74,18 @@ function AppRow({ app }: { app: ConnectedApp }) {
         <div className="truncate text-xs text-ink-3">
           {app.host ? `${app.host} · ` : ""}connected {since}
         </div>
-        {state.status !== "idle" ? (
-          <p role="status" className={`mt-1 text-xs font-medium ${state.status === "error" ? "text-crit-ink" : "text-ink-2"}`}>
-            {state.message}
-          </p>
-        ) : null}
       </div>
       <form action={action}>
         <input type="hidden" name="client_id" value={app.clientId} />
         <input type="hidden" name="name" value={app.name} />
-        <button type="submit" disabled={pending} className={buttonSmall}>
-          <Unplug aria-hidden className="size-4" />
-          {pending ? "Disconnecting…" : "Disconnect"}
-        </button>
+        <DisconnectButton />
       </form>
     </li>
   );
 }
 
 export function ConnectedApps({ endpoint, enabled, apps }: { endpoint: string; enabled: boolean; apps: ConnectedApp[] | null }) {
+  const [state, action] = useActionState(disconnectApp, IDLE);
   if (!enabled) {
     return <p className="mt-3 text-sm text-ink-2">Connecting AI apps is almost ready — it switches on once Prism&apos;s sign-in server is set up. Check back soon.</p>;
   }
@@ -99,6 +103,11 @@ export function ConnectedApps({ endpoint, enabled, apps }: { endpoint: string; e
       </ol>
 
       <h3 className="mt-5 text-[13px] font-semibold text-ink-2">Connected apps</h3>
+      {/* Always in the DOM so screen readers announce it. */}
+      <p role="status" className={`flex items-center gap-1 text-xs font-semibold ${state.status === "error" ? "text-crit-ink" : "text-good-ink"} ${state.status === "idle" ? "" : "mt-2"}`}>
+        {state.status === "done" ? <CircleCheck aria-hidden className="size-3.5" /> : null}
+        {state.status === "idle" ? null : state.message}
+      </p>
       {apps === null ? (
         <p className="mt-2 text-sm text-ink-2">We couldn&apos;t load your connected apps just now. Refresh the page to try again.</p>
       ) : apps.length === 0 ? (
@@ -106,7 +115,7 @@ export function ConnectedApps({ endpoint, enabled, apps }: { endpoint: string; e
       ) : (
         <ul className="divide-y divide-[var(--line)]">
           {apps.map((app) => (
-            <AppRow key={app.clientId} app={app} />
+            <AppRow key={app.clientId} app={app} action={action} />
           ))}
         </ul>
       )}

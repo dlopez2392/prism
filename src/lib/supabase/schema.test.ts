@@ -11,6 +11,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 const A = "11111111-1111-1111-1111-111111111111";
 const B = "22222222-2222-2222-2222-222222222222";
+const C = "33333333-3333-3333-3333-333333333333";
 const SEALED = "x".repeat(40);
 let db: PGlite;
 
@@ -39,7 +40,7 @@ beforeAll(async () => {
   await db.exec(`
     create role anon nologin; create role authenticated nologin;
     create schema auth;
-    create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}'::jsonb);
+    create table auth.users (id uuid primary key, email text, phone text, encrypted_password text default '', raw_user_meta_data jsonb default '{}'::jsonb);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
     grant usage on schema auth to anon, authenticated;
@@ -162,6 +163,25 @@ describe("a connected app, holding a token issued on the person's behalf", () =>
       // A time zone is a name, never free text.
       expect(await refused(`update public.profiles set time_zone = 'x''; drop table x; --' where user_id = $1`, [B])).toBe(true);
     });
+  });
+});
+
+describe("what an account signs in with", () => {
+  it("its password can never be set or changed — Prism signs in by email code only", async () => {
+    // Supabase gives a code-created account a random password at sign-up (an insert); after that it is frozen.
+    await rows(`insert into auth.users (id, email, encrypted_password) values ($1, 'c@x.test', '$2a$10$random-at-sign-up')`, [C]);
+    expect(await refused(`update auth.users set encrypted_password = '$2a$10$chosen-by-a-connector' where id = $1`, [C])).toBe(true);
+    expect((await rows(`select encrypted_password from auth.users where id = $1`, [C]))[0]!.encrypted_password).toBe("$2a$10$random-at-sign-up");
+    // Everything else about the account still updates, and clearing a password is allowed.
+    expect(await rows(`update auth.users set raw_user_meta_data = '{}'::jsonb, encrypted_password = encrypted_password, email = email where id = $1 returning id`, [C])).toEqual([{ id: C }]);
+    expect(await refused(`update auth.users set encrypted_password = '' where id = $1`, [C])).toBe(false);
+  });
+
+  it("nor can its email address or phone — whoever holds those holds the account", async () => {
+    expect(await refused(`update auth.users set email = 'someone-else@x.test' where id = $1`, [C])).toBe(true);
+    expect(await refused(`update auth.users set phone = '15555550100' where id = $1`, [C])).toBe(true);
+    expect((await rows(`select email, phone from auth.users where id = $1`, [C]))[0]).toEqual({ email: "c@x.test", phone: null });
+    await rows(`delete from auth.users where id = $1`, [C]);
   });
 });
 

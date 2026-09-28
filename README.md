@@ -104,6 +104,13 @@ Why it's safe to connect:
   `client_id` (the claim every connected-app token has and a person's own
   session never does), and `delete_my_account` refuses them too. Proven in
   `schema.test.ts` and against the live project.
+- **Nothing a sign-in hangs on can be changed**, by anyone. Checked live:
+  Supabase Auth itself (outside row-level security) let a connector token set
+  a password on the account — a way to turn a leaked token into a full
+  sign-in. A trigger on `auth.users` now refuses any change of password,
+  email or phone (Prism signs in by email code only, and has no change-email
+  feature), and `currentAccount` treats a connector token as signed out, so
+  it can't reach actions that act outside the database either.
 - **Only connected-app tokens are accepted** at `/mcp`, and Supabase Auth is
   asked about every one — so an app disconnected on the Account page is cut
   off immediately, not when its token expires.
