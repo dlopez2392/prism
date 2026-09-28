@@ -12,7 +12,7 @@ import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/fi
 import type { Budget } from "@/lib/finance/types";
 import type { Account } from "@/lib/supabase/server";
 import { needsRefresh } from "./coinbase-store";
-import { feedTokenHash } from "./feed-token";
+import { feedTokenHash, sealFeedSnapshot } from "./feed-token";
 import { validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { openJson, openPacked, sealJson, sealPacked, type VaultItem } from "./vault";
 
@@ -222,8 +222,9 @@ export async function accountFeedToken(account: Account, key: Buffer, opts: { cr
   return token;
 }
 
-export async function saveFeedSnapshot(account: Account, snapshot: unknown): Promise<void> {
-  await account.supabase.from("calendar_feeds").update({ snapshot }).eq("user_id", account.userId);
+/** Stored sealed: bank-derived bills never sit readable in the database. */
+export async function saveFeedSnapshot(account: Account, snapshot: unknown, key: Buffer): Promise<void> {
+  await account.supabase.from("calendar_feeds").update({ snapshot: sealFeedSnapshot(snapshot, key) }).eq("user_id", account.userId);
 }
 
 export async function removeAccountFeed(account: Account): Promise<void> {

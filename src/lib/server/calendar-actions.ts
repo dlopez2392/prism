@@ -35,7 +35,7 @@ export async function calendarFeed(prev: FeedState, form: FormData): Promise<Fee
     const token = await accountFeedToken(account, key, { create: true, reset: intent === "reset" });
     const data = await getFinance();
     // Nothing real linked yet: publish an empty calendar, never the demo household's bills.
-    await saveFeedSnapshot(account, feedSnapshot(data.source === "demo" ? { transactions: [], accounts: [], today: data.today } : data));
+    await saveFeedSnapshot(account, feedSnapshot(data.source === "demo" ? { transactions: [], accounts: [], today: data.today } : data), key);
     return { path: `/calendar/feed/${token}.ics` };
   } catch {
     return { path: prev.path, error: "That didn't work. Try again in a moment." };

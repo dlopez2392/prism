@@ -155,7 +155,7 @@ export default function PrivacyPage() {
         <Section id="protect" title="How we protect it">
           <Bullets>
             <li>Everything travels over encrypted connections (HTTPS).</li>
-            <li>The keys that let {BRAND.product} read your banks and Coinbase, and your synced transactions, are encrypted (AES-256) before they&apos;re stored.</li>
+            <li>The keys that let {BRAND.product} read your banks and Coinbase, your synced transactions, and your calendar feed of bills are encrypted (AES-256) before they&apos;re stored.</li>
             <li>Our database is encrypted at rest, and every account can reach only its own data.</li>
             <li>AI apps you connect are read-only. The database itself refuses any change they try to make.</li>
             <li>Sign-in uses a one-time code sent to your email, so there&apos;s no password to steal.</li>

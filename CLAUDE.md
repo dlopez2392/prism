@@ -72,7 +72,8 @@
   A future change-email feature must re-verify the person, then lift it.
 - Bank sync (`src/lib/plaid/sync.ts`): a signed-in person's banks keep
   Plaid's cursor and transactions SEALED on `plaid_items.sealed_sync`
-  (`sealPacked`); never store a readable transaction in the database. Saves
+  (`sealPacked`); never store a readable transaction in the database. The
+  calendar feed's snapshot is sealed too (`sealFeedSnapshot`). Saves
   go through `saveAccountPlaidSync` (version-guarded) after the response;
   `agentFinance` passes no saver. The webhook (`/api/plaid/webhook`) must
   verify Plaid's signature and may only call `plaid_item_changed` — it has

@@ -311,8 +311,11 @@ const FEED_STALE_MS = 6 * 60 * 60_000;
 
 async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live): Promise<void> {
   if (!updatedAt || Date.now() - Date.parse(updatedAt) < FEED_STALE_MS) return;
+  // No key, no refresh: a snapshot is only ever stored sealed.
+  const key = safeVaultKey();
+  if (!key) return;
   try {
-    await saveFeedSnapshot(account, feedSnapshot(data));
+    await saveFeedSnapshot(account, feedSnapshot(data), key);
   } catch {
     // A stale calendar is better than a broken page.
   }

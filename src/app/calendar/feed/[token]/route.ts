@@ -6,10 +6,13 @@
 // may run trades that hash for the feed's snapshot — the person's repeating
 // bills and paydays, refreshed as they use Prism. No balance, no transaction,
 // no bank token is reachable from here. "Reset link" in Prism kills a leaked URL.
+// The snapshot is stored sealed, so only this server, with the vault key,
+// can read it: the database never holds the bills themselves.
 
 import { createClient } from "@supabase/supabase-js";
 import type { CalendarOptions } from "@/lib/finance/calendar";
-import { feedTokenHash } from "@/lib/server/feed-token";
+import { feedTokenHash, openFeedSnapshot } from "@/lib/server/feed-token";
+import { vaultKey } from "@/lib/server/vault";
 import { calendarResponse } from "@/lib/server/calendar-response";
 import { supabaseEnv } from "@/lib/supabase/config";
 
@@ -24,7 +27,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
 
   const db = createClient(env.url, env.key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await db.rpc("calendar_feed_snapshot", { p_token_hash: feedTokenHash(token) });
-  const snap = data as Snapshot | null;
+  let key: Buffer | null = null;
+  try {
+    key = vaultKey();
+  } catch {
+    key = null;
+  }
+  const snap = (key && !error ? openFeedSnapshot(data, key) : null) as Snapshot | null;
   if (error || !snap || snap.v !== 1 || !Array.isArray(snap.streams) || !Array.isArray(snap.accounts)) return notFound();
 
   return calendarResponse(
