@@ -127,6 +127,10 @@ describe("anyone signed out", () => {
       expect((await rows(`select public.calendar_feed_snapshot($1) as s`, ["0".repeat(64)]))[0]!.s).toBeNull();
       expect((await rows(`select public.calendar_feed_snapshot($1) as s`, ["' or 1=1 --"]))[0]!.s).toBeNull();
     });
+    // Signed-in people read their own feed through its table; the lookup is for calendar apps only.
+    await as("authenticated", B, async () => {
+      expect(await refused(`select public.calendar_feed_snapshot($1)`, [hash])).toBe(true);
+    });
   });
 });
 
