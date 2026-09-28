@@ -89,6 +89,12 @@
   Clear the cookie with `clearedReturnCookie()`, never a bare delete, because
   a browser ignores a `__Host-` clear that isn't Secure with Path=/.
   `exchange` clears it once a bank is saved.
+- Privacy policy (`/privacy`, facts in `src/lib/privacy.ts`): it states what
+  the code does, so keep them in step. When a change collects, stores or
+  shares something new, or adds a service provider, update the page in the
+  same commit and move `POLICY_UPDATED`. `privacy.test.ts` fails on any cookie
+  or browser-storage key the policy doesn't declare. The contact address
+  (`BRAND.privacyEmail`) must be a mailbox someone reads.
 - The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
   overlay) + `src/lib/server/plan-store.ts` (cookies) +
   `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,

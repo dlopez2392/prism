@@ -8,4 +8,6 @@ export const BRAND = {
   tagline: "Your money, in full colour.",
   company: "Bespoke Intelligence Solutions",
   companyShort: "BIS",
+  /** Privacy questions and requests (the privacy policy). Must be a mailbox someone reads. */
+  privacyEmail: "privacy@bis-rgv.com",
 } as const;

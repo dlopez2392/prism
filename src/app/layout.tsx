@@ -88,7 +88,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <BisMark size={14} className="shrink-0 text-ink-2" />
                   {BRAND.product} is a product of {BRAND.company} ({BRAND.companyShort}). © {data.today.slice(0, 4)}
                 </span>
-                <span>Information, not financial advice. Prism can read your accounts but can never move money.</span>
+                <span>
+                  Information, not financial advice. Prism can read your accounts but can never move money.{" "}
+                  <Link href="/privacy" className="font-semibold text-ink-2 hover:underline">
+                    Privacy policy
+                  </Link>
+                </span>
               </footer>
             </main>
           </div>

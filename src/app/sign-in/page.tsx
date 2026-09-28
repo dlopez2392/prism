@@ -1,6 +1,7 @@
 // src/app/sign-in/page.tsx — sign in, or create an account, with a code by email.
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CloudOff, Lock, Smartphone, Trash2 } from "lucide-react";
 import { PrismMark } from "@/components/shell";
@@ -52,6 +53,12 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
           Delete the account any time, and every link is revoked at the source.
         </li>
       </ul>
+      <p className="mt-4 px-1 text-xs text-ink-3">
+        What Prism collects, who else sees it, and your choices:{" "}
+        <Link href="/privacy" className="font-semibold text-accent-ink hover:underline">
+          Privacy policy
+        </Link>
+      </p>
     </div>
   );
 }
