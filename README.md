@@ -48,6 +48,37 @@ Coinbase refresh tokens can be used once, so `src/proxy.ts` refreshes a link
 shortly before its hour is up and stores the new pair in the same response.
 It runs only for browsers holding a Coinbase link.
 
+## Accounts (Supabase)
+
+Signed out, Prism works as before: a demo household, plans and links kept on
+the device. Signed in, banks, Coinbase, budgets, goals and a private calendar
+link live in the person's account.
+
+1. Create a Supabase project and apply `supabase/migrations/*.sql`.
+2. Authentication → URL configuration: Site URL `https://<your-domain>`, and
+   redirect URLs `https://<your-domain>/**` (plus `http://localhost:3100/**`).
+3. Authentication → Emails → "Magic link": include the code, e.g.
+   `Your Prism code is {{ .Token }}` beside the `{{ .ConfirmationURL }}` link.
+4. Authentication → SMTP: a real sender (e.g. Resend). Supabase's built-in
+   mailer only reaches the project's own team members.
+5. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
+   `PRISM_VAULT_KEY`.
+
+How it's kept safe:
+
+- **Row-level security on every table**, proven in CI: the migration runs in an
+  in-memory Postgres (PGlite) and `src/lib/supabase/schema.test.ts` checks each
+  rule as a signed-in stranger and as nobody.
+- **No privileged key anywhere.** The server acts as the signed-in person; the
+  only thing a signed-out caller can run is the calendar lookup, and only with
+  the feed's secret.
+- **Tokens are sealed before they're stored** with `PRISM_VAULT_KEY`, which the
+  database never sees.
+- **Moving device data into an account asks first**, so signing in on a shared
+  computer can't sweep someone else's bank into your account.
+- **Delete account** revokes every bank at Plaid and Coinbase at Coinbase, then
+  deletes the person and every row of theirs.
+
 ## Deploy
 
 Production: **https://prism.bis-rgv.com** (Vercel, auto-deploys every push to
@@ -83,12 +114,15 @@ src/lib/charts/    chart geometry (scales, curves, bars, arcs, treemap)
 src/lib/plaid/     dependency-free Plaid client + mapping onto the model
 src/lib/coinbase/  dependency-free Coinbase client (OAuth2 + PKCE) + mapping
 src/proxy.ts       keeps a Coinbase link alive (single-use refresh tokens)
-src/lib/server/    data loading (demo vs live), the sealed token vault, the
-                   on-device plan (cookies + Server Actions)
+src/lib/server/    data loading (account vs device, demo vs live), the sealed
+                   token vault, plans, sign-in and account actions
+src/lib/supabase/  per-request Supabase client (acts as the person, never admin)
+supabase/          the account schema, with row-level security
 src/components/    chart kit (SVG, no chart library) and UI blocks
 src/app/           the eight screens + /api/plaid/{link-token,exchange,disconnect}
                    + /api/coinbase/{connect,callback,disconnect}
-                   + /calendar/{bills,demo}.ics
+                   + /calendar/{bills,demo}.ics, /calendar/feed/<secret>.ics
+                   + /sign-in, /auth/callback, /account
 ```
 
 - **Money is integer cents** end to end; dates are calendar dates, never instants.
@@ -135,11 +169,11 @@ source is public for reference only; see [`LICENSE`](./LICENSE).
   cookie so the prototype needs no database. Production moves them to a
   per-user, KMS-encrypted server-side store with sign-in, and persists the
   `/transactions/sync` cursor so each load fetches only what changed.
-- **Budgets and goals** are editable and saved **on this device only** (two
-  cookies) until Prism has accounts; then the plan is imported once.
-- **Calendar reminders** for real bills are a download, not yet a live feed:
-  a calendar app fetches a subscribed URL without the person's cookies, so a
-  self-updating feed needs a revocable per-person token, which needs accounts.
+- **Signed out**, budgets, goals and links stay on the device (sealed
+  cookies); signing in offers to move them into the account.
+- **Calendar reminders**: anyone can download them; a signed-in person gets a
+  private, self-updating link (a revocable secret whose sha256 is all the
+  database stores).
 - **What's next:** see [`docs/ROADMAP.md`](./docs/ROADMAP.md) — the product
   roadmap in order, and the six owner-approved integrations (Plaid
   investments, Coinbase, a credit-score partner, a home-value service,

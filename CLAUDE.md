@@ -29,9 +29,17 @@
      read-only (MCP server that cites its transactions).
 - Product roadmap order: accounts and sign-in → Plaid webhooks + stored cursor
   → editable budgets and goals → household views → fallback aggregator → the
-  integrations above. Keep `docs/ROADMAP.md` current as items ship. The owner
-  chose "not yet" on accounts (2026-09-27); if asked, the preferred region is
-  US East. Budgets and goals are editable ON THE DEVICE for now.
+  integrations above. Keep `docs/ROADMAP.md` current as items ship. Accounts:
+  the owner approved Supabase (its OWN project "prism", US East) on
+  2026-09-28. Never point Prism at bis-platform-dev or any other product's
+  project.
+- Accounts architecture: `src/lib/supabase/*` makes a per-request client that
+  acts AS the signed-in person — there is no service-role key in this app and
+  there must never be one. Row-level security guards every table; every token
+  is sealed with PRISM_VAULT_KEY before it's stored. Schema changes go in
+  `supabase/migrations/` and must keep `src/lib/supabase/schema.test.ts`
+  (PGlite) green. `getFinance()` reads the account when signed in, the device
+  otherwise; actions read through the UNCACHED `readSources()`.
 - The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
   overlay) + `src/lib/server/plan-store.ts` (cookies) +
   `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,
