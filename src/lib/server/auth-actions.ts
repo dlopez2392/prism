@@ -8,13 +8,14 @@
 // first name is asked for after sign-in (see src/lib/profile.ts). Sign out,
 // and delete the account for good.
 
-import { headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { coinbaseConfig, revokeToken } from "@/lib/coinbase/client";
 import { plaidConfig, removeItem } from "@/lib/plaid/client";
-import { landingAfterSignIn } from "@/lib/profile";
+import { landingAfterSignIn, NEXT_COOKIE, safeNext } from "@/lib/profile";
 import { currentAccount, supabaseServer } from "@/lib/supabase/server";
 import { liveCoinbaseToken, loadAccount } from "./account-store";
+import { requestOrigin } from "./origin";
 import { vaultKey } from "./vault";
 
 export type SignInState =
@@ -23,11 +24,17 @@ export type SignInState =
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@.]{2,}$/;
 
-async function origin(): Promise<string> {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3100";
-  const proto = h.get("x-forwarded-proto") ?? (/^(localhost|127\.)/.test(host) ? "http" : "https");
-  return `${proto}://${host}`;
+/**
+ * Sign-in that interrupted something — approving a connected app — goes back
+ * to it afterwards, whether the code or the email's link finishes the job.
+ * Kept in a short-lived cookie rather than the email link, so the link stays
+ * one Supabase already allows. A plain sign-in clears any stale one.
+ */
+async function rememberNext(x: FormDataEntryValue | null): Promise<void> {
+  const jar = await cookies();
+  const next = safeNext(x);
+  if (next) jar.set(NEXT_COOKIE, next, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 15 * 60 });
+  else jar.delete(NEXT_COOKIE);
 }
 
 /** Supabase's reasons, in words a person can act on. */
@@ -52,9 +59,10 @@ export async function signInStep(prev: SignInState, form: FormData): Promise<Sig
 
   if (intent === "send" || intent === "resend") {
     if (email.length > 254 || !EMAIL.test(email)) return { step: "email", email, error: "Enter an email address like you@example.com." };
+    if (intent === "send") await rememberNext(form.get("next"));
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true, emailRedirectTo: `${await origin()}/auth/callback` },
+      options: { shouldCreateUser: true, emailRedirectTo: `${await requestOrigin()}/auth/callback` },
     });
     if (error) return intent === "resend" ? { step: "code", email, error: sendError(error) } : { step: "email", email, error: sendError(error) };
     return { step: "code", email, resent: intent === "resend" };
@@ -66,7 +74,10 @@ export async function signInStep(prev: SignInState, form: FormData): Promise<Sig
     if (!/^\d{6,10}$/.test(code)) return { step: "code", email, error: "Enter the code from the email — just the digits." };
     const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     if (error) return { step: "code", email, error: "That code didn't work. Check it, or send a new one — each code works once." };
-    redirect(landingAfterSignIn(data.user));
+    const jar = await cookies();
+    const next = safeNext(jar.get(NEXT_COOKIE)?.value);
+    jar.delete(NEXT_COOKIE);
+    redirect(next ?? landingAfterSignIn(data.user));
   }
   return prev;
 }

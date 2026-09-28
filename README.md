@@ -79,6 +79,42 @@ How it's kept safe:
 - **Delete account** revokes every bank at Plaid and Coinbase at Coinbase, then
   deletes the person and every row of theirs.
 
+## Ask AI about your money (MCP)
+
+Prism is an MCP server at **`/mcp`** (production:
+`https://prism.bis-rgv.com/mcp`). Add it to Claude (Customize → Connectors →
+Add custom connector) or ChatGPT (Developer mode → custom connector); the app
+sends the person to Prism to sign in and approve it, and from then on can ask
+nine read-only questions: `get_overview`, `list_accounts`,
+`search_transactions`, `spending_breakdown`, `get_cash_flow`, `get_budgets`,
+`get_goals`, `upcoming_bills`, `get_net_worth`. Answers cite the transactions
+they rest on, carry the person's own "today" and time zone, and say
+`demo: true` when nothing is linked yet.
+
+Sign-in is **Supabase Auth's OAuth 2.1 server**, so nothing new holds a
+secret. To switch it on (once per project): Authentication → OAuth Server →
+enable, authorization path `/oauth/consent`, and allow dynamic client
+registration. `/.well-known/oauth-protected-resource/mcp` points MCP clients
+at it.
+
+Why it's safe to connect:
+
+- **Read-only is enforced by the database**, not just the tool list: a
+  restrictive policy on every table refuses any write from a token carrying a
+  `client_id` (the claim every connected-app token has and a person's own
+  session never does), and `delete_my_account` refuses them too. Proven in
+  `schema.test.ts` and against the live project.
+- **Only connected-app tokens are accepted** at `/mcp`, and Supabase Auth is
+  asked about every one — so an app disconnected on the Account page is cut
+  off immediately, not when its token expires.
+- **The consent screen leads with what can be checked**: the site the person
+  will be sent back to, and in plain words what the app can and can't do.
+- **Nothing refreshes on an app's behalf.** A lapsed Coinbase token waits for
+  the person's next visit (its refresh token works once and a connected app
+  can't save the new one), and the answer says so.
+- The tools are pure functions over the same analysis every screen draws from
+  (`src/lib/agent/tools.ts`), so a chat can't disagree with the app.
+
 ## Deploy
 
 Production: **https://prism.bis-rgv.com** (Vercel, auto-deploys every push to
@@ -117,12 +153,15 @@ src/proxy.ts       keeps a Coinbase link alive (single-use refresh tokens)
 src/lib/server/    data loading (account vs device, demo vs live), the sealed
                    token vault, plans, sign-in and account actions
 src/lib/supabase/  per-request Supabase client (acts as the person, never admin)
+src/lib/agent/     the MCP server: pure read-only tools over the analysis, and
+                   their registration with @modelcontextprotocol/server
 supabase/          the account schema, with row-level security
 src/components/    chart kit (SVG, no chart library) and UI blocks
 src/app/           the eight screens + /api/plaid/{link-token,exchange,disconnect}
                    + /api/coinbase/{connect,callback,disconnect}
                    + /calendar/{bills,demo}.ics, /calendar/feed/<secret>.ics
                    + /sign-in, /auth/callback, /account
+                   + /mcp, /oauth/consent, /.well-known/oauth-protected-resource
 ```
 
 - **Money is integer cents** end to end; dates are calendar dates, never instants.

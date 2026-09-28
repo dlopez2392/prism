@@ -15,7 +15,7 @@ import { needsRefresh } from "./coinbase-store";
 import { feedTokenHash } from "./feed-token";
 import { openJson, sealJson, type VaultItem } from "./vault";
 
-type ProfileRow = { first_name: string | null; plan_budgets: unknown; plan_goals: unknown };
+type ProfileRow = { first_name: string | null; plan_budgets: unknown; plan_goals: unknown; time_zone: string | null };
 type PlaidRow = { item_id: string; sealed_token: string; institution_id: string | null; institution_name: string | null; linked_at: string };
 type CoinbaseRow = { sealed_tokens: string; expires_at: string; version: number; linked_at: string };
 type FeedRow = { updated_at: string };
@@ -24,6 +24,7 @@ export type CoinbaseRecord = { tokens: TokenSet; version: number; linkedAt: stri
 
 export type AccountSources = {
   firstName: string | null;
+  timeZone: string | null;
   plan: Plan;
   items: VaultItem[];
   coinbase: CoinbaseRecord | null;
@@ -37,15 +38,21 @@ function openCoinbase(row: CoinbaseRow | null, key: Buffer | null): CoinbaseReco
   return { tokens: { accessToken: t.accessToken, refreshToken: t.refreshToken, expiresAt: t.expiresAt! }, version: row.version, linkedAt: row.linked_at };
 }
 
-/** One round of parallel reads: the profile (and plan), linked banks, Coinbase, and the calendar feed's age. */
-export async function loadAccount(account: Account, key: Buffer | null): Promise<AccountSources> {
+/**
+ * One round of parallel reads: the profile (and plan), linked banks, Coinbase,
+ * and the calendar feed's age. `strict` turns a failed read into an error
+ * instead of an empty account — for a connected app, which must never be told
+ * "nothing is linked" (and shown the example household) because a query failed.
+ */
+export async function loadAccount(account: Account, key: Buffer | null, { strict = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
   const [profile, plaid, coinbase, feed] = await Promise.all([
-    db.from("profiles").select("first_name, plan_budgets, plan_goals").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
+    db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
     db.from("plaid_items").select("item_id, sealed_token, institution_id, institution_name, linked_at").eq("user_id", account.userId).returns<PlaidRow[]>(),
     db.from("coinbase_links").select("sealed_tokens, expires_at, version, linked_at").eq("user_id", account.userId).maybeSingle<CoinbaseRow>(),
     db.from("calendar_feeds").select("updated_at").eq("user_id", account.userId).maybeSingle<FeedRow>(),
   ]);
+  if (strict && (profile.error || plaid.error || coinbase.error || feed.error)) throw new Error("Couldn't read the account.");
   const items: VaultItem[] = [];
   for (const r of plaid.data ?? []) {
     const opened = key ? (openJson(r.sealed_token, key) as { accessToken?: unknown } | null) : null;
@@ -54,6 +61,7 @@ export async function loadAccount(account: Account, key: Buffer | null): Promise
   }
   return {
     firstName: profile.data?.first_name ?? null,
+    timeZone: profile.data?.time_zone ?? null,
     plan: { budgets: validBudgets(profile.data?.plan_budgets ?? undefined), goals: validGoals(profile.data?.plan_goals ?? undefined) },
     items,
     coinbase: openCoinbase(coinbase.data ?? null, key),
@@ -69,6 +77,11 @@ async function upsertProfile(account: Account, patch: Record<string, unknown>): 
 /** The first name Prism greets them by — already read by `readFirstName`. Null goes without one. */
 export function saveAccountFirstName(account: Account, firstName: string | null) {
   return upsertProfile(account, { first_name: firstName });
+}
+
+/** The IANA zone the person's browser reports — already checked by `validZone`. */
+export function saveAccountTimeZone(account: Account, timeZone: string) {
+  return upsertProfile(account, { time_zone: timeZone });
 }
 
 export function saveAccountBudgets(account: Account, budgets: Budget[] | null) {

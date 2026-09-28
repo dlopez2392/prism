@@ -47,6 +47,22 @@
   the person is asked after sign-in and validated for what it is: the first
   name goes through `readFirstName` in `src/lib/profile.ts` (letters only),
   and sign-up metadata never becomes profile data.
+- Connected apps (MCP, `/mcp`): tools live in `src/lib/agent/tools.ts` as PURE
+  functions over `analyze()` — never re-derive a number the screens show
+  differently. Every tool is read-only and says so in its annotations; every
+  result carries `as_of`, `time_zone` and `demo`, and cites transaction ids.
+  Tokens come from Supabase Auth's OAuth 2.1 server; `/mcp` accepts only
+  tokens with a `client_id` and asks Supabase Auth about each one (so
+  Disconnect is immediate). Read-only is a DATABASE rule — restrictive
+  policies refuse writes from any `client_id` token — so never add a write
+  path for connected apps, and never refresh a token on their behalf
+  (`agentFinance` in `src/lib/server/finance.ts`). New tables need the same
+  restrictive write policies and a test in `schema.test.ts`. The reverse holds
+  too: `currentAccount` treats a `client_id` token as signed OUT, because a
+  connector token dressed up as the session cookie would otherwise reach
+  actions that act outside the database (Plaid unlink, Coinbase revoke or
+  refresh) before RLS can refuse anything. Return paths go through
+  `safeNext`, which accepts only already-normalised same-site paths.
 - The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
   overlay) + `src/lib/server/plan-store.ts` (cookies) +
   `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,

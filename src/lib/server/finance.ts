@@ -4,15 +4,18 @@
 // lives — their account when signed in, otherwise this device's sealed
 // cookies. Then: anything real linked → live data; nothing → the demo
 // household. Wrapped in React's `cache`, so a layout and a page in the same
-// request share one load.
+// request share one load. `agentFinance` is the same money for a connected
+// app (MCP), read-only: it never refreshes a token or writes a row.
 
 import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { after } from "next/server";
 import { categoryTotals } from "@/lib/finance/cashflow";
 import { SPEND_CATEGORIES } from "@/lib/finance/categories";
 import { addDays, addMonths, startOfMonth } from "@/lib/finance/dates";
 import { buildDemoData } from "@/lib/finance/demo";
+import type { AgentData } from "@/lib/agent/tools";
 import { applyPlan, type Plan } from "@/lib/finance/plan";
 import { feedSnapshot } from "@/lib/finance/calendar";
 import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/finance/types";
@@ -30,7 +33,7 @@ import { coinbaseNeedsSignIn, mapCoinbase } from "@/lib/coinbase/map";
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
 import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
-import { liveCoinbaseToken, loadAccount, saveFeedSnapshot } from "./account-store";
+import { liveCoinbaseToken, loadAccount, saveAccountTimeZone, saveFeedSnapshot } from "./account-store";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { open, VAULT_COOKIE, vaultKey, type VaultItem } from "./vault";
 
@@ -57,6 +60,17 @@ export function hourIn(zone: string | undefined, now = new Date()): number {
     // Unknown zone: fall through.
   }
   return now.getUTCHours();
+}
+
+/** An IANA time zone name this runtime knows, or null — never free text. */
+export function validZone(zone: string | null | undefined): string | null {
+  if (!zone || zone.length > 64 || !/^[A-Za-z][A-Za-z0-9_+/-]*$/.test(zone)) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return zone;
+  } catch {
+    return null;
+  }
 }
 
 /** "Today" in the viewer's own calendar (the zone the browser reported), else UTC. */
@@ -98,7 +112,11 @@ export type Sources = {
   /** A live Coinbase access token — or null for a dead link — fetched on demand. */
   coinbase: { config: CoinbaseConfig; token: () => Promise<string | null> } | null;
   feedUpdatedAt: string | null;
+  /** The zone the account last saw the person in. */
+  timeZone: string | null;
 };
+
+type Money = Pick<Sources, "items" | "coinbase">;
 
 function safeVaultKey(): Buffer | null {
   try {
@@ -129,6 +147,7 @@ export async function readSources(): Promise<Sources> {
       items: plaid ? a.items : [],
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
+      timeZone: a.timeZone,
     };
   }
 
@@ -142,12 +161,13 @@ export async function readSources(): Promise<Sources> {
     items: plaid ? vaultItems(jar) : [],
     coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
     feedUpdatedAt: null,
+    timeZone: null,
   };
 }
 
 const getSources = cache(readSources);
 
-const isLive = (s: Sources) => s.items.length > 0 || s.coinbase !== null;
+const isLive = (s: Money) => s.items.length > 0 || s.coinbase !== null;
 
 /**
  * The goals the data source provides before any edit — the demo household's,
@@ -175,33 +195,39 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
 
 type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover">;
 
+/**
+ * The money itself: the demo household when nothing real is linked (real and
+ * made-up money are never shown together, so linking anything ends the
+ * demo), else every bank and Coinbase, fetched in parallel.
+ */
+async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Promise<Live> {
+  const config = plaidConfig();
+  if (!isLive(src)) return { ...buildDemoData(today), notice: null, plaidReady: config !== null };
+  const [banks, crypto] = await Promise.all([
+    config && src.items.length ? loadPlaid(config, src.items, today) : Promise.resolve(emptyLive(today, config !== null)),
+    src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed)) : Promise.resolve(null),
+  ]);
+  return crypto ? withCoinbase(banks, crypto) : banks;
+}
+
+/** The greeting belongs to whoever is signed in — even over the demo's example money, which is still Alex's household. */
+function greeted(base: Live, firstName: string | null, live: boolean): Live {
+  return { ...base, household: { name: firstName && live ? `${firstName}'s household` : base.household.name, firstName: firstName ?? "there" } };
+}
+
 export const getFinance = cache(async (): Promise<Loaded> => {
   const jar = await cookies();
   const zone = jar.get("prism-tz")?.value;
   const today = todayIn(zone);
   const localHour = hourIn(zone);
-  const config = plaidConfig();
   const src = await getSources();
   const planEdited = { budgets: src.plan.budgets !== null, goals: src.plan.goals !== null };
 
-  let base: Live;
-  if (!isLive(src)) {
-    // Nothing real is linked: the demo household. Real and made-up money are
-    // never shown together, so linking anything at all ends the demo.
-    base = { ...buildDemoData(today), notice: null, plaidReady: config !== null };
-  } else {
-    const [banks, crypto] = await Promise.all([
-      config && src.items.length ? loadPlaid(config, src.items, today) : Promise.resolve(emptyLive(today, config !== null)),
-      src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t)) : Promise.resolve(null),
-    ]);
-    base = crypto ? withCoinbase(banks, crypto) : banks;
-    if (src.account) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
-  }
+  let base = await moneyFor(src, today);
   if (src.account) {
-    // The greeting belongs to whoever is signed in — even over the demo's
-    // example money, which is still Alex's household.
-    const own = src.firstName;
-    base = { ...base, household: { name: own && isLive(src) ? `${own}'s household` : base.household.name, firstName: own ?? "there" } };
+    if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
+    base = greeted(base, src.firstName, isLive(src));
+    rememberZone(src.account, src.timeZone, zone);
   }
   // The person's own edits win over seeded or drafted budgets and goals.
   return {
@@ -213,6 +239,56 @@ export const getFinance = cache(async (): Promise<Loaded> => {
     carryover: carryoverOf(jar, src.account !== null),
   };
 });
+
+/**
+ * Keep the account's time zone current, so a connected app's "this month" is
+ * the person's month. After the response, and only when it moved.
+ */
+function rememberZone(account: Account, stored: string | null, seen: string | undefined): void {
+  const zone = validZone(seen);
+  if (!zone || zone === stored) return;
+  after(() => saveAccountTimeZone(account, zone).catch(() => undefined));
+}
+
+
+/**
+ * The account's money for a connected app (MCP). Read-only through and
+ * through: the database refuses a connected app's writes anyway, and this
+ * never tries one — a Coinbase access token that has lapsed is NOT refreshed
+ * (its refresh token works once, and the new pair could not be saved), so
+ * crypto waits until the person next opens Prism.
+ */
+export async function agentFinance(account: Account): Promise<AgentData> {
+  const plaid = plaidConfig();
+  const cb = coinbaseConfig();
+  const key = safeVaultKey();
+  const a = await loadAccount(account, key, { strict: true });
+  const timeZone = validZone(a.timeZone) ?? "UTC";
+  const today = todayIn(timeZone);
+  const record = a.coinbase;
+  const src: Money = {
+    items: plaid ? a.items : [],
+    coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
+  };
+  const base = greeted(await moneyFor(src, today, "Coinbase balances update the next time you open Prism."), a.firstName, isLive(src));
+  const planned = applyPlan(base, a.plan);
+  return {
+    source: planned.source,
+    today: planned.today,
+    household: planned.household,
+    institutions: planned.institutions,
+    accounts: planned.accounts,
+    transactions: planned.transactions,
+    budgets: planned.budgets,
+    goals: planned.goals,
+    holdings: planned.holdings,
+    credit: planned.credit,
+    notice: planned.notice,
+    demo: !isLive(src),
+    timeZone,
+    budgetsSetByPerson: a.plan.budgets !== null,
+  };
+}
 
 const FEED_STALE_MS = 6 * 60 * 60_000;
 
@@ -244,9 +320,10 @@ function emptyLive(today: ISODate, plaidReady: boolean): Live {
 
 type CoinbaseLoad = { institution: Institution; account: FinanceData["accounts"][number] | null; holdings: Holding[]; problem: string | null };
 
-async function loadCoinbase(config: CoinbaseConfig, accessToken: string | null): Promise<CoinbaseLoad> {
-  // No live token means the refresh failed, and only a fresh sign-in will fix it.
-  if (!accessToken) return { institution: coinbaseNeedsSignIn(), account: null, holdings: [], problem: "Coinbase needs you to sign in again." };
+async function loadCoinbase(config: CoinbaseConfig, accessToken: string | null, lapsed = "Coinbase needs you to sign in again."): Promise<CoinbaseLoad> {
+  // No live token: in the app the refresh failed and only a fresh sign-in
+  // fixes it; for a connected app the token simply waits for the next visit.
+  if (!accessToken) return { institution: coinbaseNeedsSignIn(), account: null, holdings: [], problem: lapsed };
   try {
     const [wallets, rates] = await Promise.all([listAccounts(config, accessToken), usdRates(config)]);
     const snap = mapCoinbase(wallets, rates, new Date().toISOString());

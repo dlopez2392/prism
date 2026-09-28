@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIRST_NAME_MAX, landingAfterSignIn, readFirstName } from "./profile";
+import { FIRST_NAME_MAX, landingAfterSignIn, readFirstName, safeNext } from "./profile";
 
 describe("first name", () => {
   it("keeps real names from many languages, tidied", () => {
@@ -53,5 +53,19 @@ describe("where a sign-in lands", () => {
     expect(landingAfterSignIn({ email_confirmed_at: null }, now)).toBe("/");
     expect(landingAfterSignIn({ email_confirmed_at: "not a date" }, now)).toBe("/");
     expect(landingAfterSignIn(null, now)).toBe("/");
+  });
+});
+
+describe("where sign-in returns to", () => {
+  it("keeps a same-site path, query and all", () => {
+    expect(safeNext("/oauth/consent?authorization_id=abc-123")).toBe("/oauth/consent?authorization_id=abc-123");
+    expect(safeNext("/budgets")).toBe("/budgets");
+  });
+
+  it("refuses anything that could leave the site", () => {
+    const dressedUp = ["/.//evil.example", "/..//evil.example", "/%2e//evil.example", "/%2E%2E//evil.example", "/a/..//evil.example"];
+    for (const x of ["https://evil.example/", "//evil.example", "/\\evil.example", "/\tevil", "javascript:alert(1)", "evil", "", null, 42, `/${"a".repeat(600)}`, ...dressedUp]) {
+      expect(safeNext(x), String(x)).toBeNull();
+    }
   });
 });

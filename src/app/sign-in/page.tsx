@@ -7,6 +7,7 @@ import { PrismMark } from "@/components/shell";
 import { SignInForm } from "@/components/sign-in-form";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { supabaseEnv } from "@/lib/supabase/config";
+import { safeNext } from "@/lib/profile";
 import { currentAccount } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -22,16 +23,20 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
       </div>
     );
   }
-  if (await currentAccount()) redirect("/account");
-  const linkError = (await searchParams).error === "link";
+  const params = await searchParams;
+  const next = safeNext(params.next);
+  if (await currentAccount()) redirect(next ?? "/account");
+  const linkError = params.error === "link";
 
   return (
     <div className="mx-auto max-w-md pt-2 sm:pt-8">
       <Card className="p-6 sm:p-8">
         <PrismMark className="size-10" />
         <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink-1">Sign in to Prism</h1>
-        <p className="mt-1 mb-6 text-sm text-ink-2">Keep your banks, budgets and goals in one account, on every device.</p>
-        <SignInForm linkError={linkError} />
+        <p className="mt-1 mb-6 text-sm text-ink-2">
+          {next?.startsWith("/oauth/consent") ? "Sign in first, then you'll choose whether to connect the app." : "Keep your banks, budgets and goals in one account, on every device."}
+        </p>
+        <SignInForm linkError={linkError} next={next} />
       </Card>
       <ul className="mt-5 space-y-2.5 px-1 text-[13px] text-ink-2">
         <li className="flex gap-2.5">

@@ -30,3 +30,20 @@ export function landingAfterSignIn(user: { email_confirmed_at?: string | null } 
   // Either side of now: the auth server's clock may run a little ahead of this one.
   return Number.isFinite(confirmed) && Math.abs(now - confirmed) < FIRST_SIGN_IN_WINDOW_MS ? "/account?welcome=1" : "/";
 }
+
+/** Where to return after signing in, when sign-in interrupted something (approving a connected app, say). */
+export const NEXT_COOKIE = "prism-next";
+
+/** A same-site path to return to, or null — never another site, however it is dressed up. */
+export function safeNext(x: unknown): string | null {
+  if (typeof x !== "string" || x.length > 512 || !x.startsWith("/") || x.startsWith("//") || /[\\\u0000-\u001f\u007f]/.test(x)) return null;
+  try {
+    const url = new URL(x, "https://prism.invalid");
+    const path = `${url.pathname}${url.search}`;
+    // Only a path already in normal form: dot segments ("/.//evil.example")
+    // normalise into "//evil.example", which a browser reads as another site.
+    return url.origin === "https://prism.invalid" && path === x && !path.startsWith("//") ? path : null;
+  } catch {
+    return null;
+  }
+}

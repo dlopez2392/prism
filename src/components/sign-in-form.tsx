@@ -17,7 +17,7 @@ import { signInStep, type SignInState } from "@/lib/server/auth-actions";
 const input =
   "h-11 w-full rounded-ctl border border-line-strong bg-surface-2 px-3 text-[15px] text-ink-1 placeholder:text-ink-3 focus:border-[var(--focus)] aria-[invalid=true]:border-crit";
 
-export function SignInForm({ linkError }: { linkError: boolean }) {
+export function SignInForm({ linkError, next }: { linkError: boolean; next?: string | null }) {
   const [state, action, pending] = useActionState<SignInState, FormData>(signInStep, { step: "email" });
 
   if (state.step === "code") {
@@ -65,6 +65,7 @@ export function SignInForm({ linkError }: { linkError: boolean }) {
 
   return (
     <form action={action} noValidate>
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       {linkError && !state.error ? (
         <p role="alert" className="mb-4 rounded-ctl bg-surface-2 px-3 py-2 text-sm font-medium text-ink-1">
           That sign-in link has expired or was already used. Ask for a new code below.

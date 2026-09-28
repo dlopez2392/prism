@@ -17,16 +17,22 @@ let db: PGlite;
 const rows = async (sql: string, params: unknown[] = []) => (await db.query<Record<string, unknown>>(sql, params)).rows;
 const refused = async (sql: string, params: unknown[] = []) => rows(sql, params).then(() => false, () => true);
 
-async function as<T>(role: "anon" | "authenticated", sub: string | null, fn: () => Promise<T>): Promise<T> {
+/** Run as a role, the way PostgREST would for a token with these claims. `extra` adds claims — a connected app's `client_id`, say. */
+async function as<T>(role: "anon" | "authenticated", sub: string | null, fn: () => Promise<T>, extra: Record<string, unknown> = {}): Promise<T> {
   await db.exec(`set role ${role}`);
   await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [sub ?? ""]);
+  await db.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ role, ...(sub ? { sub } : {}), ...extra })]);
   try {
     return await fn();
   } finally {
     await db.exec("reset role");
     await db.query(`select set_config('request.jwt.claim.sub', '', false)`);
+    await db.query(`select set_config('request.jwt.claims', '', false)`);
   }
 }
+
+/** A token Supabase's OAuth server issued to a connected app (Claude, ChatGPT…) on the person's behalf. */
+const CONNECTED_APP = { client_id: "9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d" };
 
 beforeAll(async () => {
   db = new PGlite();
@@ -35,8 +41,10 @@ beforeAll(async () => {
     create schema auth;
     create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}'::jsonb);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+    create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
     grant usage on schema auth to anon, authenticated;
     grant execute on function auth.uid() to anon, authenticated;
+    grant execute on function auth.jwt() to anon, authenticated;
     grant usage on schema public to anon, authenticated;
     alter default privileges in schema public grant all on tables to anon, authenticated;
     alter default privileges in schema public grant execute on functions to anon, authenticated;
@@ -104,6 +112,55 @@ describe("a signed-in person", () => {
       const second = await rows(`update public.coinbase_links set version = version + 1 where user_id = $1 and version = 1 returning version`, [B]);
       expect(first).toEqual([{ version: 2 }]);
       expect(second).toEqual([]);
+    });
+  });
+});
+
+describe("a connected app, holding a token issued on the person's behalf", () => {
+  it("reads what the person can read", async () => {
+    await as(
+      "authenticated",
+      B,
+      async () => {
+        expect(await rows(`select user_id from public.profiles`)).toEqual([{ user_id: B }]);
+        expect(await rows(`select item_id from public.plaid_items`)).toEqual([{ item_id: "item-b" }]);
+        expect((await rows(`select count(*)::int as n from public.coinbase_links`))[0]!.n).toBe(1);
+      },
+      CONNECTED_APP,
+    );
+  });
+
+  it("can change, add or remove nothing, in any table", async () => {
+    const before = await rows(`select plan_budgets, time_zone from public.profiles where user_id = $1`, [B]);
+    const version = (await rows(`select version from public.coinbase_links where user_id = $1`, [B]))[0]!.version;
+    await as(
+      "authenticated",
+      B,
+      async () => {
+        // Refused outright…
+        expect(await refused(`insert into public.plaid_items (user_id, item_id, sealed_token) values ($1, 'item-new', $2)`, [B, SEALED])).toBe(true);
+        expect(await refused(`insert into public.calendar_feeds (user_id, token_hash, sealed_token) values ($1, $2, $3)`, [B, "a".repeat(64), SEALED])).toBe(true);
+        expect(await refused(`insert into public.profiles (user_id) values ($1) on conflict (user_id) do update set plan_goals = '[]'::jsonb`, [B])).toBe(true);
+        expect(await refused(`select public.delete_my_account()`)).toBe(true);
+        // …or matching no rows at all.
+        expect(await rows(`update public.profiles set plan_budgets = '[{"category":"food","limit":1}]'::jsonb, time_zone = 'Asia/Tokyo' where user_id = $1 returning user_id`, [B])).toEqual([]);
+        expect(await rows(`update public.coinbase_links set version = version + 1 where user_id = $1 returning version`, [B])).toEqual([]);
+        expect(await rows(`delete from public.plaid_items where user_id = $1 returning item_id`, [B])).toEqual([]);
+        expect(await rows(`delete from public.coinbase_links where user_id = $1 returning user_id`, [B])).toEqual([]);
+      },
+      CONNECTED_APP,
+    );
+    expect(await rows(`select plan_budgets, time_zone from public.profiles where user_id = $1`, [B])).toEqual(before);
+    expect((await rows(`select version from public.coinbase_links where user_id = $1`, [B]))[0]!.version).toBe(version);
+    expect((await rows(`select count(*)::int as n from public.plaid_items where user_id = $1`, [B]))[0]!.n).toBe(1);
+    expect((await rows(`select count(*)::int as n from auth.users where id = $1`, [B]))[0]!.n).toBe(1);
+  });
+
+  it("while the person's own session still writes as before", async () => {
+    await as("authenticated", B, async () => {
+      expect(await rows(`update public.profiles set time_zone = 'America/Chicago' where user_id = $1 returning time_zone`, [B])).toEqual([{ time_zone: "America/Chicago" }]);
+      // A time zone is a name, never free text.
+      expect(await refused(`update public.profiles set time_zone = 'x''; drop table x; --' where user_id = $1`, [B])).toBe(true);
     });
   });
 });

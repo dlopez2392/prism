@@ -37,6 +37,12 @@ export type Account = { supabase: SupabaseClient; userId: string; email: string 
  * The signed-in person, verified — getClaims() checks the token's signature
  * rather than trusting the cookie (never use getSession() on the server).
  * Cached per request, so the layout, the page and an action share one check.
+ *
+ * A token issued to a connected app (it carries `client_id`) is NOT a Prism
+ * session, even though its signature is genuine: dressed up as this cookie it
+ * would otherwise reach actions whose first step happens outside the database
+ * — unlinking a bank at Plaid, revoking or refreshing Coinbase — before row-
+ * level security could refuse anything. Connected apps get /mcp, and only that.
  */
 export const currentAccount = cache(async (): Promise<Account | null> => {
   const supabase = await supabaseServer();
@@ -45,6 +51,6 @@ export const currentAccount = cache(async (): Promise<Account | null> => {
   if (!jar.getAll().some((c) => c.name === AUTH_COOKIE || c.name.startsWith(`${AUTH_COOKIE}.`))) return null;
   const { data, error } = await supabase.auth.getClaims();
   const claims = data?.claims;
-  if (error || !claims?.sub) return null;
+  if (error || !claims?.sub || claims.client_id !== undefined) return null;
   return { supabase, userId: claims.sub, email: typeof claims.email === "string" ? claims.email : null };
 });

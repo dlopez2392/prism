@@ -123,3 +123,15 @@ describe("the name Prism greets you by", () => {
     await expect(saveAccountFirstName(account(db), "Dan")).rejects.toThrow(/Couldn't save/);
   });
 });
+
+describe("a failed read", () => {
+  const failing = { from: () => {
+    const b = { select: () => b, eq: () => b, returns: () => b, maybeSingle: async () => ({ data: null, error: { message: "JWT expired" } }), then: (r: (x: unknown) => void) => r({ data: null, error: { message: "JWT expired" } }) };
+    return b;
+  } };
+
+  it("reads as an empty account in the app, but as an error for a connected app", async () => {
+    await expect(loadAccount(account(failing), key)).resolves.toMatchObject({ items: [], coinbase: null, firstName: null });
+    await expect(loadAccount(account(failing), key, { strict: true })).rejects.toThrow(/Couldn't read/);
+  });
+});

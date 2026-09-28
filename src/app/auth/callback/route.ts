@@ -4,11 +4,12 @@
 // valid only in the browser that asked for it) or a `token_hash` (a custom
 // email template). Either way the session is written as cookies on this
 // response; a used or expired link goes back to sign-in with a word about it.
-// An account's very first sign-in lands on the welcome step, as a code does.
+// Like a code, it returns to whatever sign-in interrupted (approving a
+// connected app), else lands a brand-new account on the welcome step.
 
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType, User } from "@supabase/supabase-js";
-import { landingAfterSignIn } from "@/lib/profile";
+import { landingAfterSignIn, NEXT_COOKIE, safeNext } from "@/lib/profile";
 import { supabaseServer } from "@/lib/supabase/server";
 
 const LINK_TYPES: EmailOtpType[] = ["email", "magiclink", "signup"];
@@ -30,7 +31,9 @@ export async function GET(req: NextRequest) {
     ok = result !== null && !result.error;
     user = result?.data.user ?? null;
   }
-  const res = NextResponse.redirect(new URL(ok ? landingAfterSignIn(user) : "/sign-in?error=link", req.url), 303);
+  const next = safeNext(req.cookies.get(NEXT_COOKIE)?.value);
+  const res = NextResponse.redirect(new URL(ok ? (next ?? landingAfterSignIn(user)) : "/sign-in?error=link", req.url), 303);
+  if (ok) res.cookies.delete(NEXT_COOKIE);
   res.headers.set("Cache-Control", "no-store");
   return res;
 }
