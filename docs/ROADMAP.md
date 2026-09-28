@@ -1,6 +1,6 @@
 # Prism roadmap
 
-Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts built and switched off until the Supabase project exists; Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
+Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts live on Supabase project `prism`; Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
 
 ## Committed integrations
 
@@ -22,11 +22,14 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
 
 1. **Accounts and sign-in** — per-person storage for linked banks, budgets and
    goals; Plaid tokens move from the sealed cookie to an encrypted,
-   server-side store. **Built (2026-09-28), switched off until the owner's
-   Supabase project exists:** email one-time-code sign-in, row-level security
-   on every table (tested in CI), sealed tokens, device data moved in only when
-   the person agrees, and delete-account that revokes every link first. Owner
-   decision: Supabase, own project, US East (~$10/month).
+   server-side store. **Live (2026-09-28)** on Supabase project `prism`
+   (ref `mstdtbckfdrtinaoslda`, US East, ~$10/month — owner's decision): email
+   one-time-code sign-in, row-level security on every table (tested in CI and
+   applied live), sealed tokens, device data moved in only when the person
+   agrees, and delete-account that revokes every link first. Verified end to
+   end against the live project with a throwaway user (deleted by the app's
+   own Delete account). **Owner steps left:** Auth URL configuration, the
+   code in the email template, a real SMTP sender, and `PRISM_VAULT_KEY`.
 2. **Plaid webhooks and a stored sync cursor** — each load fetches only what
    changed.
 3. **Editable budgets and goals**, saved per person. **Built on the device

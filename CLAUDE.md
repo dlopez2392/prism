@@ -30,9 +30,11 @@
 - Product roadmap order: accounts and sign-in → Plaid webhooks + stored cursor
   → editable budgets and goals → household views → fallback aggregator → the
   integrations above. Keep `docs/ROADMAP.md` current as items ship. Accounts:
-  the owner approved Supabase (its OWN project "prism", US East) on
-  2026-09-28. Never point Prism at bis-platform-dev or any other product's
-  project.
+  the owner approved Supabase (its OWN project "prism", ref
+  mstdtbckfdrtinaoslda, US East) on 2026-09-28; live since that day. Never
+  point Prism at bis-platform-dev or any other product's project. Every new
+  migration: add it under supabase/migrations, keep schema.test.ts green, then
+  apply it to prism and re-run the advisors.
 - Accounts architecture: `src/lib/supabase/*` makes a per-request client that
   acts AS the signed-in person — there is no service-role key in this app and
   there must never be one. Row-level security guards every table; every token
