@@ -1,0 +1,32 @@
+# Dependabot: security fixes and a weekly, grouped round of updates.
+#
+# Security updates arrive as soon as GitHub knows about a vulnerability
+# ("Dependabot security updates" must be switched on in the repository's
+# Settings → Code security). The weekly version updates are grouped so they
+# come as a couple of pull requests, not dozens. Every one runs CI (type-check,
+# lint, tests, build) before it can be merged.
+
+version: 2
+updates:
+  - package-ecosystem: "npm" # also reads pnpm-lock.yaml
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      runtime:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      tooling:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      actions:
+        patterns: ["*"]
