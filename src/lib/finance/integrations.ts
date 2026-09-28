@@ -67,7 +67,7 @@ export const INTEGRATIONS: IntegrationGroup[] = [
         id: "coinbase",
         name: "Coinbase and crypto wallets",
         adds: "Crypto balances alongside everything else.",
-        how: "Coinbase sign-in with read-only access; self-custody wallets by public address — nothing to sign.",
+        how: "Sign in on Coinbase and approve read-only access to balances (nothing that can send, buy or sell). Self-custody wallets by public address come next — nothing to sign.",
         status: "planned",
       },
     ],

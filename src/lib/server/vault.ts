@@ -41,27 +41,36 @@ export function vaultKey(env: Env = process.env): Buffer | null {
   return null;
 }
 
-export function seal(vault: Vault, key: Buffer): string {
+/** AES-256-GCM: iv ‖ tag ‖ ciphertext, base64url. Shared by every sealed cookie. */
+export function sealJson(value: unknown, key: Buffer): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const body = Buffer.concat([cipher.update(JSON.stringify(vault), "utf8"), cipher.final()]);
+  const body = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
   return Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
 }
 
-/** Null for anything that is not a vault this key sealed — tampered, truncated, or foreign. */
-export function open(token: string | undefined, key: Buffer): Vault | null {
+/** The parsed value, or null for anything this key did not seal — tampered, truncated, or foreign. */
+export function openJson(token: string | undefined, key: Buffer): unknown {
   if (!token) return null;
   try {
     const buf = Buffer.from(token, "base64url");
     if (buf.length < 29) return null;
     const decipher = createDecipheriv("aes-256-gcm", key, buf.subarray(0, 12));
     decipher.setAuthTag(buf.subarray(12, 28));
-    const json = Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8");
-    const parsed = JSON.parse(json) as Vault;
-    return parsed && parsed.v === 1 && Array.isArray(parsed.items) ? parsed : null;
+    return JSON.parse(Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8"));
   } catch {
     return null;
   }
+}
+
+export function seal(vault: Vault, key: Buffer): string {
+  return sealJson(vault, key);
+}
+
+/** Null for anything that is not a vault this key sealed — tampered, truncated, or foreign. */
+export function open(token: string | undefined, key: Buffer): Vault | null {
+  const parsed = openJson(token, key) as Vault | null;
+  return parsed && parsed.v === 1 && Array.isArray(parsed.items) ? parsed : null;
 }
 
 export function cookieOptions(env: Env = process.env) {

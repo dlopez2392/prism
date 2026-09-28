@@ -2,14 +2,15 @@
 
 // src/components/disconnect-button.tsx
 //
-// Removing a bank is destructive (its history leaves the app), so it confirms
-// by typing the bank's name — never a reflexive "Are you sure?".
+// Removing a connection is destructive (its accounts leave the app and the
+// link is revoked at the source), so it confirms by typing the name — never a
+// reflexive "Are you sure?". Banks go to the Plaid route; Coinbase to its own.
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Unplug } from "lucide-react";
 
-export function DisconnectButton({ itemId, name }: { itemId: string; name: string }) {
+export function DisconnectButton({ itemId, name, endpoint = "/api/plaid/disconnect" }: { itemId: string; name: string; endpoint?: string }) {
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const [typed, setTyped] = useState("");
@@ -20,7 +21,7 @@ export function DisconnectButton({ itemId, name }: { itemId: string; name: strin
   async function disconnect() {
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/plaid/disconnect", {
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ itemId }),
@@ -46,7 +47,7 @@ export function DisconnectButton({ itemId, name }: { itemId: string; name: strin
       </button>
       <dialog ref={dialog} className="m-auto w-[min(92vw,420px)] rounded-card border border-line bg-surface-1 p-6 text-ink-1 shadow-pop backdrop:bg-[var(--surface-0)]/70">
         <h2 className="text-lg font-bold">Disconnect {name}?</h2>
-        <p className="mt-2 text-sm text-ink-2">Its accounts and transactions leave Prism, and the bank link is revoked. Type the bank&apos;s name to confirm.</p>
+        <p className="mt-2 text-sm text-ink-2">Its accounts leave Prism, and the link is revoked at {name} itself, not just here. Type the name to confirm.</p>
         <input
           value={typed}
           onChange={(e) => setTyped(e.target.value)}

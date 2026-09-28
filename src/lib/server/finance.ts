@@ -22,6 +22,9 @@ import {
   type PlaidConfig,
 } from "@/lib/plaid/client";
 import { mapAccount, mapHoldings, mapTransaction, suggestedLimit } from "@/lib/plaid/map";
+import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
+import { coinbaseNeedsSignIn, mapCoinbase } from "@/lib/coinbase/map";
+import { COINBASE_COOKIE, isExpired, readLink, type CoinbaseLink } from "./coinbase-store";
 import { readPlan } from "./plan-store";
 import { open, VAULT_COOKIE, vaultKey, type VaultItem } from "./vault";
 
@@ -80,9 +83,24 @@ export async function requestToday(): Promise<ISODate> {
  */
 export async function sourceGoals(): Promise<Goal[]> {
   const jar = await cookies();
-  const live = plaidConfig() !== null && vaultItems(jar).length > 0;
+  const live = (plaidConfig() !== null && vaultItems(jar).length > 0) || coinbaseLinkOf(jar) !== null;
   return live ? [] : buildDemoData(todayIn(jar.get("prism-tz")?.value)).goals;
 }
+
+/** This browser's Coinbase link, when this deployment has Coinbase keys and a vault key to open it. */
+function coinbaseLinkOf(jar: Jar): { config: CoinbaseConfig; link: CoinbaseLink } | null {
+  const config = coinbaseConfig();
+  if (!config) return null;
+  try {
+    const key = vaultKey();
+    const link = key ? readLink(jar.get(COINBASE_COOKIE)?.value, key) : null;
+    return link ? { config, link } : null;
+  } catch {
+    return null;
+  }
+}
+
+type Live = Omit<Loaded, "localHour" | "planEdited">;
 
 export const getFinance = cache(async (): Promise<Loaded> => {
   const jar = await cookies();
@@ -90,18 +108,79 @@ export const getFinance = cache(async (): Promise<Loaded> => {
   const today = todayIn(zone);
   const localHour = hourIn(zone);
   const config = plaidConfig();
-  const items = vaultItems(jar);
+  const items = config ? vaultItems(jar) : [];
+  const coinbase = coinbaseLinkOf(jar);
   const plan = readPlan(jar);
   const planEdited = { budgets: plan.budgets !== null, goals: plan.goals !== null };
-  const base =
-    !config || items.length === 0
-      ? { ...buildDemoData(today), notice: null, plaidReady: config !== null }
-      : await loadPlaid(config, items, today);
+
+  let base: Live;
+  if (items.length === 0 && !coinbase) {
+    // Nothing real is linked: the demo household. Real and made-up money are
+    // never shown together, so linking anything at all ends the demo.
+    base = { ...buildDemoData(today), notice: null, plaidReady: config !== null };
+  } else {
+    const [banks, crypto] = await Promise.all([
+      config && items.length ? loadPlaid(config, items, today) : Promise.resolve(emptyLive(today, config !== null)),
+      coinbase ? loadCoinbase(coinbase.config, coinbase.link) : Promise.resolve(null),
+    ]);
+    base = crypto ? withCoinbase(banks, crypto) : banks;
+  }
   // The person's own edits win over seeded or drafted budgets and goals.
   return { ...applyPlan(base, plan), localHour, planEdited };
 });
 
-async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate): Promise<Omit<Loaded, "localHour" | "planEdited">> {
+function emptyLive(today: ISODate, plaidReady: boolean): Live {
+  return {
+    source: "coinbase",
+    today,
+    household: { name: "Your household", firstName: "there" },
+    institutions: [],
+    accounts: [],
+    transactions: [],
+    budgets: [],
+    goals: [],
+    holdings: [],
+    credit: null,
+    notice: null,
+    plaidReady,
+  };
+}
+
+type CoinbaseLoad = { institution: Institution; account: FinanceData["accounts"][number] | null; holdings: Holding[]; problem: string | null };
+
+async function loadCoinbase(config: CoinbaseConfig, link: CoinbaseLink): Promise<CoinbaseLoad> {
+  // The proxy refreshes a token before it lapses; reaching here expired means
+  // that refresh failed, and only a fresh sign-in will fix it.
+  if (isExpired(link)) return { institution: coinbaseNeedsSignIn(), account: null, holdings: [], problem: "Coinbase needs you to sign in again." };
+  try {
+    const [wallets, rates] = await Promise.all([listAccounts(config, link.accessToken), usdRates(config)]);
+    const snap = mapCoinbase(wallets, rates, new Date().toISOString());
+    // A coin Coinbase can't price is left out of the total; that is not a
+    // problem the person can fix, so it never raises the "Fix it" banner.
+    return { institution: snap.institution, account: snap.account, holdings: snap.holdings, problem: null };
+  } catch (e) {
+    const reauth = e instanceof CoinbaseError && e.needsReconnect;
+    return {
+      institution: coinbaseNeedsSignIn(),
+      account: null,
+      holdings: [],
+      problem: reauth ? "Coinbase needs you to sign in again." : "We couldn't reach Coinbase just now.",
+    };
+  }
+}
+
+function withCoinbase(base: Live, cb: CoinbaseLoad): Live {
+  const notice = [base.notice, cb.problem].filter(Boolean).join(" ") || null;
+  return {
+    ...base,
+    institutions: [...base.institutions, cb.institution],
+    accounts: cb.account ? [...base.accounts, cb.account] : base.accounts,
+    holdings: [...base.holdings, ...cb.holdings],
+    notice,
+  };
+}
+
+async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate): Promise<Live> {
   const institutions: Institution[] = [];
   const accounts: FinanceData["accounts"] = [];
   const transactions: FinanceData["transactions"] = [];
