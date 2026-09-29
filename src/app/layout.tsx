@@ -2,11 +2,13 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { BottomNav, PrismMark, Sidebar, type AccountNav } from "@/components/shell";
 import { CarryoverBanner } from "@/components/carryover-banner";
+import { HalfwayBanner } from "@/components/halfway-banner";
 import { ThemeToggle, THEME_SCRIPT } from "@/components/theme-toggle";
 import { ConnectBank } from "@/components/connect-bank";
 import { BisMark } from "@/components/bis-mark";
 import { BRAND } from "@/lib/brand";
 import { getFinance } from "@/lib/server/finance";
+import { awaitingSecondStep } from "@/lib/supabase/server";
 import { TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import "./globals.css";
@@ -36,6 +38,7 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const data = await getFinance();
+  const halfway = data.accountsEnabled && !data.account && (await awaitingSecondStep()) !== null;
   const sourceLabel = data.source === "demo" ? "Demo household" : `${data.institutions.length} ${data.institutions.length === 1 ? "connection" : "connections"}`;
   const accountNav: AccountNav = data.accountsEnabled ? { signedIn: data.account !== null, email: data.account?.email ?? null } : null;
   return (
@@ -80,6 +83,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </Link>
               </div>
             ) : null}
+            {halfway ? <HalfwayBanner /> : null}
             {data.carryover.length ? <CarryoverBanner items={data.carryover} /> : null}
             <main className="px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-14 lg:pt-7">
               {children}

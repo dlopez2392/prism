@@ -7,7 +7,14 @@
   shares no code, database, authentication or deployment with it.
 - Product and company names live in `src/lib/brand.ts`; never hard-code them.
 - Gates before any merge: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
-  `pnpm build`. CI runs all four (`.github/workflows/ci.yml`).
+  `pnpm build`. CI runs all four (`.github/workflows/ci.yml`, job `verify`).
+- **`main` is protected by a GitHub ruleset (since 2026-09-29), with no
+  bypass, the owner included.** Changes arrive only through a pull request
+  whose `verify` check is green on its head commit and whose branch is up to
+  date with `main`; force-pushes and deletion are refused. Work on a branch,
+  open a PR, and merge (squash) only after reading the check runs for the
+  head commit, never inferring from an earlier run. Merging deploys
+  production. Never ask for the rule to be loosened to ship faster.
 - Bank data: Plaid through `src/lib/plaid/*`, mapped onto
   `src/lib/finance/types.ts`. Without `PLAID_CLIENT_ID`/`PLAID_SECRET` the app
   runs on the deterministic demo household in `src/lib/finance/demo.ts`.
@@ -90,6 +97,23 @@
   Clear the cookie with `clearedReturnCookie()`, never a bare delete, because
   a browser ignores a `__Host-` clear that isn't Secure with Path=/.
   `exchange` clears it once a bank is saved.
+- Two-step sign-in (authenticator app, TOTP; migration `two_step_sign_in`):
+  the DATABASE enforces it. Once `profiles.totp_factor_id` names a verified
+  factor, restrictive policies on every table (and `delete_my_account`) refuse
+  a session that hasn't passed THAT factor — read from `auth.sessions`, not
+  just the token's `aal` — so `second_step_pending()` is the one truth, and
+  `currentAccount` treats such a session as signed out (`awaitingSecondStep`
+  sends it to `/sign-in/two-step`). New tables need the same restrictive
+  policy and a test. Codes are checked in the BROWSER
+  (`src/lib/supabase/browser.ts`), never in a server action: Supabase refuses
+  a challenge and a verify from different addresses
+  (`mfa_ip_address_mismatch`), and a server's egress address isn't stable.
+  The server only enrolls, records and removes: `registerFactor` works only
+  for a session that just passed that factor (trigger
+  `check_totp_registration`), and `turnOff` requires a TOTP entry in the
+  token's `amr` from the last five minutes, then clears the record BEFORE
+  unenrolling. Only a code Supabase compared and refused may be called
+  "didn't match"; a failed connection must say so.
 - Privacy policy (`/privacy`, facts in `src/lib/privacy.ts`): it states what
   the code does, so keep them in step. When a change collects, stores or
   shares something new, or adds a service provider, update the page in the

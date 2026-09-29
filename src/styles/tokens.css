@@ -39,6 +39,8 @@
   --ink-on-bright: #15122b;
   /* Ink on the hero gradient — the gradient is identical in both modes. */
   --on-hero: #ffffff;
+  /* Behind a QR code in BOTH modes: a scanner needs dark modules on a light quiet zone. */
+  --qr-ground: #ffffff;
   --on-hero-soft: rgba(255, 255, 255, 0.9);
   --on-hero-faint: rgba(255, 255, 255, 0.16);
 
