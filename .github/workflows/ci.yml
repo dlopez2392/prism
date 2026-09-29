@@ -27,5 +27,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      # As Vercel runs it: inside the production build, with production's
+      # settings in the environment. Placeholders, never real values; the
+      # suite must pin them all off (src/lib/env-pins.test.ts).
       - run: pnpm test
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          PLAID_CLIENT_ID: ci-placeholder
+          PLAID_SECRET: ci-placeholder
+          PLAID_ENV: production
+          PRISM_VAULT_KEY: Y2ktcGxhY2Vob2xkZXItMzItYnl0ZXMtLS0tLS0tLS0=
+          COINBASE_CLIENT_ID: ci-placeholder
+          COINBASE_CLIENT_SECRET: ci-placeholder
       - run: pnpm build
