@@ -77,6 +77,25 @@
   in `moneyFor` under the "Added by you" institution. Any of them makes the
   household the person's own (`isLive`), never the demo. The profile's
   sealed columns re-seal in ONE write guarded by `updated_at` (`staleSeals`).
+- Households (`supabase/migrations/20260930000000_households.sql`,
+  `src/lib/finance/household.ts`): up to four adults, each with their OWN
+  account, sign-in and two-step code. DATA IS SHARED, NEVER ACCESS: the one
+  way to another member's money is `household_shared_money()`, which returns
+  their last STORED sealed copies (never `sealed_token`), only for bank
+  connections they share something from (not even the bank's name
+  otherwise), and nothing to a connected app or a session short of the
+  second step. Nobody's visit syncs anyone else's bank. Each person shares
+  account by account on Connections (`shared_accounts`); a share needs a
+  household, joining or starting one clears any old shares (private until
+  shared), and leaving deletes them at once. Invitations are a link the
+  inviter sends themselves: the secret rides after `#`, the database keeps
+  its sha256, and only the invited email can use it, once, for 7 days. The
+  Me / Household switch is the `prism-view` cookie; `getFinance()` follows it
+  and `getPersonalFinance()` never does — budgets, goals, Connections and the
+  Account page are always the person's own. The Household view carries no
+  budgets, goals, credit score or other people's holdings, and nothing in it
+  is editable (fix categories and add items from Me). Coinbase isn't
+  shareable: it loads live, with its owner's own access.
 - Connecting real money needs an account (`src/lib/linking.ts`). With
   accounts on, the link-token, exchange and both Coinbase routes refuse a
   signed-out caller BEFORE Plaid or Coinbase is asked for anything, and the

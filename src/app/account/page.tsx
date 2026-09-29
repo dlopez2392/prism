@@ -7,13 +7,15 @@ import { redirect } from "next/navigation";
 import { CalendarClock, Landmark, PiggyBank, Target, Wallet, type LucideIcon } from "lucide-react";
 import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { DeleteAccount } from "@/components/delete-account";
+import { HouseholdCard } from "@/components/household";
 import { NameForm } from "@/components/name-form";
 import { SignOutButton } from "@/components/sign-in-form";
 import { TwoStepSettings } from "@/components/two-step";
 import { Card, CardHeader, PageHeader, StatusPill } from "@/components/ui";
 import { signOut } from "@/lib/server/auth-actions";
 import { connectingEnabled, MCP_PATH } from "@/lib/server/connected-apps";
-import { getFinance } from "@/lib/server/finance";
+import { getPersonalFinance } from "@/lib/server/finance";
+import { loadHousehold, type Household } from "@/lib/server/household-store";
 import { requestOrigin } from "@/lib/server/origin";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
@@ -21,16 +23,17 @@ import { currentAccount } from "@/lib/supabase/server";
 export const metadata: Metadata = { title: "Account" };
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const data = await getFinance();
+  const data = await getPersonalFinance();
   if (!data.accountsEnabled || !data.account) redirect("/sign-in");
   const email = data.account.email ?? "your account";
   const firstName = data.account.firstName;
   const welcome = (await searchParams).welcome === "1" && !firstName;
-  const [endpoint, enabled, apps, twoStepFactor] = await Promise.all([
+  const [endpoint, enabled, apps, twoStepFactor, household] = await Promise.all([
     requestOrigin().then((o) => `${o}${MCP_PATH}`),
     connectingEnabled(supabaseEnv()!),
     connectedApps(),
     registeredFactor(),
+    myHousehold(),
   ]);
   const banks = data.institutions.filter((i) => i.source === "plaid").length;
   const coinbase = data.institutions.some((i) => i.source === "coinbase");
@@ -86,6 +89,22 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         </Card>
       </section>
 
+      <section id="household" className="scroll-mt-6">
+        <Card className="p-5 sm:p-6">
+          <CardHeader
+            title="Household"
+            subtitle={
+              household === undefined
+                ? "We couldn't load your household just now. Try again in a minute."
+                : household
+                  ? "Everyone keeps their own login. Each of you chooses what to share on Connections, and sees only what the others share."
+                  : "Share chosen accounts with a partner or family, up to four adults. Each of you keeps your own login, and nothing is shared until you choose it."
+            }
+          />
+          {household === undefined ? null : <HouseholdCard household={household} />}
+        </Card>
+      </section>
+
       <section id="ai" className="scroll-mt-6">
         <Card className="p-5 sm:p-6">
           <CardHeader
@@ -102,6 +121,17 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       </Card>
     </div>
   );
+}
+
+/** Their household; null when they're in none, undefined when it can't be read right now. */
+async function myHousehold(): Promise<Household | null | undefined> {
+  const account = await currentAccount();
+  if (!account) return null;
+  try {
+    return await loadHousehold(account);
+  } catch {
+    return undefined;
+  }
 }
 
 /** The authenticator behind two-step sign-in (one Supabase still has as verified), or null when it's off. */

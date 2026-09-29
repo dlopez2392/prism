@@ -16,7 +16,7 @@ import { daysLeftInMonth, monthEnd, typicalMonthlySpend, type BudgetStatus } fro
 import { CATEGORIES, categoryColor } from "@/lib/finance/categories";
 import { money0, monthLong, shortDate } from "@/lib/finance/format";
 import { analyze } from "@/lib/finance/model";
-import { getFinance } from "@/lib/server/finance";
+import { getPersonalFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Budgets" };
 
@@ -27,7 +27,7 @@ function state(b: BudgetStatus) {
 }
 
 export default async function BudgetsPage() {
-  const data = await getFinance();
+  const data = await getPersonalFinance();
   const a = analyze(data);
   const { budgets, budgetTotals: totals } = a;
   const left = daysLeftInMonth(a.today);

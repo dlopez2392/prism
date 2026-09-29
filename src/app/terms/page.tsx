@@ -128,6 +128,20 @@ export default function TermsPage() {
           </Bullets>
         </Section>
 
+        <Section id="household" title="Sharing with your household">
+          <Bullets>
+            <li>
+              You can invite up to three other adults to a household. Each of you keeps your own {BRAND.product} account, and nothing you&apos;ve
+              connected is shared until you choose to share it.
+            </li>
+            <li>
+              Share only accounts you have the right to share. For an account you hold with someone else, share it only if they agree. The people you
+              share with see that account&apos;s balances and transactions; they never get a way into your bank.
+            </li>
+            <li>You can stop sharing an account, or leave the household, at any time. Leaving stops everything you shared at once.</li>
+          </Bullets>
+        </Section>
+
         <Section id="apps" title="AI apps and your calendar">
           <Bullets>
             <li>

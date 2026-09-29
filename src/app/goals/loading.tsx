@@ -13,7 +13,7 @@ export default function GoalsLoading() {
           <ul className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
               <li key={i} className="flex flex-col items-center gap-3 rounded-card border border-line p-5">
-                <Bone className="size-24 rounded-full" />
+                <Bone className="size-24 rounded-pill" />
                 <Bone className="h-4 w-24" />
                 <Bone className="h-3 w-16" />
               </li>

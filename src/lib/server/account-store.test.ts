@@ -24,6 +24,7 @@ function fakeDb(tables: Record<string, Row[]>) {
     const builder = {
       select: () => builder,
       eq: (k: string, v: unknown) => ((filters[k] = v), builder),
+      limit: () => builder,
       update: (v: Row) => ((op = "update"), (values = v), builder),
       returns: () => builder,
       maybeSingle: async () => ({ data: match()[0] ?? null, error: null }),
@@ -127,7 +128,7 @@ describe("the name Prism greets you by", () => {
 
 describe("a failed read", () => {
   const failing = { from: () => {
-    const b = { select: () => b, eq: () => b, returns: () => b, maybeSingle: async () => ({ data: null, error: { message: "JWT expired" } }), then: (r: (x: unknown) => void) => r({ data: null, error: { message: "JWT expired" } }) };
+    const b = { select: () => b, eq: () => b, limit: () => b, returns: () => b, maybeSingle: async () => ({ data: null, error: { message: "JWT expired" } }), then: (r: (x: unknown) => void) => r({ data: null, error: { message: "JWT expired" } }) };
     return b;
   } };
 

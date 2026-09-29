@@ -56,6 +56,8 @@ export type AccountSources = {
   plaidSync: Map<string, StoredSync>;
   coinbase: CoinbaseRecord | null;
   feedUpdatedAt: string | null;
+  /** They're in a household, so the Me / Household switch applies. */
+  inHousehold: boolean;
   /**
    * Seals this account holds that the current vault key didn't make, sealed
    * again under it; null when there are none. For a caller that may write,
@@ -79,7 +81,7 @@ function openCoinbase(row: CoinbaseRow | null, key: VaultKey | null): CoinbaseRe
  */
 export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
-  const [profile, plaid, coinbase, feed] = await Promise.all([
+  const [profile, plaid, coinbase, feed, household] = await Promise.all([
     db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
     db
       .from("plaid_items")
@@ -88,6 +90,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
       .returns<PlaidRow[]>(),
     db.from("coinbase_links").select("sealed_tokens, expires_at, version, linked_at").eq("user_id", account.userId).maybeSingle<CoinbaseRow>(),
     db.from("calendar_feeds").select("updated_at, sealed_token").eq("user_id", account.userId).maybeSingle<FeedRow>(),
+    db.from("household_members").select("household_id").eq("user_id", account.userId).limit(1),
   ]);
   if (strict && (profile.error || plaid.error || coinbase.error || feed.error)) throw new Error("Couldn't read the account.");
   const items: VaultItem[] = [];
@@ -121,6 +124,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     plaidSync,
     coinbase: coinbaseRecord,
     feedUpdatedAt: feed.data?.updated_at ?? null,
+    inHousehold: (household.data?.length ?? 0) > 0,
     reseal: stale.run(),
   };
 }

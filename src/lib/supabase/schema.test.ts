@@ -458,3 +458,155 @@ describe.each(["sealed_category_rules", "sealed_manual_items"])("a person's %s",
     await rows(`delete from auth.users where id = $1`, [E]);
   });
 });
+
+describe("a household", () => {
+  const person = (n: number) => `4a000000-0000-4000-8000-00000000000${n}`;
+  const [H1, H2, H3, H4, H5, X] = [person(1), person(2), person(3), person(4), person(5), person(9)];
+  const hash = (s: string) => createHash("sha256").update(s).digest("hex");
+  const [LINK2, LINK3, LINK4, LINK5] = [hash("link-2"), hash("link-3"), hash("link-4"), hash("link-5")];
+  const call = (who: string, sql: string, params: unknown[] = [], claims: Record<string, unknown> = {}) => as("authenticated", who, () => rows(sql, params), claims);
+  const fails = (who: string, sql: string, params: unknown[] = [], claims: Record<string, unknown> = {}) => as("authenticated", who, () => refused(sql, params), claims);
+  const errcode = (who: string, sql: string, params: unknown[] = []) => as("authenticated", who, () => rows(sql, params).then(() => null, (e: { code?: string }) => e.code ?? "?"));
+  const shares = async (who: string) => (await rows(`select account_id from public.shared_accounts where user_id = $1 order by account_id`, [who])).map((r) => r.account_id);
+
+  beforeAll(async () => {
+    for (const [id, n] of [[H1, 1], [H2, 2], [H3, 3], [H4, 4], [H5, 5], [X, 9]] as const) {
+      await rows(`insert into auth.users (id, email) values ($1, $2)`, [id, `H${n}@X.test`]);
+      await rows(`update public.profiles set first_name = $2 where user_id = $1`, [id, `Person${n}`]);
+    }
+    // H2 banks at two places, and will share one account from the first only.
+    await rows(`insert into public.plaid_items (user_id, item_id, sealed_token, institution_name, sealed_sync) values ($1, 'joint', $2, 'Joint Bank', $3), ($1, 'secret', $2, 'Secret Bank', $3)`, [H2, SEALED, "z1." + "s".repeat(40)]);
+    await rows(`update public.profiles set sealed_manual_items = $2, sealed_category_rules = $2 where user_id = $1`, [H2, "z1." + "m".repeat(40)]);
+  });
+
+  it("starts with an invitation only its own email can use, once", async () => {
+    // Shares left over from before (written past the policies here) never go live in a new household.
+    await rows(`insert into public.shared_accounts (user_id, account_id) values ($1, 'manual-old'), ($2, 'manual-old')`, [H1, H2]);
+    // Emails match whatever their case: sign-up stored "H2@X.test".
+    await call(H1, `select public.create_household_invite('  H2@x.TEST ', $1)`, [LINK2]);
+    expect(await shares(H1)).toEqual([]);
+    expect(await call(H1, `select email from public.household_invites`)).toEqual([{ email: "h2@x.test" }]);
+    expect(await call(H1, `select count(*)::int as n from public.household_members`)).toEqual([{ n: 1 }]);
+    // Anyone else holding the link learns nothing, and can't use it.
+    expect(await call(X, `select * from public.household_invite_status($1)`, [LINK2])).toEqual([{ status: "wrong_email", invited_by_name: null }]);
+    expect(await fails(X, `select public.accept_household_invite($1)`, [LINK2])).toBe(true);
+    expect(await call(X, `select * from public.household_invites`)).toEqual([]);
+    // The person it names sees who sent it, and joins.
+    expect(await call(H2, `select * from public.household_invite_status($1)`, [LINK2])).toEqual([{ status: "ok", invited_by_name: "Person1" }]);
+    await call(H2, `select public.accept_household_invite($1)`, [LINK2]);
+    expect(await call(H2, `select first_name, is_me from public.household_people()`)).toEqual([
+      { first_name: "Person1", is_me: false },
+      { first_name: "Person2", is_me: true },
+    ]);
+    expect(await shares(H2)).toEqual([]);
+    // Once.
+    expect(await fails(H2, `select public.accept_household_invite($1)`, [LINK2])).toBe(true);
+    expect(await call(H2, `select * from public.household_invite_status($1)`, [LINK2])).toEqual([{ status: "not_found", invited_by_name: null }]);
+    // Nobody invites themselves, or someone already in.
+    expect(await errcode(H1, `select public.create_household_invite('h1@x.test', $1)`, [hash("self")])).toBe("22023");
+    expect(await errcode(H1, `select public.create_household_invite('h2@x.test', $1)`, [hash("again")])).toBe("23505");
+    expect(await call(H1, `select count(*)::int as n from public.household_invites`)).toEqual([{ n: 0 }]);
+  });
+
+  it("has room for four people, counting invitations still open", async () => {
+    await call(H1, `select public.create_household_invite('h3@x.test', $1)`, [LINK3]);
+    await call(H2, `select public.create_household_invite('h4@x.test', $1)`, [LINK4]);
+    expect(await errcode(H1, `select public.create_household_invite('h5@x.test', $1)`, [LINK5])).toBe("23514");
+    // Any member can cancel an open invitation; then there's room again.
+    expect(await call(H1, `delete from public.household_invites where email = 'h4@x.test' returning email`)).toEqual([{ email: "h4@x.test" }]);
+    await call(H1, `select public.create_household_invite('h5@x.test', $1)`, [LINK5]);
+    // And joining checks again, should two people ever take the last seats at once (written past the functions here).
+    const household = (await rows(`select household_id from public.household_members where user_id = $1`, [H1]))[0]!.household_id;
+    const Y = person(8);
+    await rows(`insert into auth.users (id, email) values ($1, 'h8@x.test')`, [Y]);
+    await rows(`insert into public.household_members (household_id, user_id) values ($1, $2), ($1, $3)`, [household, X, Y]);
+    expect(await call(H5, `select * from public.household_invite_status($1)`, [LINK5])).toEqual([{ status: "full", invited_by_name: null }]);
+    expect(await errcode(H5, `select public.accept_household_invite($1)`, [LINK5])).toBe("23514");
+    await rows(`delete from auth.users where id = $1`, [Y]);
+    await rows(`delete from public.household_members where user_id = $1`, [X]);
+    expect(await call(H5, `select status from public.household_invite_status($1)`, [LINK5])).toEqual([{ status: "ok" }]);
+    // Someone already in a household can't join another.
+    await call(H4, `select public.create_household_invite('h3@x.test', $1)`, [hash("h4-invites-h3")]);
+    await call(H3, `select public.accept_household_invite($1)`, [hash("h4-invites-h3")]);
+    expect(await call(H3, `select * from public.household_invite_status($1)`, [LINK3])).toEqual([{ status: "in_another", invited_by_name: null }]);
+    expect(await fails(H3, `select public.accept_household_invite($1)`, [LINK3])).toBe(true);
+  });
+
+  it("can't be written to except through its own steps", async () => {
+    // Even knowing the household's id, nobody writes themselves in.
+    const household = (await rows(`select household_id from public.household_members where user_id = $1`, [H1]))[0]!.household_id;
+    expect(await fails(X, `insert into public.household_members (household_id, user_id) values ($1, $2)`, [household, X])).toBe(true);
+    expect(await call(H1, `delete from public.household_members where user_id = $1 returning user_id`, [H2])).toEqual([]);
+    expect(await call(H1, `update public.household_members set user_id = $1 returning user_id`, [X])).toEqual([]);
+    expect(await fails(H1, `insert into public.household_invites (household_id, invited_by, email, token_hash) select household_id, $1, 'x@x.test', $2 from public.household_members limit 1`, [H1, hash("direct")])).toBe(true);
+    expect(await fails(H1, `insert into public.shared_accounts (user_id, account_id, item_id) values ($1, 'acc-9', 'joint')`, [H2])).toBe(true);
+    // Outside a household there is no one to share with.
+    expect(await fails(X, `insert into public.shared_accounts (user_id, account_id) values ($1, 'manual-car')`, [X])).toBe(true);
+    expect(await call(X, `select * from public.households`)).toEqual([]);
+    expect(await call(X, `select * from public.household_shared_money()`)).toEqual([]);
+  });
+
+  it("shows another member exactly what they shared, sealed, and never a token or a bank they share nothing from", async () => {
+    expect(await call(H1, `select * from public.household_shared_money()`)).toEqual([]);
+    // A bank account needs its connection; something added by hand has none.
+    expect(await fails(H2, `insert into public.shared_accounts (user_id, account_id, item_id) values ($1, 'manual-car', 'joint')`, [H2])).toBe(true);
+    expect(await fails(H2, `insert into public.shared_accounts (user_id, account_id) values ($1, 'acc-joint')`, [H2])).toBe(true);
+    await call(H2, `insert into public.shared_accounts (user_id, account_id, item_id) values ($1, 'acc-joint', 'joint')`, [H2]);
+    const [money] = await call(H1, `select * from public.household_shared_money()`);
+    expect(money).toMatchObject({ user_id: H2, first_name: "Person2", shared_account_ids: ["acc-joint"], sealed_manual_items: null });
+    expect(money!.sealed_category_rules).toMatch(/^z1\./);
+    const items = money!.items as Record<string, unknown>[];
+    expect(items.map((i) => i.institution_name)).toEqual(["Joint Bank"]);
+    expect(Object.keys(items[0]!).sort()).toEqual(["institution_name", "item_id", "sealed_sync", "synced_at"]);
+    expect(JSON.stringify(money)).not.toContain("Secret Bank");
+    await call(H2, `insert into public.shared_accounts (user_id, account_id) values ($1, 'manual-car')`, [H2]);
+    expect((await call(H1, `select sealed_manual_items from public.household_shared_money()`))[0]!.sealed_manual_items).toMatch(/^z1\./);
+    // Each sees the others' shares, never their own over again.
+    await call(H1, `insert into public.shared_accounts (user_id, account_id) values ($1, 'manual-bike')`, [H1]);
+    expect((await call(H1, `select user_id from public.household_shared_money()`)).map((r) => r.user_id)).toEqual([H2]);
+    expect((await call(H2, `select user_id from public.household_shared_money()`)).map((r) => r.user_id)).toEqual([H1]);
+    // The owner's own rows are still theirs alone.
+    expect(await call(H1, `select item_id from public.plaid_items where user_id = $1`, [H2])).toEqual([]);
+    expect(await call(H1, `select user_id from public.profiles where user_id = $1`, [H2])).toEqual([]);
+    // Someone outside the household gets nothing.
+    expect(await call(H3, `select * from public.household_shared_money()`)).toEqual([]);
+  });
+
+  it("is closed to connected apps, which read and never write", async () => {
+    expect(await fails(H1, `select * from public.household_shared_money()`, [], CONNECTED_APP)).toBe(true);
+    expect(await fails(H1, `select public.create_household_invite('x@x.test', $1)`, [hash("app")], CONNECTED_APP)).toBe(true);
+    expect(await fails(H2, `insert into public.shared_accounts (user_id, account_id) values ($1, 'manual-boat')`, [H2], CONNECTED_APP)).toBe(true);
+    expect(await call(H2, `delete from public.shared_accounts where user_id = $1 returning account_id`, [H2], CONNECTED_APP)).toEqual([]);
+    expect(await fails(H2, `select public.leave_household()`, [], CONNECTED_APP)).toBe(true);
+  });
+
+  it("is closed to a session that hasn't passed the member's own second step", async () => {
+    const [F, PASSED, EMAIL_ONLY] = ["4f000000-0000-4000-8000-000000000001", "4f000000-0000-4000-8000-000000000002", "4f000000-0000-4000-8000-000000000003"];
+    await rows(`insert into auth.mfa_factors (id, user_id, status) values ($1, $2, 'verified')`, [F, H1]);
+    await rows(`insert into auth.sessions (id, user_id, aal, factor_id) values ($1, $3, 'aal2', $4), ($2, $3, 'aal1', null)`, [PASSED, EMAIL_ONLY, H1, F]);
+    await call(H1, `update public.profiles set totp_factor_id = $2 where user_id = $1`, [H1, F], { session_id: PASSED, aal: "aal2" });
+    const emailOnly = { session_id: EMAIL_ONLY, aal: "aal1" };
+    expect(await fails(H1, `select * from public.household_shared_money()`, [], emailOnly)).toBe(true);
+    expect(await fails(H1, `select * from public.household_people()`, [], emailOnly)).toBe(true);
+    expect(await call(H1, `select * from public.household_members`, [], emailOnly)).toEqual([]);
+    expect((await call(H1, `select * from public.household_shared_money()`, [], { session_id: PASSED, aal: "aal2" })).length).toBe(1);
+    await rows(`update public.profiles set totp_factor_id = null where user_id = $1`, [H1]);
+  });
+
+  it("stops sharing at once when someone leaves, and ends with its last member", async () => {
+    await call(H2, `select public.leave_household()`);
+    expect(await rows(`select count(*)::int as n from public.shared_accounts where user_id = $1`, [H2])).toEqual([{ n: 0 }]);
+    expect(await call(H1, `select * from public.household_shared_money()`)).toEqual([]);
+    const household = (await rows(`select household_id from public.household_members where user_id = $1`, [H1]))[0]!.household_id;
+    await call(H1, `select public.leave_household()`);
+    expect(await rows(`select count(*)::int as n from public.households where id = $1`, [household])).toEqual([{ n: 0 }]);
+    expect(await rows(`select count(*)::int as n from public.household_invites where household_id = $1`, [household])).toEqual([{ n: 0 }]);
+  });
+
+  it("goes when its last member deletes their account", async () => {
+    const household = (await rows(`select household_id from public.household_members where user_id = $1`, [H4]))[0]!.household_id;
+    await call(H3, `select public.delete_my_account()`);
+    await call(H4, `select public.delete_my_account()`);
+    expect(await rows(`select count(*)::int as n from public.households where id = $1`, [household])).toEqual([{ n: 0 }]);
+  });
+});

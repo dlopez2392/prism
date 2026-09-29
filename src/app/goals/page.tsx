@@ -18,14 +18,14 @@ import { addMonths, lastMonths } from "@/lib/finance/dates";
 import { money0, monthShort, monthYear, percent } from "@/lib/finance/format";
 import { projectGoal } from "@/lib/finance/networth";
 import { goalSettings, MAX_GOALS } from "@/lib/finance/plan";
-import { getFinance } from "@/lib/server/finance";
+import { getPersonalFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Goals" };
 
 const AHEAD = 24;
 
 export default async function GoalsPage() {
-  const data = await getFinance();
+  const data = await getPersonalFinance();
   const { goals, today } = data;
   const settings = goals.map(goalSettings);
   const restore = data.source === "demo" && data.planEdited.goals ? <RestoreGoals /> : null;
