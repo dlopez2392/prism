@@ -69,8 +69,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <ConnectBank label="Connect" className="sm:hidden" />
-                <ConnectBank className="hidden sm:block" />
+                <ConnectBank label="Connect" signInFirst={accountNav?.signedIn === false} className="sm:hidden" />
+                <ConnectBank signInFirst={accountNav?.signedIn === false} className="hidden sm:block" />
                 <ThemeToggle />
               </div>
             </header>

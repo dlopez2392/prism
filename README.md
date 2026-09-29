@@ -32,6 +32,11 @@ before anyone shares real data.
 3. Restart `pnpm dev`, press **Connect a bank**, pick any test bank and sign in
    with `user_good` / `pass_good`.
 
+With accounts set up (below), connecting needs a signed-in account: a bank or
+Coinbase is kept only where two-step sign-in protects it and "Delete account"
+removes it. Without accounts, only Plaid's **sandbox** links, into the device,
+so Prism can be built and tried without a database; anything real refuses.
+
 For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 (`openssl rand -base64 32`); the app refuses to store tokens without one.
 
@@ -95,9 +100,11 @@ It runs only for browsers holding a Coinbase link.
 
 ## Accounts (Supabase)
 
-Signed out, Prism works as before: a demo household, plans and links kept on
-the device. Signed in, banks, Coinbase, budgets, goals and a private calendar
-link live in the person's account.
+Signed out, Prism works as before: a demo household, with budgets and goals
+kept on the device. Signed in, banks, Coinbase, budgets, goals and a private
+calendar link live in the person's account. Connecting a bank or Coinbase
+needs an account (`src/lib/linking.ts`); pressing Connect while signed out
+goes to sign-in first and comes back.
 
 1. Create a Supabase project and apply `supabase/migrations/*.sql`.
 2. Authentication → URL configuration: Site URL `https://<your-domain>`, and
@@ -267,8 +274,9 @@ source is public for reference only; see [`LICENSE`](./LICENSE).
   cookie so the prototype needs no database. Production moves them to a
   per-user, KMS-encrypted server-side store with sign-in, and persists the
   `/transactions/sync` cursor so each load fetches only what changed.
-- **Signed out**, budgets, goals and links stay on the device (sealed
-  cookies); signing in offers to move them into the account.
+- **Signed out**, budgets and goals stay on the device (sealed cookies), and
+  so do links made before connecting needed an account; signing in offers to
+  move them into the account.
 - **Calendar reminders**: anyone can download them; a signed-in person gets a
   private, self-updating link (a revocable secret whose sha256 is all the
   database stores).

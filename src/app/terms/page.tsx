@@ -106,6 +106,10 @@ export default function TermsPage() {
           <p>You choose what to connect, and you can disconnect anything, any time.</p>
           <Bullets>
             <li>
+              Connecting a bank or Coinbase needs a {BRAND.product} account, so every connection is kept in your account, protected by your sign-in, and removed
+              when you delete the account.
+            </li>
+            <li>
               <span className="font-semibold text-ink-1">Banks, cards, loans and investments</span> connect through Plaid. By connecting one, you authorize{" "}
               {BRAND.product} and Plaid to get your information from that institution for you, and you agree that Plaid handles it under{" "}
               <a href="https://plaid.com/legal/#end-user-privacy-policy" className={link} target="_blank" rel="noopener noreferrer">

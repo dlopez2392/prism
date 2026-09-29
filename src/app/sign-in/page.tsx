@@ -8,6 +8,7 @@ import { PrismMark } from "@/components/shell";
 import { SignInForm } from "@/components/sign-in-form";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { supabaseEnv } from "@/lib/supabase/config";
+import { connectReason } from "@/lib/linking";
 import { safeNext } from "@/lib/profile";
 import { awaitingSecondStep, currentAccount, twoStepPath } from "@/lib/supabase/server";
 
@@ -26,6 +27,8 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   }
   const params = await searchParams;
   const next = safeNext(params.next);
+  // Sent here by "Connect a bank" or "Connect Coinbase" (src/lib/linking.ts): say why, and what it buys them.
+  const reason = connectReason(params.why);
   if (await currentAccount()) redirect(next ?? "/account");
   if (await awaitingSecondStep()) redirect(twoStepPath(next));
   const linkError = params.error === "link";
@@ -36,7 +39,11 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
         <PrismMark className="size-10" />
         <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink-1">Sign in to Prism</h1>
         <p className="mt-1 mb-6 text-sm text-ink-2">
-          {next?.startsWith("/oauth/consent") ? "Sign in first, then you'll choose whether to connect the app." : "Keep your banks, budgets and goals in one account, on every device."}
+          {next?.startsWith("/oauth/consent")
+            ? "Sign in first, then you'll choose whether to connect the app."
+            : reason
+              ? `Sign in first, then connect ${reason === "coinbase" ? "Coinbase" : "your bank"}. It's kept in your account, where two-step sign-in can protect it and deleting your account removes it.`
+              : "Keep your banks, budgets and goals in one account, on every device."}
         </p>
         <SignInForm linkError={linkError} next={next} />
       </Card>

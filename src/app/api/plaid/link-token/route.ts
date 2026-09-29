@@ -5,14 +5,19 @@
 // Body: `{ from }`, the page the person is on, so that a bank which signs
 // them in on its own website can send them back to it
 // (/connections/return).
+//
+// With accounts on, only a signed-in account may connect a bank: 401
+// `sign_in_required` otherwise (src/lib/linking.ts says why).
 
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createLinkToken, plaidConfig, PlaidError, redirectUriFor } from "@/lib/plaid/client";
 import { clearedReturnCookie, packReturn, RETURN_COOKIE, returnCookieOptions, returnPath } from "@/lib/plaid/return";
+import { linkingRefusal } from "@/lib/linking";
 import { requestOrigin } from "@/lib/server/origin";
 import { sameOriginJson } from "@/lib/server/request-guard";
 import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey } from "@/lib/server/vault";
+import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
@@ -31,6 +36,8 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => null)) as { from?: unknown } | null;
   const account = await currentAccount();
+  const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: config.env !== "sandbox" });
+  if (refusal) return NextResponse.json({ error: refusal.error, message: refusal.message }, { status: refusal.status });
   const jar = await cookies();
   const vault = account ? null : (open(jar.get(VAULT_COOKIE)?.value, key) ?? emptyVault());
   // The origin as the browser saw it (a TLS-terminating proxy makes req.url say http).

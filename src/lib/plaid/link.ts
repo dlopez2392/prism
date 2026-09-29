@@ -53,13 +53,15 @@ export function loadLink(): Promise<PlaidLinkFactory> {
   return loading;
 }
 
-export type SavedBank = { ok: true; institutionName: string | null } | { ok: false; message: string };
+/** `signIn`: the server wants a signed-in account first (src/lib/linking.ts), and the caller should send the person to sign in. */
+export type SavedBank = { ok: true; institutionName: string | null } | { ok: false; message: string; signIn?: true };
 
 /** Trade Link's one-time public token for a sealed access token, server-side. */
 export async function saveBank(publicToken: string): Promise<SavedBank> {
   try {
     const res = await fetch("/api/plaid/exchange", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publicToken }) });
-    const json = (await res.json().catch(() => ({}))) as { message?: string; institutionName?: string | null };
+    const json = (await res.json().catch(() => ({}))) as { error?: string; message?: string; institutionName?: string | null };
+    if (res.status === 401 && json.error === "sign_in_required") return { ok: false, message: json.message ?? "Sign in to connect a bank.", signIn: true };
     if (!res.ok) return { ok: false, message: json.message ?? "The bank linked, but we couldn't save it. Try again." };
     return { ok: true, institutionName: json.institutionName ?? null };
   } catch {

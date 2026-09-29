@@ -10,11 +10,16 @@
 // A bank that signs people in on its own website may take the whole page there
 // (phones, in-app browsers); it sends them back to /connections/return, which
 // finishes the job and returns them to the page named in `from`.
+//
+// With accounts on, a bank connects only to a signed-in account. Someone
+// signed out goes to sign in first (`signInFirst`, or the server's
+// `sign_in_required` if the page didn't know), then comes back here.
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Landmark, Lock, Plus, X } from "lucide-react";
 import clsx from "clsx";
+import { signInToConnect } from "@/lib/linking";
 import { loadLink, saveBank } from "@/lib/plaid/link";
 
 type State = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "error"; message: string } | { kind: "done"; message: string };
@@ -24,6 +29,7 @@ export function ConnectBank({
   label = "Connect a bank",
   className,
   landOn,
+  signInFirst = false,
 }: {
   /** "hero" is the white button that sits on the --gradient-prism card. */
   variant?: "primary" | "ghost" | "hero";
@@ -31,20 +37,31 @@ export function ConnectBank({
   className?: string;
   /** Where the person lands once the bank is saved (a full load), instead of a refresh of the page the button is on. */
   landOn?: string;
+  /** Nobody is signed in and accounts are on: go to sign-in, and come back here, instead of opening Link. */
+  signInFirst?: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "idle" });
   const dialog = useRef<HTMLDialogElement>(null);
 
   async function start() {
+    const from = landOn ?? `${window.location.pathname}${window.location.search}`;
+    if (signInFirst) {
+      window.location.assign(signInToConnect("bank", from));
+      return;
+    }
     setState({ kind: "busy", label: "Opening secure link…" });
     try {
       const res = await fetch("/api/plaid/link-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: landOn ?? `${window.location.pathname}${window.location.search}` }),
+        body: JSON.stringify({ from }),
       });
       const json = (await res.json().catch(() => ({}))) as { linkToken?: string; error?: string; message?: string };
+      if (res.status === 401 && json.error === "sign_in_required") {
+        window.location.assign(signInToConnect("bank", from));
+        return;
+      }
       if (res.status === 503 && json.error === "not_configured") {
         setState({ kind: "idle" });
         dialog.current?.showModal();
@@ -57,6 +74,11 @@ export function ConnectBank({
         onSuccess: async (publicToken, metadata) => {
           setState({ kind: "busy", label: `Securing ${metadata.institution?.name ?? "your bank"}…` });
           const saved = await saveBank(publicToken);
+          if (!saved.ok && saved.signIn) {
+            handler.destroy();
+            window.location.assign(signInToConnect("bank", from));
+            return;
+          }
           if (!saved.ok) {
             setState({ kind: "error", message: saved.message });
             return;

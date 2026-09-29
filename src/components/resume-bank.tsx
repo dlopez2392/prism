@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { Landmark } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
 import { ButtonLink, Card, StatusPill } from "@/components/ui";
+import { signInToConnect } from "@/lib/linking";
 import { loadLink, saveBank, type PlaidHandler } from "@/lib/plaid/link";
 
 type State =
@@ -48,6 +49,10 @@ export function ResumeBank({ linkToken, back }: { linkToken: string; back: strin
             setState({ kind: "saving", name });
             const saved = await saveBank(publicToken);
             handler?.destroy();
+            if (!saved.ok && saved.signIn) {
+              window.location.assign(signInToConnect("bank", back));
+              return;
+            }
             if (!saved.ok) {
               setState({ kind: "error", message: saved.message });
               return;
