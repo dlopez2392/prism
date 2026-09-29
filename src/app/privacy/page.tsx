@@ -70,6 +70,7 @@ export default function PrivacyPage() {
           <p className="font-semibold text-ink-1">What you set up</p>
           <Bullets>
             <li>Your budgets and goals.</li>
+            <li>Categories you fix, such as &ldquo;everything at this shop is groceries&rdquo;, so Prism files your purchases where you put them. They name the shops, so they&apos;re stored encrypted, like your transactions.</li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
             <li>Which AI apps you&apos;ve allowed to read your money, if any.</li>
           </Bullets>

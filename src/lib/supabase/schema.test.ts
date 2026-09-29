@@ -406,6 +406,7 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealJson({ token: "t" }, ring(newKey)),
       JSON.stringify({ v: 2, sealed: sealJson({ bills: [] }, ring(newKey)) }),
     ]);
+    await rows(`update public.profiles set sealed_category_rules = $2 where user_id = $1`, [D, sealPacked({ v: 1, merchants: {}, transactions: {} }, ring(oldKey))]);
     const after = await census();
     const delta = (what: string, id: string) => (after.get(`${what} ${id}`) ?? 0) - (before.get(`${what} ${id}`) ?? 0);
     expect([
@@ -415,8 +416,40 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       delta("coinbase", o),
       delta("calendar link", n),
       delta("calendar bills", n),
-    ]).toEqual([1, 1, 1, 1, 1, 1]);
+      delta("category fixes", o),
+    ]).toEqual([1, 1, 1, 1, 1, 1, 1]);
     for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
     await rows(`delete from auth.users where id = $1`, [D]);
+  });
+});
+
+describe("a person's category fixes", () => {
+  const E = "e0e0e0e0-0000-4000-8000-00000000f1c5";
+  const fixes = "z1." + "c".repeat(40);
+
+  it("are theirs alone to keep and clear, as ciphertext, and a connected app can read them but never change them", async () => {
+    await rows(`insert into auth.users (id, email) values ($1, 'e@x.test')`, [E]);
+    await as("authenticated", E, async () => {
+      expect(await rows(`update public.profiles set sealed_category_rules = $2 where user_id = $1 returning user_id`, [E, fixes])).toEqual([{ user_id: E }]);
+      // Only ever a sealed value: nothing short enough to be a merchant's name in the clear.
+      expect(await refused(`update public.profiles set sealed_category_rules = 'Trader Joe''s' where user_id = $1`, [E])).toBe(true);
+    });
+    await as("authenticated", A, async () => {
+      expect(await rows(`select sealed_category_rules from public.profiles where user_id = $1`, [E])).toEqual([]);
+      expect(await rows(`update public.profiles set sealed_category_rules = null where user_id = $1 returning user_id`, [E])).toEqual([]);
+    });
+    await as(
+      "authenticated",
+      E,
+      async () => {
+        expect(await rows(`select sealed_category_rules from public.profiles where user_id = $1`, [E])).toEqual([{ sealed_category_rules: fixes }]);
+        expect(await rows(`update public.profiles set sealed_category_rules = null where user_id = $1 returning user_id`, [E])).toEqual([]);
+      },
+      CONNECTED_APP,
+    );
+    await as("authenticated", E, async () => {
+      expect(await rows(`update public.profiles set sealed_category_rules = null where user_id = $1 returning sealed_category_rules`, [E])).toEqual([{ sealed_category_rules: null }]);
+    });
+    await rows(`delete from auth.users where id = $1`, [E]);
   });
 });

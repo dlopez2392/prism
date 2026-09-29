@@ -72,6 +72,8 @@ export type Transaction = {
   amount: Cents;
   merchant: string;
   category: CategoryId;
+  /** The bank's own category, kept when the person fixed it to `category` (finance/category-rules.ts). */
+  bankCategory?: CategoryId;
   pending: boolean;
 };
 

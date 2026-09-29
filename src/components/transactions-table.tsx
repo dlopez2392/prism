@@ -4,10 +4,13 @@
 //
 // Every transaction, searchable and filterable by category, newest first.
 // The list arrives with the page; filtering is instant because it is local.
+// With `canFix` (a signed-in account's own money), each row opens "Change
+// category"; a row the person changed says so, in words.
 
-import { useDeferredValue, useMemo, useState } from "react";
-import { Search, SearchX } from "lucide-react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { CircleCheck, Search, SearchX } from "lucide-react";
 import clsx from "clsx";
+import { CategoryFixDialog } from "@/components/category-fixer";
 import { CategoryIcon } from "@/components/category-icon";
 import { CATEGORIES } from "@/lib/finance/categories";
 import { money, shortDate } from "@/lib/finance/format";
@@ -16,7 +19,23 @@ import type { CategoryId, Transaction } from "@/lib/finance/types";
 const PAGE = 25;
 const FILTERS: (CategoryId | "all")[] = ["all", "housing", "food", "transport", "shopping", "fun", "health", "travel", "bills", "other", "income", "transfer"];
 
-export function TransactionsTable({ transactions, accountNames }: { transactions: Transaction[]; accountNames: Record<string, string> }) {
+export function TransactionsTable({
+  transactions,
+  accountNames,
+  canFix = false,
+  fixHint = null,
+}: {
+  transactions: Transaction[];
+  accountNames: Record<string, string>;
+  /** The person may change categories: signed in, looking at their own money. */
+  canFix?: boolean;
+  /** Where they can't yet, the one line saying how they could. */
+  fixHint?: string | null;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [fixing, setFixing] = useState<Transaction | null>(null);
+  const [session, setSession] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryId | "all">("all");
   const [shown, setShown] = useState(PAGE);
@@ -30,6 +49,13 @@ export function TransactionsTable({ transactions, accountNames }: { transactions
   }, [transactions, category, q]);
 
   const total = rows.reduce((s, t) => s + t.amount, 0);
+
+  function fix(t: Transaction) {
+    setFixing(t);
+    setSession((n) => n + 1);
+    setNotice(null);
+    dialog.current?.showModal();
+  }
 
   return (
     <div>
@@ -67,6 +93,17 @@ export function TransactionsTable({ transactions, accountNames }: { transactions
         </label>
       </div>
 
+      {/* Always in the DOM so screen readers announce it; drawn only when it speaks. */}
+      <p role="status" className={clsx("flex items-center gap-1 text-xs font-semibold text-good-ink", notice && "mt-3")}>
+        {notice ? (
+          <>
+            <CircleCheck aria-hidden className="size-3.5 shrink-0" />
+            {notice}
+          </>
+        ) : null}
+      </p>
+      {fixHint ? <p className="mt-3 text-xs text-ink-3">{fixHint}</p> : null}
+
       <div className="mt-3 flex items-center justify-between text-xs text-ink-3">
         <span>
           {rows.length.toLocaleString("en-US")} {rows.length === 1 ? "transaction" : "transactions"}
@@ -82,25 +119,44 @@ export function TransactionsTable({ transactions, accountNames }: { transactions
         </div>
       ) : (
         <ul className="mt-2 divide-y divide-[var(--line)]">
-          {rows.slice(0, shown).map((t) => (
-            <li key={t.id} className="flex items-center gap-3 py-2.5">
-              <CategoryIcon category={t.category} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-ink-1">{t.merchant}</div>
-                <div className="truncate text-xs text-ink-3">
-                  {CATEGORIES[t.category].label} · {accountNames[t.accountId] ?? "Account"}
-                  {t.pending ? " · Pending" : ""}
+          {rows.slice(0, shown).map((t) => {
+            const content = (
+              <>
+                <CategoryIcon category={t.category} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-ink-1">{t.merchant}</div>
+                  <div className="truncate text-xs text-ink-3">
+                    {CATEGORIES[t.category].label}
+                    {t.bankCategory ? " (changed by you)" : ""} · {accountNames[t.accountId] ?? "Account"}
+                    {t.pending ? " · Pending" : ""}
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className={clsx("num text-sm font-bold", t.amount > 0 ? "text-good-ink" : "text-ink-1")}>
-                  {t.amount > 0 ? "+" : ""}
-                  {money(t.amount)}
+                <div className="text-right">
+                  <div className={clsx("num text-sm font-bold", t.amount > 0 ? "text-good-ink" : "text-ink-1")}>
+                    {t.amount > 0 ? "+" : ""}
+                    {money(t.amount)}
+                  </div>
+                  <div className="num text-xs text-ink-3">{shortDate(t.date)}</div>
                 </div>
-                <div className="num text-xs text-ink-3">{shortDate(t.date)}</div>
-              </div>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={t.id}>
+                {canFix ? (
+                  <button
+                    type="button"
+                    onClick={() => fix(t)}
+                    aria-label={`Change category for ${t.merchant}, ${money(t.amount)} on ${shortDate(t.date)}. Now ${CATEGORIES[t.category].label}${t.bankCategory ? ", changed by you" : ""}.`}
+                    className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-ctl px-2 py-2.5 text-left transition-colors duration-150 hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 py-2.5">{content}</div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       {shown < rows.length ? (
@@ -112,6 +168,7 @@ export function TransactionsTable({ transactions, accountNames }: { transactions
           Show {Math.min(PAGE, rows.length - shown)} more
         </button>
       ) : null}
+      {canFix ? <CategoryFixDialog dialogRef={dialog} transaction={fixing} session={session} onDone={setNotice} /> : null}
     </div>
   );
 }
