@@ -34,4 +34,8 @@ describe("the unit suite's environment", () => {
   it("holds under production's own settings, as Vercel's build runs it", () => {
     for (const name of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "PLAID_SECRET", "PRISM_VAULT_KEY"]) expect(process.env[name]).toBe("");
   });
+
+  it("pins every replacement vault key too, which the app reads by pattern, not by name", () => {
+    expect(Object.entries(process.env).filter(([name, value]) => /^PRISM_VAULT_KEY/.test(name) && value !== "")).toEqual([]);
+  });
 });

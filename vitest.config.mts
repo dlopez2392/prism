@@ -27,6 +27,13 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: "",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
+      // Replacement vault keys are read by pattern (vaultKey() in src/lib/server/vault.ts),
+      // so pin whichever numbers this environment has: PRISM_VAULT_KEY_2, _3 …
+      ...Object.fromEntries(
+        Object.keys(process.env)
+          .filter((name) => /^PRISM_VAULT_KEY_\d+$/.test(name))
+          .map((name) => [name, ""]),
+      ),
     },
   },
   resolve: {
