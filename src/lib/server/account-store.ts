@@ -9,6 +9,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { refreshTokens, type CoinbaseConfig, type TokenSet } from "@/lib/coinbase/client";
 import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
+import { validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
 import type { Budget } from "@/lib/finance/types";
 import type { Account } from "@/lib/supabase/server";
@@ -17,7 +18,15 @@ import { feedTokenHash, openFeedSnapshot, sealFeedSnapshot } from "./feed-token"
 import { validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { needsReseal, openJson, openPacked, sealJson, sealPacked, type VaultItem, type VaultKey } from "./vault";
 
-type ProfileRow = { first_name: string | null; plan_budgets: unknown; plan_goals: unknown; time_zone: string | null; sealed_category_rules: string | null; updated_at: string };
+type ProfileRow = {
+  first_name: string | null;
+  plan_budgets: unknown;
+  plan_goals: unknown;
+  time_zone: string | null;
+  sealed_category_rules: string | null;
+  sealed_manual_items: string | null;
+  updated_at: string;
+};
 type PlaidRow = {
   item_id: string;
   sealed_token: string;
@@ -40,6 +49,8 @@ export type AccountSources = {
   plan: Plan;
   /** The person's category fixes; none when there are none, or none open under the vault key. */
   categories: CategoryRules;
+  /** What they own or owe that no bank reports, added by hand. */
+  manual: ManualItem[];
   items: VaultItem[];
   /** Each linked bank's stored sync (cursor, transactions, balances), by item id — empty unless asked for. */
   plaidSync: Map<string, StoredSync>;
@@ -69,7 +80,7 @@ function openCoinbase(row: CoinbaseRow | null, key: VaultKey | null): CoinbaseRe
 export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
   const [profile, plaid, coinbase, feed] = await Promise.all([
-    db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
+    db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
     db
       .from("plaid_items")
       .select(withSync ? "item_id, sealed_token, institution_id, institution_name, linked_at, sealed_sync, sync_version, synced_at, changed_at" : "item_id, sealed_token, institution_id, institution_name, linked_at")
@@ -98,12 +109,14 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   if (coinbaseRecord) stale.coinbase(coinbase.data!, coinbaseRecord);
   if (feed.data) stale.feed(feed.data);
   const rawRules = key && profile.data?.sealed_category_rules ? openPacked(profile.data.sealed_category_rules, key) : null;
-  if (profile.data && rawRules !== null) stale.profileRules(profile.data, rawRules);
+  const rawManual = key && profile.data?.sealed_manual_items ? openPacked(profile.data.sealed_manual_items, key) : null;
+  if (profile.data) stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual });
   return {
     firstName: profile.data?.first_name ?? null,
     timeZone: profile.data?.time_zone ?? null,
     plan: { budgets: validBudgets(profile.data?.plan_budgets ?? undefined), goals: validGoals(profile.data?.plan_goals ?? undefined) },
     categories: rawRules === null ? NO_RULES : validCategoryRules(rawRules),
+    manual: rawManual === null ? [] : validManualItems(rawManual),
     items,
     plaidSync,
     coinbase: coinbaseRecord,
@@ -151,12 +164,21 @@ function staleSeals(account: Account, key: VaultKey | null) {
       const sealed_tokens = sealJson(record.tokens, key!);
       jobs.push(() => db.from("coinbase_links").update({ sealed_tokens }).eq("user_id", account.userId).eq("version", version).eq("sealed_tokens", was));
     },
-    /** Guarded by the profile's updated_at (touched by every write to it): the sealed value itself is too big to send as a filter. */
-    profileRules(row: ProfileRow, raw: unknown) {
-      if (!due(row.sealed_category_rules)) return;
+    /**
+     * The profile's sealed columns, in ONE write guarded by the profile's
+     * updated_at (touched by every write to it), since the sealed values are
+     * too big to send as a filter. One write, because a second guarded by
+     * the same updated_at would always find it moved by the first.
+     */
+    profile(row: ProfileRow, opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items">) {
       const k = key!;
+      const patch: Record<string, string> = {};
+      for (const column of ["sealed_category_rules", "sealed_manual_items"] as const) {
+        if (opened[column] !== null && due(row[column])) patch[column] = sealPacked(opened[column], k);
+      }
+      if (Object.keys(patch).length === 0) return;
       const was = row.updated_at;
-      jobs.push(() => db.from("profiles").update({ sealed_category_rules: sealPacked(raw, k) }).eq("user_id", account.userId).eq("updated_at", was));
+      jobs.push(() => db.from("profiles").update(patch).eq("user_id", account.userId).eq("updated_at", was));
     },
     /** The feed's secret, and its bill list with it: both were sealed by the key being replaced. */
     feed(row: FeedRow) {
@@ -224,6 +246,18 @@ export async function loadAccountCategoryRules(account: Account, key: VaultKey):
 /** Sealed like the transactions they rename: merchant names are bank data. Null when there are none left. */
 export function saveAccountCategoryRules(account: Account, rules: CategoryRules, key: VaultKey) {
   return upsertProfile(account, { sealed_category_rules: hasRules(rules) ? sealPacked(rules, key) : null });
+}
+
+/** What they own or owe, read strictly before a save, like category fixes: a failed read never passes for "nothing". */
+export async function loadAccountManualItems(account: Account, key: VaultKey): Promise<ManualItem[]> {
+  const { data, error } = await account.supabase.from("profiles").select("sealed_manual_items").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_manual_items">>();
+  if (error) throw new Error("Couldn't read what you've added.");
+  return data?.sealed_manual_items ? validManualItems(openPacked(data.sealed_manual_items, key)) : [];
+}
+
+/** Sealed: what someone owns and what it's worth is financial data. Null when nothing is left. */
+export function saveAccountManualItems(account: Account, items: ManualItem[], key: VaultKey) {
+  return upsertProfile(account, { sealed_manual_items: items.length ? sealPacked(items, key) : null });
 }
 
 export async function addAccountPlaidItem(account: Account, item: VaultItem, key: VaultKey): Promise<void> {

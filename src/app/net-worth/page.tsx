@@ -13,6 +13,7 @@ import { ScoreGauge } from "@/components/charts/radial";
 import { Sparkline } from "@/components/charts/sparkline";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { TreemapChart } from "@/components/charts/treemap-chart";
+import { AddManualItem, ManualItemRow } from "@/components/manual-item-editor";
 import { Card, CardHeader, Change, EmptyState, PageHeader, StatusPill, type Status } from "@/components/ui";
 import { slotColor } from "@/lib/finance/categories";
 import { money0, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
@@ -26,13 +27,21 @@ const RATING: Record<string, Status> = { excellent: "good", good: "good", fair: 
 export default async function NetWorthPage() {
   const data = await getFinance();
   const series = netWorthSeries(data.accounts, data.today);
+  // What a person adds by hand lives in their account; the example household's is only for show.
+  const canAdd = data.account !== null;
+  const editable = new Map(canAdd && data.source !== "demo" ? data.manual.map((i) => [`manual-${i.id}`, i]) : []);
 
   if (data.accounts.length === 0) {
     return (
       <div>
         <PageHeader title="Net worth" subtitle="Everything you own, minus everything you owe." />
         <Card>
-          <EmptyState icon={Landmark} title="Your whole picture, in one number" body="Link your accounts and this becomes your net worth, month by month." />
+          <EmptyState
+            icon={Landmark}
+            title="Your whole picture, in one number"
+            body={canAdd ? "Link your accounts, or add your home, a car or a loan, and this becomes your net worth, month by month." : "Link your accounts and this becomes your net worth, month by month."}
+            action={canAdd ? <AddManualItem /> : undefined}
+          />
         </Card>
       </div>
     );
@@ -141,7 +150,11 @@ export default async function NetWorthPage() {
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <Card className="p-5 sm:p-6 lg:col-span-7">
-          <CardHeader title="Accounts" subtitle={`${data.accounts.length} ${data.accounts.length === 1 ? "account" : "accounts"} across ${data.institutions.length} ${data.institutions.length === 1 ? "institution" : "institutions"}`} />
+          <CardHeader
+            title="Accounts"
+            subtitle={`${data.accounts.length} ${data.accounts.length === 1 ? "account" : "accounts"} across ${data.institutions.length} ${data.institutions.length === 1 ? "institution" : "institutions"}`}
+            action={canAdd ? <AddManualItem /> : undefined}
+          />
           <div className="mt-3 space-y-5">
             {groups.map((g) => (
               <section key={g.label}>
@@ -155,14 +168,16 @@ export default async function NetWorthPage() {
                     // On a debt, what moves is how much is owed, and less is better.
                     const debt = acc.balance < 0;
                     const moved = acc.history.length > 1 ? (debt ? Math.abs(acc.history.at(-1)!) - Math.abs(acc.history[0]!) : acc.history.at(-1)! - acc.history[0]!) : null;
-                    return (
-                      <li key={acc.id} className="flex items-center gap-3 py-2.5">
+                    const mine = editable.get(acc.id);
+                    const content = (
+                      <>
                         {/* On a phone the name gets the row and may wrap; from sm up it shares it with the trend line. */}
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{acc.name}</div>
                           <div className="truncate text-xs text-ink-3">
                             {institution.get(acc.institutionId) ?? "—"}
                             {acc.mask ? ` ·· ${acc.mask}` : ""}
+                            {mine ? ` · updated ${monthYear(`${mine.values.at(-1)!.month}-01`)}` : ""}
                           </div>
                         </div>
                         <div className="hidden shrink-0 sm:block">
@@ -177,6 +192,17 @@ export default async function NetWorthPage() {
                             </div>
                           ) : null}
                         </div>
+                      </>
+                    );
+                    return mine ? (
+                      <li key={acc.id}>
+                        <ManualItemRow item={mine} label={`Edit ${acc.name}, ${money0(acc.balance)}`}>
+                          {content}
+                        </ManualItemRow>
+                      </li>
+                    ) : (
+                      <li key={acc.id} className="flex items-center gap-3 py-2.5">
+                        {content}
                       </li>
                     );
                   })}

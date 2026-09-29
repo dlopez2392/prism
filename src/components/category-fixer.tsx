@@ -85,7 +85,7 @@ function FixForm({ t, onDone, onCancel }: { t: Transaction; onDone: (message: st
           {choicesFor(t.amount).map((c) => (
             <label key={c} className="relative">
               <input type="radio" name="category" value={c} defaultChecked={c === t.category} className="peer sr-only" />
-              <span className="flex h-12 cursor-pointer items-center gap-2 rounded-ctl border border-line bg-surface-2 px-2.5 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3 peer-checked:border-accent peer-checked:bg-accent-soft peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--focus)]">
+              <span className="flex min-h-12 cursor-pointer items-center gap-2 rounded-ctl border border-line bg-surface-2 px-2.5 py-2 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3 peer-checked:border-accent peer-checked:bg-accent-soft peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--focus)]">
                 <CategoryIcon category={c} size="sm" />
                 <span className="min-w-0 leading-tight">{CATEGORIES[c].label}</span>
               </span>

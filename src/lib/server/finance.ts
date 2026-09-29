@@ -23,6 +23,7 @@ import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, t
 import { needsSync, syncTransactions, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction, suggestedLimit } from "@/lib/plaid/map";
 import { NO_RULES, recategorize, type CategoryRules } from "@/lib/finance/category-rules";
+import { manualAccount, manualInstitution, type ManualItem } from "@/lib/finance/manual";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
 import { coinbaseNeedsSignIn, mapCoinbase } from "@/lib/coinbase/map";
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
@@ -46,6 +47,8 @@ export type Loaded = FinanceData & {
   account: { email: string | null; firstName: string | null; calendarFeed: boolean } | null;
   /** Signed in, with money or plans still sitting on this device from before: what they are. */
   carryover: string[];
+  /** What the signed-in person added by hand, as they entered it, for the editor on Net worth. */
+  manual: ManualItem[];
 };
 
 export function hourIn(zone: string | undefined, now = new Date()): number {
@@ -105,6 +108,8 @@ export type Sources = {
   plan: Plan;
   /** The person's category fixes, applied where their transactions are assembled. A device keeps none. */
   categories: CategoryRules;
+  /** What they own or owe that no bank reports, added by hand. A device keeps none. */
+  manual: ManualItem[];
   items: VaultItem[];
   /** A live Coinbase access token — or null for a dead link — fetched on demand. */
   coinbase: { config: CoinbaseConfig; token: () => Promise<string | null> } | null;
@@ -118,7 +123,7 @@ export type Sources = {
 /** Where a bank's sync starts from, and where a newer one goes — `save` is null when nothing may be written. */
 type PlaidSync = { stored: Map<string, StoredSync>; save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null };
 
-type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories">;
+type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual">;
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -150,6 +155,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       firstName: a.firstName,
       plan: a.plan,
       categories: a.categories,
+      manual: a.manual,
       items: plaid ? a.items : [],
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
@@ -178,6 +184,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     firstName: null,
     plan: readPlan(jar),
     categories: NO_RULES,
+    manual: [],
     items: plaid ? vaultItems(jar) : [],
     coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
     feedUpdatedAt: null,
@@ -189,7 +196,8 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
 
 const getSources = cache(() => readSources({ withSync: true }));
 
-const isLive = (s: Money) => s.items.length > 0 || s.coinbase !== null;
+/** Anything of the person's own — a bank, Coinbase, or something they added — replaces the example household. */
+const isLive = (s: Money) => s.items.length > 0 || s.coinbase !== null || s.manual.length > 0;
 
 /**
  * The goals the data source provides before any edit — the demo household's,
@@ -215,7 +223,7 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
@@ -229,7 +237,19 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
     config && src.items.length ? loadPlaid(config, src.items, today, src.plaidSync, src.categories) : Promise.resolve(emptyLive(today, config !== null)),
     src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed)) : Promise.resolve(null),
   ]);
-  return crypto ? withCoinbase(banks, crypto) : banks;
+  const money = crypto ? withCoinbase(banks, crypto) : banks;
+  return withManual(money, src.manual, today, src.items.length === 0 && !src.coinbase);
+}
+
+/** What the person added by hand, as accounts under "Added by you". Only things added by hand? Then that's the household's source. */
+function withManual(base: Live, items: ManualItem[], today: ISODate, only: boolean): Live {
+  if (items.length === 0) return base;
+  return {
+    ...base,
+    source: only ? "manual" : base.source,
+    institutions: [...base.institutions, manualInstitution()],
+    accounts: [...base.accounts, ...items.map((i) => manualAccount(i, today))],
+  };
 }
 
 /** The greeting belongs to whoever is signed in — even over the demo's example money, which is still Alex's household. */
@@ -259,6 +279,7 @@ export const getFinance = cache(async (): Promise<Loaded> => {
     accountsEnabled: supabaseEnv() !== null,
     account: src.account ? { email: src.account.email, firstName: src.firstName, calendarFeed: src.feedUpdatedAt !== null } : null,
     carryover: carryoverOf(jar, src.account !== null),
+    manual: src.manual,
   };
 });
 
@@ -293,6 +314,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     // Catch up from the stored cursor in memory; a connected app never saves (and the database wouldn't let it).
     plaidSync: { stored: a.plaidSync, save: null },
     categories: a.categories,
+    manual: a.manual,
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
   };
   const base = greeted(await moneyFor(src, today, "Coinbase balances update the next time you open Prism."), a.firstName, isLive(src));

@@ -71,6 +71,12 @@
   money going out is never income, whatever is stored. Saves go through
   `fixCategory`, which re-reads the stored fixes strictly and never writes
   over fixes it couldn't read.
+- Things added by hand (`src/lib/finance/manual.ts`): a home, a vehicle,
+  anything else owned, or money owed, SEALED in `profiles.sealed_manual_items`,
+  one value per month carried forward (so trends work), account-only, merged
+  in `moneyFor` under the "Added by you" institution. Any of them makes the
+  household the person's own (`isLive`), never the demo. The profile's
+  sealed columns re-seal in ONE write guarded by `updated_at` (`staleSeals`).
 - Connecting real money needs an account (`src/lib/linking.ts`). With
   accounts on, the link-token, exchange and both Coinbase routes refuse a
   signed-out caller BEFORE Plaid or Coinbase is asked for anything, and the
