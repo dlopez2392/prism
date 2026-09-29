@@ -14,6 +14,13 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    ignore:
+      # Node's type definitions must describe the Node that runs Prism
+      # (package.json engines: 22.x, as on Vercel and in CI). A newer major
+      # would type-check APIs production doesn't have. Move them WITH the
+      # runtime, in the same change that raises engines.node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       runtime:
         dependency-type: "production"
