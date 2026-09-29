@@ -211,4 +211,10 @@ describe("a cited transaction", () => {
       pending: true,
     });
   });
+
+  it("says when the person filed it under a category the bank didn't, and what the bank said", () => {
+    const t = { id: "t2", accountId: "a1", date: TODAY, amount: -550, merchant: "Blue Bottle", category: "food" as const, bankCategory: "shopping" as const, pending: false };
+    expect(citeable(t, new Map())).toMatchObject({ category: "Food & dining", category_set_by_person: true, bank_category: "Shopping" });
+    expect(citeable({ ...t, bankCategory: undefined }, new Map())).not.toHaveProperty("bank_category");
+  });
 });

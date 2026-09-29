@@ -239,6 +239,8 @@ select what, key_id, count(*) from (
   select 'calendar link', case when sealed_token like 'j2.%' then substr(sealed_token, 4, 8) else 'unnamed' end from calendar_feeds
   union all
   select 'calendar bills', case when snapshot->>'sealed' like 'j2.%' then substr(snapshot->>'sealed', 4, 8) else 'unnamed' end from calendar_feeds where snapshot ? 'sealed'
+  union all
+  select 'category fixes', case when sealed_category_rules like 'z2.%' then substr(sealed_category_rules, 4, 8) else 'unnamed' end from profiles where sealed_category_rules is not null
 ) seals group by what, key_id order by what, key_id;
 ```
 
@@ -251,7 +253,7 @@ with any key in the ring too, so retiring a key ends those as well.
 |---|---|
 | **Overview** | Net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
 | **Cash flow** | Income → categories → saved **Sankey**, money in vs out by month, what you kept each month, savings-rate trend |
-| **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, searchable ledger |
+| **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop, kept sealed in their account and applied everywhere, Claude included) |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete |

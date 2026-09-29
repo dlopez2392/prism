@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const { liveCoinbaseToken, loadAccount, saveAccountFirstName } = await import("./account-store");
+const { liveCoinbaseToken, loadAccount, loadAccountCategoryRules, saveAccountCategoryRules, saveAccountFirstName } = await import("./account-store");
 const { needsReseal, openJson, openPacked, sealJson, sealPacked, vaultKey } = await import("./vault");
 const { openFeedSnapshot, sealFeedSnapshot } = await import("./feed-token");
 
@@ -192,10 +192,11 @@ describe("replacing the vault key", () => {
   const after = vaultKey({ PRISM_VAULT_KEY_2: b64(k2) })!;
   const sync = { v: 1, cursor: "c-9", ready: true, transactions: [{ transaction_id: "t1", account_id: "a1", amount: 4.5, date: "2026-09-01", pending: false }] };
   const bills = { bills: [{ name: "Rent", date: "2026-10-01" }] };
+  const fixes = { v: 1, merchants: { "blue bottle": "food" }, transactions: { t9: "transfer" } };
 
   /** One person's account, everything in it sealed by `k` — as it stood before the key was replaced. */
   const sealedBy = (k: typeof before) => ({
-    profiles: [{ user_id: "u1", first_name: "Dana", plan_budgets: null, plan_goals: null }],
+    profiles: [{ user_id: "u1", first_name: "Dana", plan_budgets: null, plan_goals: null, sealed_category_rules: sealPacked(fixes, k), updated_at: "2026-09-29T10:00:00.000Z" }],
     plaid_items: [
       {
         user_id: "u1",
@@ -221,13 +222,15 @@ describe("replacing the vault key", () => {
     expect(a.items.map((i) => i.accessToken)).toEqual(["access-1"]);
     expect(a.plaidSync.get("i1")?.state).toEqual(sync);
     expect(a.coinbase?.tokens.accessToken).toBe("at1");
+    expect(a.categories).toEqual(fixes);
     expect(a.reseal).not.toBeNull();
     await a.reseal!();
 
     const [item] = tables.plaid_items! as Row[];
     const [link] = tables.coinbase_links! as Row[];
     const [feed] = tables.calendar_feeds! as Row[];
-    for (const sealed of [item!.sealed_token, item!.sealed_sync, link!.sealed_tokens, feed!.sealed_token, (feed!.snapshot as { sealed: string }).sealed]) {
+    const [profile] = tables.profiles! as Row[];
+    for (const sealed of [item!.sealed_token, item!.sealed_sync, link!.sealed_tokens, feed!.sealed_token, (feed!.snapshot as { sealed: string }).sealed, profile!.sealed_category_rules]) {
       expect(needsReseal(sealed as string, during)).toBe(false);
     }
     // Versions never move, so a save made meanwhile can't be refused because of this.
@@ -239,6 +242,7 @@ describe("replacing the vault key", () => {
     expect(openJson(link!.sealed_tokens as string, after)).toEqual(tokens(1, NOW + 3_600_000));
     expect(openJson(feed!.sealed_token as string, after)).toEqual({ token: "feed-secret" });
     expect(openFeedSnapshot(feed!.snapshot, after)).toEqual(bills);
+    expect(openPacked(profile!.sealed_category_rules as string, after)).toEqual(fixes);
     const later = await loadAccount(account(db), after, { withSync: true });
     expect(later.items.map((i) => i.accessToken)).toEqual(["access-1"]);
     expect(later.reseal).toBeNull();
@@ -268,10 +272,15 @@ describe("replacing the vault key", () => {
     const refreshed = sealJson(tokens(2, NOW + 7_200_000), during);
     Object.assign(item!, { sealed_token: relinked, sealed_sync: newer, sync_version: 4 });
     Object.assign(link!, { sealed_tokens: refreshed, version: 5 });
+    // …and a new category fix is saved (every profile write moves updated_at).
+    const [profile] = tables.profiles! as Row[];
+    const newFixes = sealPacked({ ...fixes, merchants: { ...fixes.merchants, "corner shop": "food" } }, during);
+    Object.assign(profile!, { sealed_category_rules: newFixes, updated_at: "2026-09-29T10:00:05.000Z" });
     await a.reseal!();
     expect(item!.sealed_token).toBe(relinked);
     expect(item!.sealed_sync).toBe(newer);
     expect(link!.sealed_tokens).toBe(refreshed);
+    expect(profile!.sealed_category_rules).toBe(newFixes);
   });
 
   it("never overwrites a Coinbase reconnect, which starts over at the same version", async () => {
@@ -303,5 +312,28 @@ describe("replacing the vault key", () => {
     expect(a.items).toEqual([]);
     expect(a.reseal).toBeNull();
     expect(writes).toEqual([]);
+  });
+});
+
+describe("category fixes in the account", () => {
+  const fixes = { v: 1 as const, merchants: { "blue bottle": "food" as const }, transactions: {} };
+
+  it("are stored sealed, so no merchant's name sits in the database in the clear, and cleared to nothing", async () => {
+    const upserts: Row[] = [];
+    const db = { from: () => ({ upsert: async (row: Row) => (upserts.push(row), { error: null }) }) };
+    await saveAccountCategoryRules(account(db), fixes, key);
+    await saveAccountCategoryRules(account(db), { v: 1, merchants: {}, transactions: {} }, key);
+    const sealed = upserts[0]!.sealed_category_rules as string;
+    expect(sealed).not.toContain("blue");
+    expect(Buffer.from(sealed.slice(3), "base64url").toString("latin1")).not.toContain("blue bottle");
+    expect(openPacked(sealed, key)).toEqual(fixes);
+    expect(upserts[1]).toEqual({ user_id: "u1", sealed_category_rules: null });
+  });
+
+  it("are read strictly before a save: a failed read is an error, never 'no fixes' to write over", async () => {
+    const broken = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: "timeout" } }) }) }) }) };
+    await expect(loadAccountCategoryRules(account(broken), key)).rejects.toThrow();
+    const { db } = fakeDb({ profiles: [{ user_id: "u1", sealed_category_rules: sealPacked(fixes, key) }] });
+    expect(await loadAccountCategoryRules(account(db), key)).toEqual(fixes);
   });
 });

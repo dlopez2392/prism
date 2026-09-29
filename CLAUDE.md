@@ -61,6 +61,16 @@
   replaces and never moving a version. A new sealed column must join
   `staleSeals` in `account-store.ts` and the README census, or a rotation
   strands it. Replacing the key is the README's "Replacing the vault key".
+- Category fixes (`src/lib/finance/category-rules.ts`): a person's own
+  categories for a transaction, or for every transaction at a merchant
+  (a one-transaction fix wins). They live SEALED in
+  `profiles.sealed_category_rules` (merchant names are bank data), need a
+  signed-in account (no device copy), and are applied ONCE, in `loadPlaid`,
+  before budgets are drafted, so every chart, insight, forecast and
+  connected-app answer agrees. A fixed transaction keeps `bankCategory`;
+  money going out is never income, whatever is stored. Saves go through
+  `fixCategory`, which re-reads the stored fixes strictly and never writes
+  over fixes it couldn't read.
 - Connecting real money needs an account (`src/lib/linking.ts`). With
   accounts on, the link-token, exchange and both Coinbase routes refuse a
   signed-out caller BEFORE Plaid or Coinbase is asked for anything, and the

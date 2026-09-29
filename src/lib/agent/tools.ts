@@ -66,6 +66,8 @@ export function citeable(t: Transaction, accounts: Map<string, Account>) {
     merchant: t.merchant,
     amount: usd(t.amount),
     category: CATEGORIES[t.category]?.label ?? t.category,
+    // The person filed it there themselves; the bank had said otherwise.
+    ...(t.bankCategory ? { category_set_by_person: true, bank_category: CATEGORIES[t.bankCategory]?.label ?? t.bankCategory } : {}),
     account: accountLabel(accounts.get(t.accountId)),
     ...(t.pending ? { pending: true } : {}),
   };

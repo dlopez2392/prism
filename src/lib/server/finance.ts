@@ -22,6 +22,7 @@ import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/fin
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
 import { needsSync, syncTransactions, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction, suggestedLimit } from "@/lib/plaid/map";
+import { NO_RULES, recategorize, type CategoryRules } from "@/lib/finance/category-rules";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
 import { coinbaseNeedsSignIn, mapCoinbase } from "@/lib/coinbase/map";
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
@@ -102,6 +103,8 @@ export type Sources = {
   account: Account | null;
   firstName: string | null;
   plan: Plan;
+  /** The person's category fixes, applied where their transactions are assembled. A device keeps none. */
+  categories: CategoryRules;
   items: VaultItem[];
   /** A live Coinbase access token — or null for a dead link — fetched on demand. */
   coinbase: { config: CoinbaseConfig; token: () => Promise<string | null> } | null;
@@ -115,7 +118,7 @@ export type Sources = {
 /** Where a bank's sync starts from, and where a newer one goes — `save` is null when nothing may be written. */
 type PlaidSync = { stored: Map<string, StoredSync>; save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null };
 
-type Money = Pick<Sources, "items" | "coinbase" | "plaidSync">;
+type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories">;
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -146,6 +149,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       account,
       firstName: a.firstName,
       plan: a.plan,
+      categories: a.categories,
       items: plaid ? a.items : [],
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
@@ -173,6 +177,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     account: null,
     firstName: null,
     plan: readPlan(jar),
+    categories: NO_RULES,
     items: plaid ? vaultItems(jar) : [],
     coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
     feedUpdatedAt: null,
@@ -221,7 +226,7 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
   const config = plaidConfig();
   if (!isLive(src)) return { ...buildDemoData(today), notice: null, plaidReady: config !== null };
   const [banks, crypto] = await Promise.all([
-    config && src.items.length ? loadPlaid(config, src.items, today, src.plaidSync) : Promise.resolve(emptyLive(today, config !== null)),
+    config && src.items.length ? loadPlaid(config, src.items, today, src.plaidSync, src.categories) : Promise.resolve(emptyLive(today, config !== null)),
     src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed)) : Promise.resolve(null),
   ]);
   return crypto ? withCoinbase(banks, crypto) : banks;
@@ -287,6 +292,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     items: plaid ? a.items : [],
     // Catch up from the stored cursor in memory; a connected app never saves (and the database wouldn't let it).
     plaidSync: { stored: a.plaidSync, save: null },
+    categories: a.categories,
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
   };
   const base = greeted(await moneyFor(src, today, "Coinbase balances update the next time you open Prism."), a.firstName, isLive(src));
@@ -406,7 +412,7 @@ async function bankFor(
   return { accounts: next.accounts ?? [], transactions: next.transactions, ready: next.ready, syncedAt: startedAt, fromCopy: false };
 }
 
-async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate, sync: PlaidSync | null = null): Promise<Live> {
+async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate, sync: PlaidSync | null = null, rules: CategoryRules = NO_RULES): Promise<Live> {
   const institutions: Institution[] = [];
   const accounts: FinanceData["accounts"] = [];
   const transactions: FinanceData["transactions"] = [];
@@ -440,9 +446,12 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
   );
 
   transactions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  // The person's own category fixes come first, so everything after — the
+  // drafted budgets, every chart, insight and connected-app answer — agrees.
+  const fixed = recategorize(transactions, rules);
   // No budgets are stored yet for a live household, so draft them from the
   // last three FULL months — a starting point the person can see and adjust.
-  const lastThree = categoryTotals(transactions, addMonths(startOfMonth(today), -3), addDays(startOfMonth(today), -1));
+  const lastThree = categoryTotals(fixed, addMonths(startOfMonth(today), -3), addDays(startOfMonth(today), -1));
   const budgets = SPEND_CATEGORIES.filter((c) => lastThree[c] > 0).map((c) => ({ category: c, limit: suggestedLimit(lastThree[c]) }));
 
   return {
@@ -451,7 +460,7 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
     household: { name: "Your household", firstName: "there" },
     institutions,
     accounts,
-    transactions,
+    transactions: fixed,
     budgets,
     goals: [],
     holdings,
