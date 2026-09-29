@@ -49,6 +49,18 @@
   `supabase/migrations/` and must keep `src/lib/supabase/schema.test.ts`
   (PGlite) green. `getFinance()` reads the account when signed in, the device
   otherwise; actions read through the UNCACHED `readSources()`.
+- The vault key is a KEYRING (`vaultKey()` in `src/lib/server/vault.ts`):
+  `PRISM_VAULT_KEY`, then `PRISM_VAULT_KEY_2`, `_3`… The highest number seals,
+  every number opens. With ONE key, seals keep their original formats (bare
+  base64url, `z1.`) so a deploy rewrites nothing and a rollback still reads
+  everything; only during a rotation (two keys or more) does a seal name its
+  key (`j2.<id>.` / `z2.<id>.`). Seals the current key didn't make are then
+  sealed again after the person's own visit
+  (`reseal` from `loadAccount`, scheduled with `after()` in `readSources`,
+  NEVER from a connected app), each write guarded by the exact value it
+  replaces and never moving a version. A new sealed column must join
+  `staleSeals` in `account-store.ts` and the README census, or a rotation
+  strands it. Replacing the key is the README's "Replacing the vault key".
 - Connecting real money needs an account (`src/lib/linking.ts`). With
   accounts on, the link-token, exchange and both Coinbase routes refuse a
   signed-out caller BEFORE Plaid or Coinbase is asked for anything, and the

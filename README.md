@@ -191,6 +191,60 @@ keys the deployment serves the demo household.
 Any Next.js host works. On Vercel: import the repository, keep the detected
 Next.js settings, and add the environment variables from `.env.example`.
 
+## Replacing the vault key
+
+`PRISM_VAULT_KEY` seals every bank and Coinbase token, every synced
+transaction and the calendar's bill list. Replace it if it may have been
+exposed (Incident Response Plan 5.2), when anyone who could see it leaves, or
+as a drill. Nobody has to reconnect a bank.
+
+Keys are **numbered**, because a Sensitive variable in Vercel can't be read
+back: you never move a key, you only add the next number and, later, delete
+the old one. The highest number seals; every number opens.
+
+1. **Make a new key** on your own computer. It never goes in chat, email or a
+   document.
+   - macOS or Linux: `openssl rand -base64 32`
+   - Windows PowerShell:
+     `$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)`
+2. **Add it** in Vercel → Settings → Environment Variables as
+   `PRISM_VAULT_KEY_2` (the next number after your highest, up to `_99`),
+   for Production, marked **Sensitive**. Leave the old one where it is.
+3. **Redeploy** production. Every new seal now uses the new key and names
+   it, and each person's older seals move to it right after their next visit
+   (`reseal` in `src/lib/server/account-store.ts`). A connected AI app never
+   moves them: it can't write.
+4. **Watch them move.** Run the census below in Supabase → SQL editor. It
+   reads only the first characters of each value: a key id (a short hash that
+   names a key without revealing it), or `unnamed`. With a single key, seals
+   don't name their key at all, so a deploy changes nothing stored and an
+   older release can still read everything; during a rotation, `unnamed` and
+   any id but the new one are what's left to move. Your own visit shows you
+   which id is the new one.
+5. **Retire the old key** by deleting its variable and redeploying, once the
+   census shows only the new id. Anything it still sealed stops opening,
+   and those people reconnect, as they would have without this tool. After a
+   suspected exposure, rotate the Plaid and Coinbase secrets FIRST (a stolen
+   token is useless without them), then retire the old key within 30 days.
+
+```sql
+-- Which vault key sealed what. Reads key ids only, never a sealed value.
+select what, key_id, count(*) from (
+  select 'bank token' as what, case when sealed_token like 'j2.%' then substr(sealed_token, 4, 8) else 'unnamed' end as key_id from plaid_items
+  union all
+  select 'bank transactions', case when sealed_sync like 'z2.%' then substr(sealed_sync, 4, 8) else 'unnamed' end from plaid_items where sealed_sync is not null
+  union all
+  select 'coinbase', case when sealed_tokens like 'j2.%' then substr(sealed_tokens, 4, 8) else 'unnamed' end from coinbase_links
+  union all
+  select 'calendar link', case when sealed_token like 'j2.%' then substr(sealed_token, 4, 8) else 'unnamed' end from calendar_feeds
+  union all
+  select 'calendar bills', case when snapshot->>'sealed' like 'j2.%' then substr(snapshot->>'sealed', 4, 8) else 'unnamed' end from calendar_feeds where snapshot ? 'sealed'
+) seals group by what, key_id order by what, key_id;
+```
+
+Connections kept on a device from before connecting needed an account open
+with any key in the ring too, so retiring a key ends those as well.
+
 ## Screens
 
 | Screen | What it shows |

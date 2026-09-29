@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 const { liveCoinbaseToken, loadAccount, saveAccountFirstName } = await import("./account-store");
-const { sealJson } = await import("./vault");
+const { needsReseal, openJson, openPacked, sealJson, sealPacked, vaultKey } = await import("./vault");
+const { openFeedSnapshot, sealFeedSnapshot } = await import("./feed-token");
 
 const key = randomBytes(32);
 const NOW = 1_790_000_000_000;
@@ -179,5 +180,128 @@ describe("a bank's stored sync", () => {
     expect(first.values).toMatchObject({ sync_version: 4, synced_at: "2026-09-28T11:00:00Z" });
     expect(String(first.values.sealed_sync)).not.toContain("Corner");
     expect(openPacked(String(first.values.sealed_sync), key)).toEqual(syncState);
+  });
+});
+
+describe("replacing the vault key", () => {
+  const k1 = randomBytes(32);
+  const k2 = randomBytes(32);
+  const b64 = (k: Buffer) => k.toString("base64");
+  const before = vaultKey({ PRISM_VAULT_KEY: b64(k1) })!;
+  const during = vaultKey({ PRISM_VAULT_KEY: b64(k1), PRISM_VAULT_KEY_2: b64(k2) })!;
+  const after = vaultKey({ PRISM_VAULT_KEY_2: b64(k2) })!;
+  const sync = { v: 1, cursor: "c-9", ready: true, transactions: [{ transaction_id: "t1", account_id: "a1", amount: 4.5, date: "2026-09-01", pending: false }] };
+  const bills = { bills: [{ name: "Rent", date: "2026-10-01" }] };
+
+  /** One person's account, everything in it sealed by `k` — as it stood before the key was replaced. */
+  const sealedBy = (k: typeof before) => ({
+    profiles: [{ user_id: "u1", first_name: "Dana", plan_budgets: null, plan_goals: null }],
+    plaid_items: [
+      {
+        user_id: "u1",
+        item_id: "i1",
+        sealed_token: sealJson({ accessToken: "access-1" }, k),
+        institution_id: null,
+        institution_name: "First Bank",
+        linked_at: "2026-09-01",
+        sealed_sync: sealPacked(sync, k),
+        sync_version: 3,
+        synced_at: "2026-09-02",
+        changed_at: null,
+      },
+    ],
+    coinbase_links: [{ ...coinbaseRow(1, 4, NOW + 3_600_000), sealed_tokens: sealJson(tokens(1, NOW + 3_600_000), k) }],
+    calendar_feeds: [{ user_id: "u1", updated_at: "2026-09-02T00:00:00Z", sealed_token: sealJson({ token: "feed-secret" }, k), snapshot: sealFeedSnapshot(bills, k) }],
+  });
+
+  it("moves everything to the new key as the person uses Prism, so deleting the old key strands nothing", async () => {
+    const { db, tables } = fakeDb(sealedBy(before));
+    const a = await loadAccount(account(db), during, { withSync: true });
+    // The visit itself works from the old seals.
+    expect(a.items.map((i) => i.accessToken)).toEqual(["access-1"]);
+    expect(a.plaidSync.get("i1")?.state).toEqual(sync);
+    expect(a.coinbase?.tokens.accessToken).toBe("at1");
+    expect(a.reseal).not.toBeNull();
+    await a.reseal!();
+
+    const [item] = tables.plaid_items! as Row[];
+    const [link] = tables.coinbase_links! as Row[];
+    const [feed] = tables.calendar_feeds! as Row[];
+    for (const sealed of [item!.sealed_token, item!.sealed_sync, link!.sealed_tokens, feed!.sealed_token, (feed!.snapshot as { sealed: string }).sealed]) {
+      expect(needsReseal(sealed as string, during)).toBe(false);
+    }
+    // Versions never move, so a save made meanwhile can't be refused because of this.
+    expect(item!.sync_version).toBe(3);
+    expect(link!.version).toBe(4);
+    // With the old key gone, every value still opens.
+    expect(openJson(item!.sealed_token as string, after)).toEqual({ accessToken: "access-1" });
+    expect(openPacked(item!.sealed_sync as string, after)).toEqual(sync);
+    expect(openJson(link!.sealed_tokens as string, after)).toEqual(tokens(1, NOW + 3_600_000));
+    expect(openJson(feed!.sealed_token as string, after)).toEqual({ token: "feed-secret" });
+    expect(openFeedSnapshot(feed!.snapshot, after)).toEqual(bills);
+    const later = await loadAccount(account(db), after, { withSync: true });
+    expect(later.items.map((i) => i.accessToken)).toEqual(["access-1"]);
+    expect(later.reseal).toBeNull();
+  });
+
+  it("writes nothing when everything is already under the current key", async () => {
+    const { db, writes } = fakeDb(sealedBy(during));
+    const a = await loadAccount(account(db), during, { withSync: true });
+    expect(a.reseal).toBeNull();
+    expect(writes).toEqual([]);
+  });
+
+  it("leaves the stored copy alone when only the bank token was read", async () => {
+    const { db, writes } = fakeDb(sealedBy(before));
+    await (await loadAccount(account(db), during)).reseal!();
+    expect(writes.filter((w) => w.table === "plaid_items").map((w) => Object.keys(w.values!))).toEqual([["sealed_token"]]);
+  });
+
+  it("never overwrites a save made between the read and the reseal", async () => {
+    const { db, tables } = fakeDb(sealedBy(before));
+    const a = await loadAccount(account(db), during, { withSync: true });
+    // Meanwhile: the bank is relinked, a new sync lands, and Coinbase refreshes (spending the old refresh token).
+    const [item] = tables.plaid_items! as Row[];
+    const [link] = tables.coinbase_links! as Row[];
+    const relinked = sealJson({ accessToken: "access-2" }, during);
+    const newer = sealPacked({ ...sync, cursor: "c-10" }, during);
+    const refreshed = sealJson(tokens(2, NOW + 7_200_000), during);
+    Object.assign(item!, { sealed_token: relinked, sealed_sync: newer, sync_version: 4 });
+    Object.assign(link!, { sealed_tokens: refreshed, version: 5 });
+    await a.reseal!();
+    expect(item!.sealed_token).toBe(relinked);
+    expect(item!.sealed_sync).toBe(newer);
+    expect(link!.sealed_tokens).toBe(refreshed);
+  });
+
+  it("never overwrites a Coinbase reconnect, which starts over at the same version", async () => {
+    const { db, tables } = fakeDb(sealedBy(before));
+    const [link] = tables.coinbase_links! as Row[];
+    link!.version = 1;
+    const a = await loadAccount(account(db), during);
+    const reconnected = sealJson(tokens(7, NOW + 7_200_000), during);
+    Object.assign(link!, { sealed_tokens: reconnected, version: 1 });
+    await a.reseal!();
+    expect(link!.sealed_tokens).toBe(reconnected);
+  });
+
+  it("changes nothing on a deploy without a rotation: no writes, and every seal in the format it had", async () => {
+    const { db, writes, tables } = fakeDb(sealedBy(before));
+    const [item] = tables.plaid_items! as Row[];
+    expect(item!.sealed_token as string).not.toContain(".");
+    expect((item!.sealed_sync as string).startsWith("z1.")).toBe(true);
+    const a = await loadAccount(account(db), before, { withSync: true });
+    expect(a.items.map((i) => i.accessToken)).toEqual(["access-1"]);
+    expect(a.reseal).toBeNull();
+    expect(writes).toEqual([]);
+  });
+
+  it("leaves a row no key opens exactly as it was", async () => {
+    const stranger = vaultKey({ PRISM_VAULT_KEY: b64(randomBytes(32)) })!;
+    const { db, writes } = fakeDb(sealedBy(stranger));
+    const a = await loadAccount(account(db), during, { withSync: true });
+    expect(a.items).toEqual([]);
+    expect(a.reseal).toBeNull();
+    expect(writes).toEqual([]);
   });
 });

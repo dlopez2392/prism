@@ -4,7 +4,7 @@
 // drift apart.
 
 import { createHash } from "node:crypto";
-import { openJson, sealJson } from "./vault";
+import { openJson, sealJson, type VaultKey } from "./vault";
 
 export function feedTokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -16,12 +16,12 @@ export function feedTokenHash(token: string): string {
  * bank-derived value: the database holds `{ v: 2, sealed }` and never the
  * bills themselves.
  */
-export function sealFeedSnapshot(snapshot: unknown, key: Buffer): { v: 2; sealed: string } {
+export function sealFeedSnapshot(snapshot: unknown, key: VaultKey): { v: 2; sealed: string } {
   return { v: 2, sealed: sealJson(snapshot, key) };
 }
 
 /** The snapshot inside a stored value, or null for anything this key didn't seal (an unsealed one included). */
-export function openFeedSnapshot(stored: unknown, key: Buffer): unknown {
+export function openFeedSnapshot(stored: unknown, key: VaultKey): unknown {
   const s = stored as { v?: unknown; sealed?: unknown } | null;
   return s && s.v === 2 && typeof s.sealed === "string" ? openJson(s.sealed, key) : null;
 }

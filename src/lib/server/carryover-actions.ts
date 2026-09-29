@@ -19,13 +19,13 @@ import { currentAccount } from "@/lib/supabase/server";
 import { addAccountPlaidItem, loadAccount, saveAccountBudgets, saveAccountCoinbase, saveAccountGoals } from "./account-store";
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
 import { BUDGETS_COOKIE, CARRYOVER_COOKIE, GOALS_COOKIE, readPlan } from "./plan-store";
-import { open, VAULT_COOKIE, vaultKey } from "./vault";
+import { open, VAULT_COOKIE, vaultKey, type VaultKey } from "./vault";
 
 export async function moveDeviceToAccount(): Promise<void> {
   const account = await currentAccount();
   if (!account) return;
   const jar = await cookies();
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {

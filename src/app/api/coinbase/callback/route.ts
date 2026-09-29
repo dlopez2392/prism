@@ -13,7 +13,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { coinbaseConfig, exchangeCode, revokeToken } from "@/lib/coinbase/client";
 import { COINBASE_OAUTH_COOKIE, finishSignIn } from "@/lib/server/coinbase-store";
-import { vaultKey } from "@/lib/server/vault";
+import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { liveCoinbaseToken, loadAccount, saveAccountCoinbase } from "@/lib/server/account-store";
 import { linkingRefusal, signInToConnect } from "@/lib/linking";
 import { supabaseEnv } from "@/lib/supabase/config";
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   const back = (outcome: string) => leave(`/connections?coinbase=${outcome}`);
 
   const config = coinbaseConfig();
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {

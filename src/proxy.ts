@@ -20,7 +20,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { coinbaseConfig } from "@/lib/coinbase/client";
 import { COINBASE_COOKIE, linkCookieOptions, refreshLink } from "@/lib/server/coinbase-store";
-import { vaultKey } from "@/lib/server/vault";
+import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { AUTH_COOKIE, hasSessionCookie, supabaseEnv } from "@/lib/supabase/config";
 
 type Pending = { name: string; value: string; options: CookieOptions };
@@ -49,7 +49,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const config = coinbaseConfig();
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {

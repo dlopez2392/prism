@@ -29,7 +29,7 @@ import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveAccountTimeZone, saveFeedSnapshot } from "./account-store";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
-import { open, VAULT_COOKIE, vaultKey, type VaultItem } from "./vault";
+import { open, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
 
 export type Loaded = FinanceData & {
   /** A problem worth a banner — the data shown is still real, just incomplete. */
@@ -117,7 +117,7 @@ type PlaidSync = { stored: Map<string, StoredSync>; save: ((itemId: string, stat
 
 type Money = Pick<Sources, "items" | "coinbase" | "plaidSync">;
 
-function safeVaultKey(): Buffer | null {
+function safeVaultKey(): VaultKey | null {
   try {
     return vaultKey();
   } catch {
@@ -139,6 +139,8 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
   if (account) {
     // Stored bank copies are loaded (and opened) only for what draws money — never for a plan edit.
     const a = await loadAccount(account, key, { withSync });
+    // Seals an older vault key made move to the current one, after the response (vault.ts, "Keyring").
+    if (a.reseal) after(a.reseal);
     const record = a.coinbase;
     return {
       account,

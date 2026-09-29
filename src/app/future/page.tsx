@@ -22,7 +22,7 @@ import { monthlyCost } from "@/lib/finance/recurring";
 import { dailyBalances } from "@/lib/finance/view";
 import { accountFeedToken } from "@/lib/server/account-store";
 import { getFinance } from "@/lib/server/finance";
-import { vaultKey } from "@/lib/server/vault";
+import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { currentAccount } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Future" };
@@ -203,7 +203,7 @@ function Figure({ label, value, note, status }: { label: string; value: string; 
 /** The signed-in person's calendar feed path, if they've made one. */
 async function ownFeedPath(): Promise<string | null> {
   const account = await currentAccount();
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {

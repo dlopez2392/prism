@@ -12,9 +12,9 @@ import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/fi
 import type { Budget } from "@/lib/finance/types";
 import type { Account } from "@/lib/supabase/server";
 import { needsRefresh } from "./coinbase-store";
-import { feedTokenHash, sealFeedSnapshot } from "./feed-token";
+import { feedTokenHash, openFeedSnapshot, sealFeedSnapshot } from "./feed-token";
 import { validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
-import { openJson, openPacked, sealJson, sealPacked, type VaultItem } from "./vault";
+import { needsReseal, openJson, openPacked, sealJson, sealPacked, type VaultItem, type VaultKey } from "./vault";
 
 type ProfileRow = { first_name: string | null; plan_budgets: unknown; plan_goals: unknown; time_zone: string | null };
 type PlaidRow = {
@@ -29,7 +29,7 @@ type PlaidRow = {
   changed_at: string | null;
 };
 type CoinbaseRow = { sealed_tokens: string; expires_at: string; version: number; linked_at: string };
-type FeedRow = { updated_at: string };
+type FeedRow = { updated_at: string; sealed_token: string };
 
 export type CoinbaseRecord = { tokens: TokenSet; version: number; linkedAt: string };
 
@@ -42,9 +42,15 @@ export type AccountSources = {
   plaidSync: Map<string, StoredSync>;
   coinbase: CoinbaseRecord | null;
   feedUpdatedAt: string | null;
+  /**
+   * Seals this account holds that the current vault key didn't make, sealed
+   * again under it; null when there are none. For a caller that may write,
+   * after the response. A connected app never calls it (its writes are refused).
+   */
+  reseal: (() => Promise<void>) | null;
 };
 
-function openCoinbase(row: CoinbaseRow | null, key: Buffer | null): CoinbaseRecord | null {
+function openCoinbase(row: CoinbaseRow | null, key: VaultKey | null): CoinbaseRecord | null {
   if (!row || !key) return null;
   const t = openJson(row.sealed_tokens, key) as Partial<TokenSet> | null;
   if (!t || typeof t.accessToken !== "string" || typeof t.refreshToken !== "string" || !Number.isFinite(t.expiresAt)) return null;
@@ -57,7 +63,7 @@ function openCoinbase(row: CoinbaseRow | null, key: Buffer | null): CoinbaseReco
  * instead of an empty account — for a connected app, which must never be told
  * "nothing is linked" (and shown the example household) because a query failed.
  */
-export async function loadAccount(account: Account, key: Buffer | null, { strict = false, withSync = false } = {}): Promise<AccountSources> {
+export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
   const [profile, plaid, coinbase, feed] = await Promise.all([
     db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
@@ -67,28 +73,104 @@ export async function loadAccount(account: Account, key: Buffer | null, { strict
       .eq("user_id", account.userId)
       .returns<PlaidRow[]>(),
     db.from("coinbase_links").select("sealed_tokens, expires_at, version, linked_at").eq("user_id", account.userId).maybeSingle<CoinbaseRow>(),
-    db.from("calendar_feeds").select("updated_at").eq("user_id", account.userId).maybeSingle<FeedRow>(),
+    db.from("calendar_feeds").select("updated_at, sealed_token").eq("user_id", account.userId).maybeSingle<FeedRow>(),
   ]);
   if (strict && (profile.error || plaid.error || coinbase.error || feed.error)) throw new Error("Couldn't read the account.");
   const items: VaultItem[] = [];
   const plaidSync = new Map<string, StoredSync>();
+  const stale = staleSeals(account, key);
   for (const r of plaid.data ?? []) {
     const opened = key ? (openJson(r.sealed_token, key) as { accessToken?: unknown } | null) : null;
     if (typeof opened?.accessToken !== "string") continue; // sealed under another key: unusable, so unseen
     items.push({ itemId: r.item_id, accessToken: opened.accessToken, institutionId: r.institution_id, institutionName: r.institution_name, linkedAt: r.linked_at });
+    stale.plaidToken(r, opened);
     if (!withSync) continue;
     // A copy that won't open or doesn't read as one starts over at the next sync.
-    const state = key ? validState(openPacked(r.sealed_sync, key)) : null;
+    const raw = key ? openPacked(r.sealed_sync, key) : null;
+    const state = validState(raw);
     plaidSync.set(r.item_id, { state, version: r.sync_version ?? 0, syncedAt: state ? r.synced_at : null, changedAt: r.changed_at ?? null });
+    if (state) stale.plaidSync(r, raw);
   }
+  const coinbaseRecord = openCoinbase(coinbase.data ?? null, key);
+  if (coinbaseRecord) stale.coinbase(coinbase.data!, coinbaseRecord);
+  if (feed.data) stale.feed(feed.data);
   return {
     firstName: profile.data?.first_name ?? null,
     timeZone: profile.data?.time_zone ?? null,
     plan: { budgets: validBudgets(profile.data?.plan_budgets ?? undefined), goals: validGoals(profile.data?.plan_goals ?? undefined) },
     items,
     plaidSync,
-    coinbase: openCoinbase(coinbase.data ?? null, key),
+    coinbase: coinbaseRecord,
     feedUpdatedAt: feed.data?.updated_at ?? null,
+    reseal: stale.run(),
+  };
+}
+
+/**
+ * Replacing the vault key without a privileged sweep: the app has no key that
+ * reads anyone else's rows, so each account's seals move to the new key when
+ * its owner next uses Prism. Each write lands only over the exact copy it
+ * replaces, and never moves a version, so it can't undo or block a save made
+ * meanwhile (a Coinbase refresh most of all: its old refresh token is spent).
+ * Best effort: a row that isn't moved now is moved next visit.
+ */
+function staleSeals(account: Account, key: VaultKey | null) {
+  const jobs: (() => PromiseLike<{ error: unknown }>)[] = [];
+  const db = account.supabase;
+  const due = (sealed: string | null | undefined): boolean => key !== null && needsReseal(sealed, key);
+  return {
+    plaidToken(r: PlaidRow, opened: unknown) {
+      if (!due(r.sealed_token)) return;
+      const { item_id, sealed_token: was } = r;
+      const sealed_token = sealJson(opened, key!);
+      jobs.push(() => db.from("plaid_items").update({ sealed_token }).eq("user_id", account.userId).eq("item_id", item_id).eq("sealed_token", was));
+    },
+    /** Keyed on the sync version, not the copy: a copy can be megabytes, and only a new sync (which moves the version) changes it. */
+    plaidSync(r: PlaidRow, raw: unknown) {
+      if (!due(r.sealed_sync)) return;
+      const k = key!;
+      const { item_id, sync_version } = r;
+      jobs.push(() =>
+        db
+          .from("plaid_items")
+          .update({ sealed_sync: sealPacked(raw, k) })
+          .eq("user_id", account.userId)
+          .eq("item_id", item_id)
+          .eq("sync_version", sync_version ?? 0),
+      );
+    },
+    coinbase(row: CoinbaseRow, record: CoinbaseRecord) {
+      if (!due(row.sealed_tokens)) return;
+      const { version, sealed_tokens: was } = row;
+      const sealed_tokens = sealJson(record.tokens, key!);
+      jobs.push(() => db.from("coinbase_links").update({ sealed_tokens }).eq("user_id", account.userId).eq("version", version).eq("sealed_tokens", was));
+    },
+    /** The feed's secret, and its bill list with it: both were sealed by the key being replaced. */
+    feed(row: FeedRow) {
+      if (!due(row.sealed_token)) return;
+      const k = key!;
+      const was = row.sealed_token;
+      const opened = openJson(was, k) as { token?: unknown } | null;
+      if (typeof opened?.token !== "string") return;
+      jobs.push(async () => {
+        const { data } = await db.from("calendar_feeds").select("snapshot").eq("user_id", account.userId).maybeSingle<{ snapshot: unknown }>();
+        const snapshot = openFeedSnapshot(data?.snapshot, k);
+        return db
+          .from("calendar_feeds")
+          .update({ sealed_token: sealJson(opened, k), ...(snapshot === null ? {} : { snapshot: sealFeedSnapshot(snapshot, k) }) })
+          .eq("user_id", account.userId)
+          .eq("sealed_token", was);
+      });
+    },
+    run(): (() => Promise<void>) | null {
+      if (jobs.length === 0) return null;
+      return async () => {
+        const results = await Promise.allSettled(jobs.map((job) => job()));
+        const failed = results.filter((r) => r.status === "rejected" || r.value.error).length;
+        // How many, never what: the rows hold bank data.
+        if (failed > 0) console.warn(`Prism: ${failed} of ${jobs.length} sealed values stay under an older vault key until the next visit.`);
+      };
+    },
   };
 }
 
@@ -115,7 +197,7 @@ export function saveAccountGoals(account: Account, goals: GoalSettings[] | null)
   return upsertProfile(account, { plan_goals: goals });
 }
 
-export async function addAccountPlaidItem(account: Account, item: VaultItem, key: Buffer): Promise<void> {
+export async function addAccountPlaidItem(account: Account, item: VaultItem, key: VaultKey): Promise<void> {
   const { error } = await account.supabase.from("plaid_items").upsert(
     {
       user_id: account.userId,
@@ -139,7 +221,7 @@ export async function addAccountPlaidItem(account: Account, item: VaultItem, key
 /** Under the column's own limit, with room to spare; a copy bigger than this isn't kept (the next visit syncs again). */
 const SEALED_SYNC_MAX = 15_000_000;
 
-export async function saveAccountPlaidSync(account: Account, itemId: string, state: SyncState, key: Buffer, fromVersion: number, startedAt: string): Promise<boolean> {
+export async function saveAccountPlaidSync(account: Account, itemId: string, state: SyncState, key: VaultKey, fromVersion: number, startedAt: string): Promise<boolean> {
   const sealed = sealPacked(state, key);
   if (sealed.length > SEALED_SYNC_MAX) throw new Error(`A bank's sync is too large to keep (${sealed.length} characters).`);
   const { data, error } = await account.supabase
@@ -157,7 +239,7 @@ export async function removeAccountPlaidItem(account: Account, itemId: string): 
   await account.supabase.from("plaid_items").delete().eq("user_id", account.userId).eq("item_id", itemId);
 }
 
-export async function saveAccountCoinbase(account: Account, tokens: TokenSet, key: Buffer): Promise<void> {
+export async function saveAccountCoinbase(account: Account, tokens: TokenSet, key: VaultKey): Promise<void> {
   const { error } = await account.supabase.from("coinbase_links").upsert(
     { user_id: account.userId, sealed_tokens: sealJson(tokens, key), expires_at: new Date(tokens.expiresAt).toISOString(), version: 1, linked_at: new Date().toISOString() },
     { onConflict: "user_id" },
@@ -179,7 +261,7 @@ export async function liveCoinbaseToken(
   account: Account,
   record: CoinbaseRecord,
   config: CoinbaseConfig,
-  key: Buffer,
+  key: VaultKey,
   fetchImpl: typeof fetch = fetch,
   now = Date.now(),
 ): Promise<string | null> {
@@ -207,7 +289,7 @@ export async function liveCoinbaseToken(
 // ── The self-updating calendar ───────────────────────────────────────────────
 
 /** This account's secret calendar URL token, creating one (or a new one, on reset) if asked. */
-export async function accountFeedToken(account: Account, key: Buffer, opts: { create: boolean; reset?: boolean }): Promise<string | null> {
+export async function accountFeedToken(account: Account, key: VaultKey, opts: { create: boolean; reset?: boolean }): Promise<string | null> {
   if (!opts.reset) {
     const { data } = await account.supabase.from("calendar_feeds").select("sealed_token").eq("user_id", account.userId).maybeSingle<{ sealed_token: string }>();
     const existing = data ? (openJson(data.sealed_token, key) as { token?: unknown } | null) : null;
@@ -223,7 +305,7 @@ export async function accountFeedToken(account: Account, key: Buffer, opts: { cr
 }
 
 /** Stored sealed: bank-derived bills never sit readable in the database. */
-export async function saveFeedSnapshot(account: Account, snapshot: unknown, key: Buffer): Promise<void> {
+export async function saveFeedSnapshot(account: Account, snapshot: unknown, key: VaultKey): Promise<void> {
   await account.supabase.from("calendar_feeds").update({ snapshot: sealFeedSnapshot(snapshot, key) }).eq("user_id", account.userId);
 }
 

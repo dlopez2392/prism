@@ -11,7 +11,7 @@ import { clearedReturnCookie, RETURN_COOKIE } from "@/lib/plaid/return";
 import { addAccountPlaidItem, loadAccount } from "@/lib/server/account-store";
 import { linkingRefusal } from "@/lib/linking";
 import { sameOriginJson } from "@/lib/server/request-guard";
-import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey, type VaultItem } from "@/lib/server/vault";
+import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "@/lib/server/vault";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   if (refused) return NextResponse.json({ error: "bad_request", message: refused }, { status: 400 });
 
   const config = plaidConfig();
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = config ? vaultKey() : null;
   } catch (e) {

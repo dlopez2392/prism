@@ -12,13 +12,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authorizeUrl, coinbaseConfig } from "@/lib/coinbase/client";
 import { linkingRefusal, signInToConnect } from "@/lib/linking";
 import { COINBASE_OAUTH_COOKIE, pendingCookieOptions, redirectUriFor, startSignIn } from "@/lib/server/coinbase-store";
-import { vaultKey } from "@/lib/server/vault";
+import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
   const config = coinbaseConfig();
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {

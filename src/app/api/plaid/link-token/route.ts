@@ -16,7 +16,7 @@ import { clearedReturnCookie, packReturn, RETURN_COOKIE, returnCookieOptions, re
 import { linkingRefusal } from "@/lib/linking";
 import { requestOrigin } from "@/lib/server/origin";
 import { sameOriginJson } from "@/lib/server/request-guard";
-import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey } from "@/lib/server/vault";
+import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey, type VaultKey } from "@/lib/server/vault";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
 
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
   const config = plaidConfig();
   if (!config) return NextResponse.json({ error: "not_configured" }, { status: 503 });
-  let key: Buffer | null;
+  let key: VaultKey | null;
   try {
     key = vaultKey();
   } catch (e) {

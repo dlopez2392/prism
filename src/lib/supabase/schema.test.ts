@@ -4,10 +4,11 @@
 // authenticated roles with Supabase's default grants — so a policy mistake
 // fails here, in CI, before it can reach the real database.
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, describe, expect, it } from "vitest";
+import { keyId, sealJson, sealPacked, vaultKey } from "@/lib/server/vault";
 
 const A = "11111111-1111-1111-1111-111111111111";
 const B = "22222222-2222-2222-2222-222222222222";
@@ -371,5 +372,51 @@ describe("two-step sign-in", () => {
       expect(await refused(`select public.my_second_step_factor()`)).toBe(true);
       expect(await refused(`select public.check_totp_registration()`)).toBe(true);
     });
+  });
+});
+
+describe("the vault key census (README, \"Replacing the vault key\")", () => {
+  /** The SQL exactly as the README prints it, so the owner's copy can't drift from the schema. */
+  const census = async () => {
+    const readme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8");
+    const sql = /```sql\n([\s\S]*?)```/.exec(readme.slice(readme.indexOf("## Replacing the vault key")))![1]!;
+    const counts = new Map<string, number>();
+    for (const r of await rows(sql)) counts.set(`${r.what} ${r.key_id}`, Number(r.count));
+    return counts;
+  };
+
+  it("counts every sealed column by the key that sealed it, reading key ids only", async () => {
+    const D = "c0ffee00-0000-4000-8000-00000000ca5e";
+    const [oldKey, newKey, other] = [randomBytes(32), randomBytes(32), randomBytes(32)];
+    const [o, n] = [keyId(oldKey), keyId(newKey)];
+    // Seals name their key only while a rotation is under way, so each of these rings holds two keys.
+    const ring = (current: Buffer) => vaultKey({ PRISM_VAULT_KEY: other.toString("base64"), PRISM_VAULT_KEY_2: current.toString("base64") })!;
+    const before = await census();
+    await rows(`insert into auth.users (id, email) values ($1, 'd@x.test')`, [D]);
+    await rows(`insert into public.plaid_items (user_id, item_id, sealed_token, sealed_sync) values ($1, 'moved', $2, $3), ($1, 'waiting', $4, null)`, [
+      D,
+      sealJson({ accessToken: "a" }, ring(newKey)),
+      sealPacked({ cursor: "c" }, ring(newKey)),
+      SEALED,
+    ]);
+    await rows(`insert into public.coinbase_links (user_id, sealed_tokens, expires_at) values ($1, $2, now())`, [D, sealJson({ accessToken: "a" }, ring(oldKey))]);
+    await rows(`insert into public.calendar_feeds (user_id, token_hash, sealed_token, snapshot) values ($1, $2, $3, $4)`, [
+      D,
+      "d".repeat(64),
+      sealJson({ token: "t" }, ring(newKey)),
+      JSON.stringify({ v: 2, sealed: sealJson({ bills: [] }, ring(newKey)) }),
+    ]);
+    const after = await census();
+    const delta = (what: string, id: string) => (after.get(`${what} ${id}`) ?? 0) - (before.get(`${what} ${id}`) ?? 0);
+    expect([
+      delta("bank token", n),
+      delta("bank token", "unnamed"),
+      delta("bank transactions", n),
+      delta("coinbase", o),
+      delta("calendar link", n),
+      delta("calendar bills", n),
+    ]).toEqual([1, 1, 1, 1, 1, 1]);
+    for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
+    await rows(`delete from auth.users where id = $1`, [D]);
   });
 });
