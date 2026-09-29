@@ -105,6 +105,8 @@ export function Change({
       )}
     >
       {Icon ? <Icon aria-hidden className="size-3.5" strokeWidth={2.5} /> : null}
+      {/* The arrow is drawn; the direction is also said, so it never rests on an icon or a colour alone. */}
+      {up === null ? null : <span className="sr-only">{up ? "up " : "down "}</span>}
       <span className="num">{text}</span>
       {suffix ? <span className={clsx("ml-1 font-medium", onHero ? "text-[var(--on-hero-soft)]" : "text-ink-3")}>{suffix}</span> : null}
     </span>

@@ -95,13 +95,19 @@ or ink 4.5:1 across all eight slots.
 3. Status is never colour alone — dot or icon + word.
 4. Every screen has designed loaded / empty / error states. Empty states sell
    the feature: one sentence of what appears here + the action that causes it.
-5. Loading = skeletons shaped like the content. No spinners.
+5. Loading = skeletons shaped like the content. No spinners. Every screen has
+   its own `loading.tsx`, laid out like the screen from the pieces in
+   `src/components/skeletons.tsx`; `src/lib/loading-states.test.ts` fails when
+   one is missing.
 6. One hero gradient per screen (`data-hero`).
 7. Insights show their work: every generated insight carries the transactions
    it was computed from, one tap away ("Show the math").
 8. Money is integer cents end to end; formatting happens only at the edge.
 9. Mobile first: every screen works at 360px with a bottom tab bar; the
-   sidebar appears at ≥ 1024px. No horizontal page scroll.
+   sidebar appears at ≥ 1024px. No horizontal page scroll. On a phone, a name
+   or a status line wraps rather than truncates, and a row's sparkline gives
+   way to its change in words (`<Change>`), so the name keeps its room and the
+   figure keeps its context. A debt's change is the amount owed: down is good.
 10. Provider-neutral: no screen may name the aggregator in the UI except the
     Connections screen. The data layer maps every provider onto
     `src/lib/finance/types.ts`. **Two exceptions: the privacy policy

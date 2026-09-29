@@ -118,13 +118,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           {byInstitution.map(({ inst, accounts, total }) => (
             <li key={inst.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">
               <div className="grid size-10 shrink-0 place-items-center rounded-ctl bg-surface-2 text-sm font-extrabold text-ink-1">{inst.name.slice(0, 1)}</div>
+              {/* On a phone the name and when it last synced may wrap: that line is what this screen is for. */}
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold text-ink-1">{inst.name}</div>
-                <div className="truncate text-xs text-ink-3">
+                <div className="text-sm font-bold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{inst.name}</div>
+                <div className="text-xs text-ink-3 sm:truncate">
                   {accounts.length} {accounts.length === 1 ? "account" : "accounts"} · {synced(inst.lastSyncedAt, data.today)}
                 </div>
               </div>
-              <div className="num w-28 text-right text-sm font-bold text-ink-1">{money0(total)}</div>
+              <div className="num shrink-0 text-right text-sm font-bold text-ink-1 sm:w-28">{money0(total)}</div>
               <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
                 <StatusPill status={HEALTH[inst.health].status}>{HEALTH[inst.health].label}</StatusPill>
                 {inst.source === "plaid" ? <DisconnectButton itemId={inst.id} name={inst.name} /> : null}

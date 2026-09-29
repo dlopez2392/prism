@@ -1,23 +1,25 @@
-// Loading = skeletons shaped like the content (DESIGN.md rule 5): a title, the
-// hero and its neighbour, a row of tiles, then two chart cards.
+// Overview, while it loads: the greeting, the hero and safe-to-spend, four
+// tiles, then two chart cards (DESIGN.md rule 5; src/components/skeletons.tsx).
 
-export default function Loading() {
+import { Block, Header, Loading } from "@/components/skeletons";
+
+export default function OverviewLoading() {
   return (
-    <div aria-busy="true" aria-label="Loading your money" className="space-y-5">
-      <div className="skeleton h-8 w-56" />
+    <Loading label="Loading your money">
+      <Header eyebrow />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="skeleton h-64 rounded-card lg:col-span-7" />
-        <div className="skeleton h-64 rounded-card lg:col-span-5" />
+        <Block className="h-64 lg:col-span-7" />
+        <Block className="h-64 lg:col-span-5" />
       </div>
       <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="skeleton h-28 rounded-card" />
+          <Block key={i} className="h-28" />
         ))}
       </div>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="skeleton h-80 rounded-card lg:col-span-7" />
-        <div className="skeleton h-80 rounded-card lg:col-span-5" />
+        <Block className="h-80 lg:col-span-7" />
+        <Block className="h-80 lg:col-span-5" />
       </div>
-    </div>
+    </Loading>
   );
 }
