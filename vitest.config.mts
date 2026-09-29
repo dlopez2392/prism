@@ -4,10 +4,13 @@ import path from "node:path";
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
-    // The Plaid and Coinbase adapters and the token vault read their configuration from the
-    // environment. Pin it OFF for the unit suite so a developer's real sandbox
-    // keys can never change what a test asserts; tests that need a value set it
-    // with vi.stubEnv.
+    // The Plaid and Coinbase adapters, the token vault and accounts (Supabase)
+    // read their configuration from the environment. Pin it OFF for the unit
+    // suite so real keys can never change what a test asserts: a developer's
+    // sandbox keys, and production's own settings when Vercel runs these tests
+    // inside its build (vercel.json). Tests that need a value set it with
+    // vi.stubEnv. src/lib/env-pins.test.ts fails if the app reads a variable
+    // this list doesn't pin.
     env: {
       PLAID_CLIENT_ID: "",
       PLAID_SECRET: "",
@@ -21,6 +24,9 @@ export default defineConfig({
       COINBASE_REDIRECT_URI: "",
       COINBASE_LOGIN_URL: "",
       COINBASE_API_URL: "",
+      NEXT_PUBLIC_SUPABASE_URL: "",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
     },
   },
   resolve: {
