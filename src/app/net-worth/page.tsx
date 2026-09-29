@@ -152,17 +152,31 @@ export default async function NetWorthPage() {
                 <ul>
                   {g.accounts.map((acc) => {
                     const up = acc.history.at(-1)! >= acc.history[0]!;
+                    // On a debt, what moves is how much is owed, and less is better.
+                    const debt = acc.balance < 0;
+                    const moved = acc.history.length > 1 ? (debt ? Math.abs(acc.history.at(-1)!) - Math.abs(acc.history[0]!) : acc.history.at(-1)! - acc.history[0]!) : null;
                     return (
                       <li key={acc.id} className="flex items-center gap-3 py-2.5">
+                        {/* On a phone the name gets the row and may wrap; from sm up it shares it with the trend line. */}
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold text-ink-1">{acc.name}</div>
+                          <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{acc.name}</div>
                           <div className="truncate text-xs text-ink-3">
                             {institution.get(acc.institutionId) ?? "—"}
                             {acc.mask ? ` ·· ${acc.mask}` : ""}
                           </div>
                         </div>
-                        <Sparkline values={acc.history} color={acc.balance < 0 ? "var(--flow-out)" : up ? "var(--flow-in)" : "var(--c-other)"} width={84} height={28} />
-                        <div className="num w-28 text-right text-sm font-bold text-ink-1">{money0(acc.balance)}</div>
+                        <div className="hidden shrink-0 sm:block">
+                          <Sparkline values={acc.history} color={acc.balance < 0 ? "var(--flow-out)" : up ? "var(--flow-in)" : "var(--c-other)"} width={84} height={28} />
+                        </div>
+                        <div className="shrink-0 text-right sm:w-28">
+                          <div className="num text-sm font-bold text-ink-1">{money0(acc.balance)}</div>
+                          {/* The trend line's job on a phone: the balance keeps its context (DESIGN.md rule 1). */}
+                          {moved !== null ? (
+                            <div className="sm:hidden">
+                              <Change text={money0(Math.abs(moved))} up={moved === 0 ? null : moved > 0} goodWhenUp={!debt} suffix={`${acc.history.length - 1} mo`} />
+                            </div>
+                          ) : null}
+                        </div>
                       </li>
                     );
                   })}

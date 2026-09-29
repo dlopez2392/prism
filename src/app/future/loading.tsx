@@ -1,0 +1,27 @@
+// Future, while it loads: safe-to-spend beside four tiles, the balance forecast, then what's coming and the calendar card.
+
+import { Block, CardTitle, Frame, Header, Loading, Rows } from "@/components/skeletons";
+
+export default function FutureLoading() {
+  return (
+    <Loading label="Loading your forecast">
+      <Header />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <Block className="h-60 lg:col-span-5" />
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:col-span-7">
+          {[0, 1, 2, 3].map((i) => (
+            <Block key={i} className="h-28" />
+          ))}
+        </div>
+      </div>
+      <Block className="h-96" />
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
+        <Frame className="lg:col-span-7">
+          <CardTitle />
+          <Rows count={5} />
+        </Frame>
+        <Block className="h-72 lg:col-span-5" />
+      </div>
+    </Loading>
+  );
+}

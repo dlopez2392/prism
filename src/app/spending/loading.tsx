@@ -1,0 +1,24 @@
+// Spending, while it loads: the hero beside the month-by-month chart, two cards, the calendar, then every transaction.
+
+import { Block, CardTitle, Frame, Header, Loading, Rows } from "@/components/skeletons";
+
+export default function SpendingLoading() {
+  return (
+    <Loading label="Loading your spending">
+      <Header eyebrow action />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <Block className="h-72 lg:col-span-4" />
+        <Block className="h-72 lg:col-span-8" />
+      </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <Block className="h-80 lg:col-span-6" />
+        <Block className="h-80 lg:col-span-6" />
+      </div>
+      <Block className="h-64" />
+      <Frame>
+        <CardTitle />
+        <Rows count={6} />
+      </Frame>
+    </Loading>
+  );
+}
