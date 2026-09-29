@@ -7,7 +7,14 @@
   shares no code, database, authentication or deployment with it.
 - Product and company names live in `src/lib/brand.ts`; never hard-code them.
 - Gates before any merge: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
-  `pnpm build`. CI runs all four (`.github/workflows/ci.yml`).
+  `pnpm build`. CI runs all four (`.github/workflows/ci.yml`, job `verify`).
+- **`main` is protected by a GitHub ruleset (since 2026-09-29), with no
+  bypass, the owner included.** Changes arrive only through a pull request
+  whose `verify` check is green on its head commit and whose branch is up to
+  date with `main`; force-pushes and deletion are refused. Work on a branch,
+  open a PR, and merge (squash) only after reading the check runs for the
+  head commit, never inferring from an earlier run. Merging deploys
+  production. Never ask for the rule to be loosened to ship faster.
 - Bank data: Plaid through `src/lib/plaid/*`, mapped onto
   `src/lib/finance/types.ts`. Without `PLAID_CLIENT_ID`/`PLAID_SECRET` the app
   runs on the deterministic demo household in `src/lib/finance/demo.ts`.
