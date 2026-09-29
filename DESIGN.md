@@ -104,10 +104,12 @@ or ink 4.5:1 across all eight slots.
    sidebar appears at ≥ 1024px. No horizontal page scroll.
 10. Provider-neutral: no screen may name the aggregator in the UI except the
     Connections screen. The data layer maps every provider onto
-    `src/lib/finance/types.ts`. **One exception (2026-09-28): the privacy
-    policy (`/privacy`)**, which must name every company that handles
-    people's data. That is a legal requirement, and Plaid's own terms require
-    it, so the page is not a place to hide who connects a bank.
+    `src/lib/finance/types.ts`. **Two exceptions: the privacy policy
+    (`/privacy`, 2026-09-28)**, which must name every company that handles
+    people's data, **and the Terms of Service (`/terms`, 2026-09-29)**, where
+    people agree to Plaid's End User Privacy Policy before connecting a bank.
+    Both are legal requirements, and Plaid's own terms require them, so the
+    legal pages are not a place to hide who connects a bank.
 
 ## Definition of done for any UI change
 

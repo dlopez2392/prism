@@ -9,6 +9,7 @@
 // back with a correction — React resets a form after its action, so its
 // default value is fed from the action's returned state.
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { Mail } from "lucide-react";
 import { buttonGhost, buttonPrimary } from "@/components/dialog";
@@ -97,6 +98,18 @@ export function SignInForm({ linkError, next }: { linkError: boolean; next?: str
         {pending ? "Sending…" : "Email me a code"}
       </button>
       <p className="mt-3 text-center text-xs text-ink-3">No password. New here? The same code creates your account.</p>
+      {/* Where an account is created, the Terms are in view (terms.test.ts checks both links stay). */}
+      <p className="mt-2 text-center text-xs text-ink-3">
+        By continuing, you agree to the{" "}
+        <Link href="/terms" className="font-semibold text-ink-2 underline-offset-2 hover:underline">
+          Terms of Service
+        </Link>{" "}
+        and acknowledge the{" "}
+        <Link href="/privacy" className="font-semibold text-ink-2 underline-offset-2 hover:underline">
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </form>
   );
 }
