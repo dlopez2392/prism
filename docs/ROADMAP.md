@@ -36,6 +36,9 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    first name is asked after sign-in (a welcome step on an account's first
    visit, and the Account page) and must read as a name — an optional field
    beside the email box collected a password by mistake, which was erased.
+   **Two-step sign-in (2026-09-28):** optional authenticator-app codes after
+   the email code, enforced by row-level security against Supabase's own
+   session record; set up and turned off from the Account page.
 2. **Plaid webhooks and a stored sync cursor** — each load fetches only what
    changed. **Built (2026-09-28):** each bank's cursor, synced
    transactions and balances are stored sealed (gzip + AES-256-GCM, ciphertext only) with a

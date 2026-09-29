@@ -13,7 +13,7 @@ import { redirect } from "next/navigation";
 import { coinbaseConfig, revokeToken } from "@/lib/coinbase/client";
 import { plaidConfig, removeItem } from "@/lib/plaid/client";
 import { landingAfterSignIn, NEXT_COOKIE, safeNext } from "@/lib/profile";
-import { currentAccount, supabaseServer } from "@/lib/supabase/server";
+import { currentAccount, secondStepPending, supabaseServer, twoStepPath } from "@/lib/supabase/server";
 import { liveCoinbaseToken, loadAccount } from "./account-store";
 import { requestOrigin } from "./origin";
 import { vaultKey } from "./vault";
@@ -77,6 +77,8 @@ export async function signInStep(prev: SignInState, form: FormData): Promise<Sig
     const jar = await cookies();
     const next = safeNext(jar.get(NEXT_COOKIE)?.value);
     jar.delete(NEXT_COOKIE);
+    // Two-step sign-in on: the email code was step one, and the authenticator code comes next.
+    if (await secondStepPending(supabase)) redirect(twoStepPath(next));
     redirect(next ?? landingAfterSignIn(data.user));
   }
   return prev;

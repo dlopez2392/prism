@@ -41,6 +41,9 @@ beforeAll(async () => {
     create role anon nologin; create role authenticated nologin;
     create schema auth;
     create table auth.users (id uuid primary key, email text, phone text, encrypted_password text default '', raw_user_meta_data jsonb default '{}'::jsonb);
+    -- Supabase Auth's own records of a person's authenticators and of each session's assurance level.
+    create table auth.mfa_factors (id uuid primary key, user_id uuid not null references auth.users (id) on delete cascade, factor_type text not null default 'totp', status text not null);
+    create table auth.sessions (id uuid primary key, user_id uuid not null references auth.users (id) on delete cascade, aal text not null default 'aal1', factor_id uuid);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
     grant usage on schema auth to anon, authenticated;
@@ -265,5 +268,108 @@ describe("delete my account", () => {
     }
     expect((await rows(`select count(*)::int as n from auth.users where id = $1`, [A]))[0]!.n).toBe(0);
     expect((await rows(`select count(*)::int as n from public.plaid_items where user_id = $1`, [B]))[0]!.n).toBe(1);
+  });
+});
+
+describe("two-step sign-in", () => {
+  const D = "44444444-4444-4444-4444-444444444444";
+  const F1 = "f1f1f1f1-0000-4000-8000-000000000001"; // D's authenticator
+  const F2 = "f2f2f2f2-0000-4000-8000-000000000002"; // a second one on D's account
+  const S_EMAIL = "5e550000-0000-4000-8000-000000000001"; // email code only
+  const S_PASSED = "5e550000-0000-4000-8000-000000000002"; // passed F1
+  const S_OTHER = "5e550000-0000-4000-8000-000000000003"; // passed F2
+  const S_HALF = "5e550000-0000-4000-8000-000000000004"; // names F1, but Supabase has it at aal1
+  const session = (id: string, aal: "aal1" | "aal2") => ({ session_id: id, aal });
+  const seesOwnBank = async (claims: Record<string, unknown>) => (await as("authenticated", D, () => rows(`select item_id from public.plaid_items`), claims)).length === 1;
+
+  beforeAll(async () => {
+    await rows(`insert into auth.users (id, email) values ($1, 'd@x.test')`, [D]);
+    await rows(`insert into public.plaid_items (user_id, item_id, sealed_token) values ($1, 'item-d', $2)`, [D, SEALED]);
+    await rows(`insert into auth.mfa_factors (id, user_id, status) values ($1, $3, 'verified'), ($2, $3, 'verified')`, [F1, F2, D]);
+    await rows(
+      `insert into auth.sessions (id, user_id, aal, factor_id) values ($1, $4, 'aal1', null), ($2, $4, 'aal2', $5), ($3, $4, 'aal2', $6), ($7, $4, 'aal1', $5)`,
+      [S_EMAIL, S_PASSED, S_OTHER, D, F1, F2, S_HALF],
+    );
+  });
+
+  it("changes nothing for someone who hasn't turned it on", async () => {
+    expect(await seesOwnBank(session(S_EMAIL, "aal1"))).toBe(true);
+    expect(await as("authenticated", D, () => rows(`select public.second_step_pending() as p`), session(S_EMAIL, "aal1"))).toEqual([{ p: false }]);
+  });
+
+  it("can be registered only by a session that has just passed that very authenticator", async () => {
+    const register = (claims: Record<string, unknown>, factor: string) =>
+      as("authenticated", D, () => rows(`update public.profiles set totp_factor_id = $1 where user_id = $2`, [factor, D]), claims);
+    // The email code alone, a session that passed a different authenticator, a token that only claims aal2: all refused.
+    expect(await register(session(S_EMAIL, "aal1"), F1).then(() => false, () => true)).toBe(true);
+    expect(await register(session(S_OTHER, "aal2"), F1).then(() => false, () => true)).toBe(true);
+    expect(await register(session(S_EMAIL, "aal2"), F1).then(() => false, () => true)).toBe(true);
+    // Someone else's authenticator can't be registered either.
+    await rows(`insert into auth.mfa_factors (id, user_id, status) values ('f3f3f3f3-0000-4000-8000-000000000003', $1, 'verified')`, [B]);
+    expect(await register(session(S_PASSED, "aal2"), "f3f3f3f3-0000-4000-8000-000000000003").then(() => false, () => true)).toBe(true);
+    expect((await rows(`select totp_factor_id from public.profiles where user_id = $1`, [D]))[0]!.totp_factor_id).toBeNull();
+    // The session that passed F1 can.
+    await register(session(S_PASSED, "aal2"), F1);
+    expect((await rows(`select totp_factor_id from public.profiles where user_id = $1`, [D]))[0]!.totp_factor_id).toBe(F1);
+  });
+
+  it("then closes every row to a session that has only the email code", async () => {
+    const emailOnly = session(S_EMAIL, "aal1");
+    await as(
+      "authenticated",
+      D,
+      async () => {
+        expect((await rows(`select public.second_step_pending() as p`))[0]!.p).toBe(true);
+        for (const t of ["profiles", "plaid_items", "coinbase_links", "calendar_feeds"]) expect(await rows(`select * from public.${t}`)).toEqual([]);
+        expect(await refused(`insert into public.plaid_items (user_id, item_id, sealed_token) values ($1, 'sneak', $2)`, [D, SEALED])).toBe(true);
+        await rows(`update public.profiles set totp_factor_id = null where user_id = $1`, [D]);
+        await rows(`delete from public.plaid_items where user_id = $1`, [D]);
+        expect(await refused(`select public.delete_my_account()`)).toBe(true);
+        // What it may learn is which authenticator to ask for.
+        expect((await rows(`select public.my_second_step_factor() as f`))[0]!.f).toBe(F1);
+      },
+      emailOnly,
+    );
+    // None of that landed.
+    expect((await rows(`select totp_factor_id from public.profiles where user_id = $1`, [D]))[0]!.totp_factor_id).toBe(F1);
+    expect((await rows(`select count(*)::int as n from public.plaid_items where user_id = $1`, [D]))[0]!.n).toBe(1);
+    expect((await rows(`select count(*)::int as n from auth.users where id = $1`, [D]))[0]!.n).toBe(1);
+  });
+
+  it("opens them only to a session that passed the registered authenticator, by the token AND by Supabase's own record", async () => {
+    expect(await seesOwnBank(session(S_PASSED, "aal2"))).toBe(true);
+    // A different authenticator on the same account doesn't count.
+    expect(await seesOwnBank(session(S_OTHER, "aal2"))).toBe(false);
+    // A token claiming aal2 for a session Supabase has at aal1 doesn't count; nor an aal1 token for a passed session.
+    expect(await seesOwnBank(session(S_EMAIL, "aal2"))).toBe(false);
+    expect(await seesOwnBank(session(S_PASSED, "aal1"))).toBe(false);
+    // A session Supabase still has at aal1 doesn't count, whatever factor it names and whatever the token claims.
+    expect(await seesOwnBank(session(S_HALF, "aal2"))).toBe(false);
+    // Nor a token without a session at all.
+    expect(await seesOwnBank({ aal: "aal2" })).toBe(false);
+  });
+
+  it("leaves connected apps readable (and still read-only), since they were approved behind the second step", async () => {
+    const app = { ...CONNECTED_APP, ...session(S_EMAIL, "aal1") };
+    expect(await seesOwnBank(app)).toBe(true);
+    await as("authenticated", D, () => rows(`delete from public.plaid_items where user_id = $1`, [D]), app);
+    expect((await rows(`select count(*)::int as n from public.plaid_items where user_id = $1`, [D]))[0]!.n).toBe(1);
+  });
+
+  it("is off again once the registered authenticator is removed, and a passed session can turn it off", async () => {
+    await rows(`update auth.mfa_factors set status = 'unverified' where id = $1`, [F1]);
+    expect(await seesOwnBank(session(S_EMAIL, "aal1"))).toBe(true);
+    await rows(`update auth.mfa_factors set status = 'verified' where id = $1`, [F1]);
+    expect(await seesOwnBank(session(S_EMAIL, "aal1"))).toBe(false);
+    await as("authenticated", D, () => rows(`update public.profiles set totp_factor_id = null where user_id = $1`, [D]), session(S_PASSED, "aal2"));
+    expect(await seesOwnBank(session(S_EMAIL, "aal1"))).toBe(true);
+  });
+
+  it("keeps its checks out of reach of anyone signed out", async () => {
+    await as("anon", null, async () => {
+      expect(await refused(`select public.second_step_pending()`)).toBe(true);
+      expect(await refused(`select public.my_second_step_factor()`)).toBe(true);
+      expect(await refused(`select public.check_totp_registration()`)).toBe(true);
+    });
   });
 });

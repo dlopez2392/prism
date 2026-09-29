@@ -9,6 +9,7 @@ import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { DeleteAccount } from "@/components/delete-account";
 import { NameForm } from "@/components/name-form";
 import { SignOutButton } from "@/components/sign-in-form";
+import { TwoStepSettings } from "@/components/two-step";
 import { Card, CardHeader, PageHeader, StatusPill } from "@/components/ui";
 import { signOut } from "@/lib/server/auth-actions";
 import { connectingEnabled, MCP_PATH } from "@/lib/server/connected-apps";
@@ -25,7 +26,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const email = data.account.email ?? "your account";
   const firstName = data.account.firstName;
   const welcome = (await searchParams).welcome === "1" && !firstName;
-  const [endpoint, enabled, apps] = await Promise.all([requestOrigin().then((o) => `${o}${MCP_PATH}`), connectingEnabled(supabaseEnv()!), connectedApps()]);
+  const [endpoint, enabled, apps, twoStepFactor] = await Promise.all([
+    requestOrigin().then((o) => `${o}${MCP_PATH}`),
+    connectingEnabled(supabaseEnv()!),
+    connectedApps(),
+    registeredFactor(),
+  ]);
   const banks = data.institutions.filter((i) => i.source === "plaid").length;
   const coinbase = data.institutions.some((i) => i.source === "coinbase");
 
@@ -68,6 +74,18 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         </ul>
       </Card>
 
+      <section id="two-step" className="scroll-mt-6">
+        <Card className="p-5 sm:p-6">
+          <CardHeader
+            title="Two-step sign-in"
+            subtitle="Add a code from an authenticator app on your phone to every sign-in, so your email alone can't open Prism."
+          />
+          <div className="mt-4">
+            <TwoStepSettings factorId={twoStepFactor} supabase={supabaseEnv()!} />
+          </div>
+        </Card>
+      </section>
+
       <section id="ai" className="scroll-mt-6">
         <Card className="p-5 sm:p-6">
           <CardHeader
@@ -84,6 +102,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       </Card>
     </div>
   );
+}
+
+/** The authenticator behind two-step sign-in (one Supabase still has as verified), or null when it's off. */
+async function registeredFactor(): Promise<string | null> {
+  const account = await currentAccount();
+  if (!account) return null;
+  const { data } = await account.supabase.rpc("my_second_step_factor");
+  return typeof data === "string" ? data : null;
 }
 
 /** The apps this person has let in, newest first — or null when they can't be listed right now. */

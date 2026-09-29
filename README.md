@@ -123,6 +123,13 @@ How it's kept safe:
   computer can't sweep someone else's bank into your account.
 - **Delete account** revokes every bank at Plaid and Coinbase at Coinbase, then
   deletes the person and every row of theirs.
+- **Two-step sign-in** with any authenticator app (Account page). Once it's
+  on, the database itself refuses every row of the account to a session that
+  hasn't passed the person's own authenticator, so a stolen email code opens
+  nothing. Codes are checked in the browser, because Supabase requires a
+  code's challenge and answer to come from the same address; turning it off
+  needs a code from the last five minutes. Verified end to end against the
+  live project.
 
 ## Ask AI about your money (MCP)
 
