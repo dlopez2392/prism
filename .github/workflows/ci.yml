@@ -38,6 +38,7 @@ jobs:
           PLAID_SECRET: ci-placeholder
           PLAID_ENV: production
           PRISM_VAULT_KEY: Y2ktcGxhY2Vob2xkZXItMzItYnl0ZXMtLS0tLS0tLS0=
+          PRISM_VAULT_KEY_2: Y2ktcGxhY2Vob2xkZXItcmVwbGFjZW1lbnQta2V5LTI=
           COINBASE_CLIENT_ID: ci-placeholder
           COINBASE_CLIENT_SECRET: ci-placeholder
       - run: pnpm build

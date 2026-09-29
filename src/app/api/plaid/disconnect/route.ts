@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { plaidConfig, removeItem } from "@/lib/plaid/client";
 import { loadAccount, removeAccountPlaidItem } from "@/lib/server/account-store";
 import { sameOriginJson } from "@/lib/server/request-guard";
-import { cookieOptions, open, seal, VAULT_COOKIE, vaultKey } from "@/lib/server/vault";
+import { cookieOptions, open, seal, VAULT_COOKIE, vaultKey, type VaultKey } from "@/lib/server/vault";
 import { currentAccount } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   if (refused) return NextResponse.json({ error: "bad_request", message: refused }, { status: 400 });
 
   const config = plaidConfig();
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = config ? vaultKey() : null;
   } catch (e) {

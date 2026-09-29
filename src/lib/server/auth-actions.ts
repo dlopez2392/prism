@@ -16,7 +16,7 @@ import { landingAfterSignIn, NEXT_COOKIE, safeNext } from "@/lib/profile";
 import { currentAccount, secondStepPending, supabaseServer, twoStepPath } from "@/lib/supabase/server";
 import { liveCoinbaseToken, loadAccount } from "./account-store";
 import { requestOrigin } from "./origin";
-import { vaultKey } from "./vault";
+import { vaultKey, type VaultKey } from "./vault";
 
 export type SignInState =
   | { step: "email"; email?: string; error?: string }
@@ -105,7 +105,7 @@ export async function deleteAccount(_prev: DeleteState, form: FormData): Promise
     .toLowerCase();
   if (!account.email || typed !== account.email.toLowerCase()) return { error: "Type your email address exactly to confirm." };
 
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {

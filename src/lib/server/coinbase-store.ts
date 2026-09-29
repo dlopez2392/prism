@@ -13,7 +13,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { refreshTokens, type CoinbaseConfig, type TokenSet } from "@/lib/coinbase/client";
 import type { Env } from "@/lib/plaid/client";
-import { openJson, sealJson } from "./vault";
+import { openJson, sealJson, type VaultKey } from "./vault";
 
 export const COINBASE_COOKIE = "prism-coinbase";
 export const COINBASE_OAUTH_COOKIE = "prism-coinbase-oauth";
@@ -28,13 +28,13 @@ type Pending = { v: 1; state: string; verifier: string; redirectUri: string; cre
 
 const str = (x: unknown): x is string => typeof x === "string" && x.length > 0 && x.length < 4096;
 
-export function readLink(raw: string | undefined, key: Buffer): CoinbaseLink | null {
+export function readLink(raw: string | undefined, key: VaultKey): CoinbaseLink | null {
   const v = openJson(raw, key) as Record<string, unknown> | null;
   if (!v || v.v !== 1 || !str(v.accessToken) || !str(v.refreshToken) || !Number.isFinite(v.expiresAt) || !str(v.linkedAt)) return null;
   return { v: 1, accessToken: v.accessToken, refreshToken: v.refreshToken, expiresAt: v.expiresAt as number, linkedAt: v.linkedAt };
 }
 
-export function sealLink(tokens: TokenSet, linkedAt: string, key: Buffer): string {
+export function sealLink(tokens: TokenSet, linkedAt: string, key: VaultKey): string {
   const link: CoinbaseLink = { v: 1, ...tokens, linkedAt };
   return sealJson(link, key);
 }
@@ -56,7 +56,7 @@ export function isExpired(link: TokenSet, now = Date.now()): boolean {
  */
 export async function refreshLink(
   raw: string | undefined,
-  key: Buffer,
+  key: VaultKey,
   config: CoinbaseConfig,
   fetchImpl: typeof fetch = fetch,
   now = Date.now(),
@@ -74,7 +74,7 @@ export async function refreshLink(
 const b64url = (b: Buffer) => b.toString("base64url");
 
 /** A fresh sign-in attempt: the sealed cookie value, and what goes in the authorize URL. */
-export function startSignIn(redirectUri: string, key: Buffer, now = Date.now()): { cookie: string; state: string; challenge: string } {
+export function startSignIn(redirectUri: string, key: VaultKey, now = Date.now()): { cookie: string; state: string; challenge: string } {
   const state = b64url(randomBytes(24));
   const verifier = b64url(randomBytes(48));
   const challenge = b64url(createHash("sha256").update(verifier).digest());
@@ -83,7 +83,7 @@ export function startSignIn(redirectUri: string, key: Buffer, now = Date.now()):
 }
 
 /** The pending sign-in, if this browser started one in the last ten minutes and `state` matches it. */
-export function finishSignIn(raw: string | undefined, state: string | null, key: Buffer, now = Date.now()): { verifier: string; redirectUri: string } | null {
+export function finishSignIn(raw: string | undefined, state: string | null, key: VaultKey, now = Date.now()): { verifier: string; redirectUri: string } | null {
   const p = openJson(raw, key) as Pending | null;
   if (!p || p.v !== 1 || !str(p.state) || !str(p.verifier) || !str(p.redirectUri) || !Number.isFinite(p.createdAt)) return null;
   if (now - p.createdAt > PENDING_TTL_MS || now < p.createdAt) return null;

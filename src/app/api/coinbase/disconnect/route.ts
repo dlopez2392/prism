@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { coinbaseConfig, refreshTokens, revokeToken } from "@/lib/coinbase/client";
 import { COINBASE_COOKIE, needsRefresh, readLink } from "@/lib/server/coinbase-store";
 import { sameOriginJson } from "@/lib/server/request-guard";
-import { vaultKey } from "@/lib/server/vault";
+import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { liveCoinbaseToken, loadAccount, removeAccountCoinbase } from "@/lib/server/account-store";
 import { currentAccount } from "@/lib/supabase/server";
 
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   if (refused) return NextResponse.json({ error: "bad_request", message: refused }, { status: 400 });
 
   const config = coinbaseConfig();
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {

@@ -11,14 +11,14 @@ import { currentAccount } from "@/lib/supabase/server";
 import { accountFeedToken, removeAccountFeed, saveFeedSnapshot } from "./account-store";
 import { feedSnapshot } from "@/lib/finance/calendar";
 import { getFinance } from "./finance";
-import { vaultKey } from "./vault";
+import { vaultKey, type VaultKey } from "./vault";
 
 export type FeedState = { path: string | null; error?: string };
 
 export async function calendarFeed(prev: FeedState, form: FormData): Promise<FeedState> {
   const account = await currentAccount();
   if (!account) return { path: null, error: "Sign in to get a calendar link." };
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {

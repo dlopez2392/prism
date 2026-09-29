@@ -12,7 +12,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { CalendarOptions } from "@/lib/finance/calendar";
 import { feedTokenHash, openFeedSnapshot } from "@/lib/server/feed-token";
-import { vaultKey } from "@/lib/server/vault";
+import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { calendarResponse } from "@/lib/server/calendar-response";
 import { supabaseEnv } from "@/lib/supabase/config";
 
@@ -27,7 +27,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
 
   const db = createClient(env.url, env.key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await db.rpc("calendar_feed_snapshot", { p_token_hash: feedTokenHash(token) });
-  let key: Buffer | null = null;
+  let key: VaultKey | null = null;
   try {
     key = vaultKey();
   } catch {
