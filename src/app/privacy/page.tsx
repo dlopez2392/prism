@@ -62,6 +62,10 @@ export default function PrivacyPage() {
               password.
             </li>
             <li>Coinbase, if you connect it: your crypto balances, read-only.</li>
+            <li>
+              Connecting either needs a {BRAND.product} account. The connection is kept in your account, where your sign-in (and two-step sign-in, if you turn
+              it on) protects it, and deleting your account removes it.
+            </li>
           </Bullets>
           <p className="font-semibold text-ink-1">What you set up</p>
           <Bullets>
@@ -147,7 +151,11 @@ export default function PrivacyPage() {
               When you delete your account, we disconnect every bank and Coinbase link first, then erase your account and everything in it. Encrypted database
               backups roll off shortly after.
             </li>
-            <li>Using {BRAND.product} without an account keeps your data on your device, in the cookies listed below. Clearing this site&apos;s data removes it.</li>
+            <li>
+              Using {BRAND.product} without an account keeps your budgets and goals on your device, in the cookies listed below. Clearing this site&apos;s data
+              removes them. A bank or Coinbase connected on a device before connecting needed an account stays there, encrypted, until you sign in, which moves it
+              into your account, or until it expires.
+            </li>
           </Bullets>
         </Section>
 

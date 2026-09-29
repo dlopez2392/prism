@@ -8,7 +8,7 @@
 import { BRAND } from "@/lib/brand";
 
 /** Shown on the page. Change it whenever the policy's substance changes. */
-export const POLICY_UPDATED = "September 28, 2026";
+export const POLICY_UPDATED = "September 29, 2026";
 
 /** Where privacy questions and requests go. Must be a mailbox someone reads. */
 export const PRIVACY_CONTACT = BRAND.privacyEmail;
@@ -33,9 +33,19 @@ export const STORED_ON_DEVICE: StoredOnDevice[] = [
     setByLibrary: true,
   },
   { name: "prism-next", kind: "Cookie", what: "Remembers what you were doing when sign-in interrupted it, such as approving an AI app.", lasts: "15 minutes" },
-  { name: "prism-vault", kind: "Cookie", what: "Banks you connected on this device without an account, encrypted so only Prism's server can read it.", lasts: "30 days" },
+  {
+    name: "prism-vault",
+    kind: "Cookie",
+    what: "A bank connected on this device before connecting one needed an account, encrypted so only Prism's server can read it. Signing in moves it into your account.",
+    lasts: "30 days",
+  },
   { name: "__Host-prism-bank-return", kind: "Cookie", what: "Holds your connection in place while your bank signs you in on its own website.", lasts: "Up to 1 hour" },
-  { name: "prism-coinbase", kind: "Cookie", what: "Your Coinbase connection on this device without an account, encrypted.", lasts: "400 days" },
+  {
+    name: "prism-coinbase",
+    kind: "Cookie",
+    what: "A Coinbase connection made on this device before connecting one needed an account, encrypted. Signing in moves it into your account.",
+    lasts: "400 days",
+  },
   { name: "prism-coinbase-oauth", kind: "Cookie", what: "Keeps a Coinbase sign-in secure while it's in progress.", lasts: "10 minutes" },
   { name: "prism-budgets", kind: "Cookie", what: "Budgets you set on this device without an account.", lasts: "400 days" },
   { name: "prism-goals", kind: "Cookie", what: "Goals you set on this device without an account.", lasts: "400 days" },

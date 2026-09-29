@@ -4,6 +4,7 @@
 // it once the bank is linked.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { VAULT_COOKIE } from "@/lib/server/vault";
 import { readReturn, RETURN_COOKIE } from "./return";
 
 vi.mock("server-only", () => ({}));
@@ -145,5 +146,80 @@ describe("a bank that signs people in on its own website", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true, institutionName: "Platypus OAuth Bank" });
     expect(jar.has(RETURN_COOKIE)).toBe(false);
+  });
+});
+
+// Who may connect a bank at all (src/lib/linking.ts). With accounts on, a signed-out
+// request gets nowhere near Plaid and leaves nothing in the browser.
+describe("connecting a bank needs an account", () => {
+  const vaultSet = () => jar.has(VAULT_COOKIE);
+  beforeEach(() => {
+    jar.clear();
+    cleared.clear();
+    signedIn.current = null;
+    allowList = [];
+    addAccountPlaidItem.mockClear();
+    plaid.mockClear();
+    vi.stubGlobal("fetch", plaid);
+    vi.stubEnv("PLAID_CLIENT_ID", "id");
+    vi.stubEnv("PLAID_SECRET", "secret");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+  const accountsOn = () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://ref.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+  };
+
+  it("refuses to open Link for someone signed out, before Plaid is asked for anything", async () => {
+    accountsOn();
+    const res = await post(linkToken, "/api/plaid/link-token", { from: "/budgets" });
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: "sign_in_required" });
+    expect(plaid).not.toHaveBeenCalled();
+    expect(vaultSet()).toBe(false);
+  });
+
+  it("refuses to save a bank for someone signed out, even holding a genuine public token", async () => {
+    accountsOn();
+    const res = await post(exchange, "/api/plaid/exchange", { publicToken: "public-sandbox-77aa" });
+    expect(res.status).toBe(401);
+    expect(plaid).not.toHaveBeenCalled();
+    expect(vaultSet()).toBe(false);
+    expect(addAccountPlaidItem).not.toHaveBeenCalled();
+  });
+
+  it("links a signed-in account's bank into the account, never into a cookie", async () => {
+    accountsOn();
+    signedIn.current = { userId: "u1", email: "a@x.test" };
+    expect((await post(linkToken, "/api/plaid/link-token", { from: "/" })).status).toBe(200);
+    expect(sentToPlaid()[0]!.user).toEqual({ client_user_id: "u1" });
+    expect((await post(exchange, "/api/plaid/exchange", { publicToken: "public-sandbox-77aa" })).status).toBe(200);
+    expect(addAccountPlaidItem).toHaveBeenCalledTimes(1);
+    expect(vaultSet()).toBe(false);
+  });
+
+  it("never links a real (production) bank without accounts, even where accounts aren't set up", async () => {
+    // A real deployment always has its own key, so the refusal below is the
+    // account gate's, not a missing key's.
+    vi.stubEnv("PLAID_ENV", "production");
+    vi.stubEnv("PRISM_VAULT_KEY", Buffer.alloc(32, 7).toString("base64"));
+    const res = await post(linkToken, "/api/plaid/link-token", { from: "/" });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ error: "accounts_required" });
+    const saved = await post(exchange, "/api/plaid/exchange", { publicToken: "public-production-77aa" });
+    expect(saved.status).toBe(503);
+    expect(await saved.json()).toMatchObject({ error: "accounts_required" });
+    expect(plaid).not.toHaveBeenCalled();
+    expect(vaultSet()).toBe(false);
+  });
+
+  it("still links the sandbox into this device where accounts are off, so Prism can be developed", async () => {
+    expect((await post(linkToken, "/api/plaid/link-token", { from: "/" })).status).toBe(200);
+    expect((await post(exchange, "/api/plaid/exchange", { publicToken: "public-sandbox-77aa" })).status).toBe(200);
+    expect(vaultSet()).toBe(true);
   });
 });

@@ -49,6 +49,15 @@
   `supabase/migrations/` and must keep `src/lib/supabase/schema.test.ts`
   (PGlite) green. `getFinance()` reads the account when signed in, the device
   otherwise; actions read through the UNCACHED `readSources()`.
+- Connecting real money needs an account (`src/lib/linking.ts`). With
+  accounts on, the link-token, exchange and both Coinbase routes refuse a
+  signed-out caller BEFORE Plaid or Coinbase is asked for anything, and the
+  Connect buttons send them to `/sign-in?why=bank|coinbase&next=…`. With
+  accounts off, only Plaid's sandbox links into the device cookie. Never
+  write a new `prism-vault` or `prism-coinbase` cookie for anything real: the
+  cookie readers stay only for links made before this rule, until sign-in
+  moves them into the account. `link-routes.test.ts` and
+  `coinbase/routes.test.ts` hold every gate.
 - The sign-in form asks for the email and NOTHING else — an optional field
   beside it is where people type passwords (it happened). Anything more about
   the person is asked after sign-in and validated for what it is: the first

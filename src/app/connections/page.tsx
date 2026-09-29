@@ -13,6 +13,7 @@ import { Card, CardHeader, PageHeader, Pill, StatusPill, type Status } from "@/c
 import { money0 } from "@/lib/finance/format";
 import { coinbaseConfig } from "@/lib/coinbase/client";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/finance/integrations";
+import { signInToConnect } from "@/lib/linking";
 import type { Institution } from "@/lib/finance/types";
 import { getFinance } from "@/lib/server/finance";
 import { vaultKey } from "@/lib/server/vault";
@@ -41,6 +42,7 @@ const COINBASE_OUTCOME: Record<string, { status: Status; text: string }> = {
   expired: { status: "warn", text: "That Coinbase sign-in took too long or started in another browser. Try again from here." },
   failed: { status: "warn", text: "Coinbase didn't finish connecting. Try again in a minute." },
   not_configured: { status: "neutral", text: "Coinbase isn't switched on for this version of Prism yet." },
+  accounts_required: { status: "neutral", text: "Connecting Coinbase needs a Prism account, and accounts aren't set up on this site." },
 };
 
 /** Coinbase keys plus a vault key to seal its tokens — both, or the button stays hidden. */
@@ -61,6 +63,8 @@ function synced(at: string | null, today: string): string {
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const data = await getFinance();
+  // Real money connects only to an account (src/lib/linking.ts): signed out, the button goes to sign-in first.
+  const signInFirst = data.accountsEnabled && !data.account;
   const outcomeKey = (await searchParams).coinbase;
   const outcome = typeof outcomeKey === "string" ? COINBASE_OUTCOME[outcomeKey] : undefined;
   const cbReady = coinbaseReady();
@@ -90,7 +94,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             You sign in on your bank&apos;s own screen through Plaid, the network behind most US money apps. Prism gets read-only access — it can
             see balances and transactions, and it can never move money.
           </p>
-          <ConnectBank variant="hero" label="Connect a bank" className="mt-5" />
+          <ConnectBank variant="hero" label={signInFirst ? "Sign in to connect a bank" : "Connect a bank"} signInFirst={signInFirst} className="mt-5" />
         </Card>
 
         <Card className="p-5 sm:p-6 lg:col-span-5">
@@ -167,11 +171,11 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                           ) : (
                             // A plain link: the trip to Coinbase is a full-page navigation.
                             <a
-                              href="/api/coinbase/connect"
+                              href={signInFirst ? signInToConnect("coinbase", "/connections") : "/api/coinbase/connect"}
                               className="mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-ctl border border-line-strong px-3.5 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
                             >
                               <Plus aria-hidden className="size-4" />
-                              Connect Coinbase
+                              {signInFirst ? "Sign in to connect Coinbase" : "Connect Coinbase"}
                             </a>
                           )
                         ) : null}
