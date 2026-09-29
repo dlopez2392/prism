@@ -152,6 +152,17 @@ export function redirectUriFor(env: Env, origin: string, plaidEnv: PlaidEnv): { 
 }
 
 /**
+ * What Link asks for. Every one of these READS: the Terms of Service promise
+ * that Prism can never move money, and terms.test.ts holds these to a
+ * read-only list. A product that could pay, transfer or verify identity is a
+ * change to the Terms and the privacy policy first.
+ */
+export const LINK_PRODUCTS = ["transactions"] as const;
+export const LINK_OPTIONAL_PRODUCTS = ["investments", "liabilities"] as const;
+/** The Terms say accounts are for people in the United States. */
+export const LINK_COUNTRIES = ["US"] as const;
+
+/**
  * `webhookUrl` is where Plaid announces new transactions (PLAID_WEBHOOK_URL
  * overrides it); `redirectUri` is where a bank's own sign-in page sends the
  * person back (see redirectUriFor).
@@ -167,10 +178,10 @@ export async function createLinkToken(
     // The name Plaid Link shows: "Prism uses Plaid to connect your account".
     client_name: BRAND.product,
     language: "en",
-    country_codes: ["US"],
-    products: ["transactions"],
+    country_codes: [...LINK_COUNTRIES],
+    products: [...LINK_PRODUCTS],
     // Asked for when the institution supports them; never blocks the link.
-    optional_products: ["investments", "liabilities"],
+    optional_products: [...LINK_OPTIONAL_PRODUCTS],
     transactions: { days_requested: 730 },
   };
   if (opts.redirectUri) body.redirect_uri = opts.redirectUri;

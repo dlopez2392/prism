@@ -11,8 +11,8 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { Ban, KeyRound, Lock, ShieldCheck, Trash2, type LucideIcon } from "lucide-react";
+import { Bullets, legalLink as link, Section, ShortVersion } from "@/components/legal";
 import { Card, PageHeader } from "@/components/ui";
 import { BRAND } from "@/lib/brand";
 import { POLICY_UPDATED, PRIVACY_CONTACT, PROVIDERS, STORED_ON_DEVICE } from "@/lib/privacy";
@@ -30,42 +30,13 @@ const SHORT_VERSION: { icon: LucideIcon; text: string }[] = [
   { icon: Trash2, text: "Delete your account any time. We disconnect every bank first, then erase your data." },
 ];
 
-const link = "font-semibold text-accent-ink hover:underline";
-
-function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
-  return (
-    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24 border-t border-line pt-6 first:border-t-0 first:pt-0">
-      <h2 id={`${id}-title`} className="text-lg font-bold tracking-tight text-ink-1">
-        {title}
-      </h2>
-      <div className="mt-2 space-y-3 text-sm leading-relaxed text-ink-2">{children}</div>
-    </section>
-  );
-}
-
-function Bullets({ children }: { children: ReactNode }) {
-  return <ul className="list-disc space-y-1.5 pl-5 marker:text-ink-3">{children}</ul>;
-}
-
 export default function PrivacyPage() {
   const mail = <a href={`mailto:${PRIVACY_CONTACT}`} className={link}>{PRIVACY_CONTACT}</a>;
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader eyebrow="Legal" title="Privacy policy" subtitle={`Last updated ${POLICY_UPDATED}. How ${BRAND.product} handles your money data, in plain words.`} />
 
-      <Card className="p-5 sm:p-6">
-        <h2 className="text-[15px] font-bold tracking-tight text-ink-1">The short version</h2>
-        <ul className="mt-3 space-y-2.5">
-          {SHORT_VERSION.map(({ icon: Icon, text }) => (
-            <li key={text} className="flex items-start gap-3 text-sm text-ink-1">
-              <span aria-hidden className="grid size-7 shrink-0 place-items-center rounded-ctl bg-accent-soft text-accent">
-                <Icon className="size-4" />
-              </span>
-              <span className="pt-1">{text}</span>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      <ShortVersion items={SHORT_VERSION} />
 
       <Card as="article" className="mt-5 space-y-6 p-5 sm:p-8">
         <Section id="who" title="Who we are">

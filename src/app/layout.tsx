@@ -97,6 +97,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Link href="/privacy" className="font-semibold text-ink-2 hover:underline">
                     Privacy policy
                   </Link>
+                  {" · "}
+                  <Link href="/terms" className="font-semibold text-ink-2 hover:underline">
+                    Terms
+                  </Link>
                 </span>
               </footer>
             </main>
