@@ -9,7 +9,7 @@ import { SignInForm } from "@/components/sign-in-form";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { safeNext } from "@/lib/profile";
-import { currentAccount } from "@/lib/supabase/server";
+import { awaitingSecondStep, currentAccount, twoStepPath } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -27,6 +27,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   const next = safeNext(params.next);
   if (await currentAccount()) redirect(next ?? "/account");
+  if (await awaitingSecondStep()) redirect(twoStepPath(next));
   const linkError = params.error === "link";
 
   return (

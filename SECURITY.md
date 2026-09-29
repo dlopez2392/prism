@@ -4,7 +4,12 @@ Prism handles people's financial data, so we take reports of security problems s
 
 ## Reporting a vulnerability
 
-Email **privacy@bis-rgv.com** with "Security" in the subject line. Please include:
+Report it privately in either of two ways:
+
+- on GitHub: this repository's **Security** tab → **Report a vulnerability**; or
+- by email to **privacy@bis-rgv.com**, with "Security" in the subject line.
+
+Please include:
 
 - what you found, and where (a URL, an endpoint, or a file in this repository);
 - the steps to reproduce it; and

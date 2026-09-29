@@ -81,6 +81,7 @@ export default function PrivacyPage() {
             <li>Your email address, to sign you in with a one-time code. There is no password.</li>
             <li>Your first name, if you give it, so Prism can greet you.</li>
             <li>Your time zone, so &ldquo;today&rdquo; and &ldquo;this month&rdquo; match yours.</li>
+            <li>If you turn on two-step sign-in, the secret your authenticator app shares with us. Our sign-in provider keeps it, to check your codes.</li>
           </Bullets>
           <p className="font-semibold text-ink-1">Money you choose to connect</p>
           <Bullets>
@@ -159,6 +160,10 @@ export default function PrivacyPage() {
             <li>Our database is encrypted at rest, and every account can reach only its own data.</li>
             <li>AI apps you connect are read-only. The database itself refuses any change they try to make.</li>
             <li>Sign-in uses a one-time code sent to your email, so there&apos;s no password to steal.</li>
+            <li>
+              You can add two-step sign-in with an authenticator app. Then your email alone can&apos;t open your account: until the second code is entered, the
+              database refuses to show or change any of your data.
+            </li>
           </Bullets>
           <p>No system is perfectly secure. If a breach ever affects your information, we&apos;ll tell you as the law requires.</p>
         </Section>
