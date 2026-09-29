@@ -46,10 +46,12 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
   const accountNames = Object.fromEntries(data.accounts.map((a) => [a.id, a.name]));
   const inWindow = txns.filter((t) => t.date >= w.from && t.date <= w.to);
   // Category fixes live in an account and rename the person's own money, never the example household's.
-  const canFix = data.account !== null && data.source !== "demo";
+  const canFix = data.account !== null && data.source !== "demo" && data.view === "me";
   const fixHint = canFix
     ? null
-    : data.account
+    : data.view === "household"
+      ? "Each person fixes their own categories. Switch to Me to fix yours."
+      : data.account
       ? "Connect a bank, and you can fix any category Prism gets wrong."
       : data.accountsEnabled
         ? "Wrong category? Sign in and connect your bank to fix it, and Prism remembers it for next time."

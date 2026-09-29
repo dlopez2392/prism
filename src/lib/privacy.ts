@@ -50,6 +50,13 @@ export const STORED_ON_DEVICE: StoredOnDevice[] = [
   { name: "prism-budgets", kind: "Cookie", what: "Budgets you set on this device without an account.", lasts: "400 days" },
   { name: "prism-goals", kind: "Cookie", what: "Goals you set on this device without an account.", lasts: "400 days" },
   { name: "prism-carryover", kind: "Cookie", what: "Remembers that you chose to decide later about moving this device's budgets and goals into your account.", lasts: "30 days" },
+  { name: "prism-view", kind: "Cookie", what: "Whether you're looking at your own money or your household's.", lasts: "1 year" },
+  {
+    name: "prism-household-invite",
+    kind: "Browser storage",
+    what: "Holds a household invitation you opened while you sign in to accept it, in that tab only.",
+    lasts: "Until you accept it or close the tab",
+  },
   { name: "prism-tz", kind: "Cookie", what: "Your time zone, so days and months line up with yours.", lasts: "1 year" },
   { name: "prism-theme", kind: "Browser storage", what: "Whether you picked light or dark.", lasts: "Until you clear it" },
 ];

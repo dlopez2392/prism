@@ -10,13 +10,16 @@ import Link from "next/link";
 import { Gauge, House, KeyRound, Landmark, Lock, Plus, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
 import { DisconnectButton } from "@/components/disconnect-button";
+import { ShareAccounts, type ShareableAccount } from "@/components/household";
 import { Card, CardHeader, PageHeader, Pill, StatusPill, type Status } from "@/components/ui";
 import { money0 } from "@/lib/finance/format";
 import { coinbaseConfig } from "@/lib/coinbase/client";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/finance/integrations";
 import { signInToConnect } from "@/lib/linking";
 import type { Institution } from "@/lib/finance/types";
-import { getFinance } from "@/lib/server/finance";
+import { getPersonalFinance } from "@/lib/server/finance";
+import { loadShares } from "@/lib/server/household-store";
+import { currentAccount } from "@/lib/supabase/server";
 import { vaultKey } from "@/lib/server/vault";
 
 export const metadata: Metadata = { title: "Connections" };
@@ -63,7 +66,22 @@ function synced(at: string | null, today: string): string {
 }
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const data = await getFinance();
+  const data = await getPersonalFinance();
+  const joined = (await searchParams).joined === "1";
+  const shares = data.inHousehold ? await myShares() : [];
+  const institutionName = new Map(data.institutions.map((i) => [i.id, i.name]));
+  // Only the person's own money, and only what the household can be shown without anyone's access.
+  const shareable: ShareableAccount[] =
+    data.source === "demo"
+      ? []
+      : data.accounts.map((a) => ({
+          id: a.id,
+          name: a.name,
+          detail: `${institutionName.get(a.institutionId) ?? ""}${a.mask ? ` ·· ${a.mask}` : ""}`,
+          itemId: a.source === "plaid" ? a.institutionId : null,
+          shareable: a.source === "plaid" || a.source === "manual",
+          why: "Coinbase can't be shared yet: it loads live, with your own access.",
+        }));
   // Real money connects only to an account (src/lib/linking.ts): signed out, the button goes to sign-in first.
   const signInFirst = data.accountsEnabled && !data.account;
   const outcomeKey = (await searchParams).coinbase;
@@ -144,6 +162,26 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         </ul>
       </Card>
 
+      {data.inHousehold ? (
+        <section id="share" className="scroll-mt-6">
+          <Card className="p-5 sm:p-6">
+            <CardHeader
+              title="Shared with your household"
+              subtitle={
+                joined
+                  ? "Welcome to the household. Nothing of yours is shared yet: choose what they see."
+                  : "Private until you share it. They see a shared account's balances and transactions, never a way into your bank."
+              }
+            />
+            {shares === null ? (
+              <p className="mt-3 text-sm text-ink-3">We couldn&apos;t load what you share just now. Try again in a minute.</p>
+            ) : (
+              <ShareAccounts accounts={shareable} shared={shares} />
+            )}
+          </Card>
+        </section>
+      ) : null}
+
       <section aria-labelledby="catalog">
         <h2 id="catalog" className="mb-1 text-lg font-extrabold tracking-tight">
           Everything Prism can connect to
@@ -213,4 +251,15 @@ function Assurance({ icon: Icon, title, body }: { icon: LucideIcon; title: strin
       </div>
     </li>
   );
+}
+
+/** The account ids this person shares; null when they can't be read right now. */
+async function myShares(): Promise<string[] | null> {
+  const account = await currentAccount();
+  if (!account) return [];
+  try {
+    return [...(await loadShares(account)).keys()];
+  } catch {
+    return null;
+  }
 }

@@ -28,7 +28,8 @@ export default async function NetWorthPage() {
   const data = await getFinance();
   const series = netWorthSeries(data.accounts, data.today);
   // What a person adds by hand lives in their account; the example household's is only for show.
-  const canAdd = data.account !== null;
+  // In the Household view, everyone's things are shown, and each person edits their own from Me.
+  const canAdd = data.account !== null && data.view === "me";
   const editable = new Map(canAdd && data.source !== "demo" ? data.manual.map((i) => [`manual-${i.id}`, i]) : []);
 
   if (data.accounts.length === 0) {
@@ -69,10 +70,14 @@ export default async function NetWorthPage() {
       };
     });
   const credit = data.credit;
+  const household = data.view === "household";
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Net worth" subtitle="Everything you own, minus everything you owe — and how it's moving." />
+      <PageHeader
+        title="Net worth"
+        subtitle={household ? "Everything your household shares: what it owns, minus what it owes — and how it's moving." : "Everything you own, minus everything you owe — and how it's moving."}
+      />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card hero className="flex flex-col justify-between p-5 sm:p-6 lg:col-span-4">
@@ -103,11 +108,11 @@ export default async function NetWorthPage() {
           ) : null}
           <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-ctl bg-[var(--on-hero-faint)] p-3">
-              <dt className="text-xs text-[var(--on-hero-soft)]">You own</dt>
+              <dt className="text-xs text-[var(--on-hero-soft)]">{household ? "Together you own" : "You own"}</dt>
               <dd className="mt-0.5 text-lg font-bold">{money0(now.assets)}</dd>
             </div>
             <div className="rounded-ctl bg-[var(--on-hero-faint)] p-3">
-              <dt className="text-xs text-[var(--on-hero-soft)]">You owe</dt>
+              <dt className="text-xs text-[var(--on-hero-soft)]">{household ? "Together you owe" : "You owe"}</dt>
               <dd className="mt-0.5 text-lg font-bold">{money0(now.debts)}</dd>
             </div>
           </dl>
@@ -225,6 +230,8 @@ export default async function NetWorthPage() {
           >
             {tiles.length ? (
               <TreemapChart tiles={tiles} height={300} ariaLabel="Investment holdings sized by value" />
+            ) : household ? (
+              <EmptyState icon={Landmark} title="Holdings aren't shared yet" body="Shared investment accounts count toward the total. What each one holds shows in its owner's own view, for now." />
             ) : (
               <EmptyState icon={Landmark} title="No investments linked" body="Link a brokerage or retirement account and each holding becomes a tile sized by its value." />
             )}

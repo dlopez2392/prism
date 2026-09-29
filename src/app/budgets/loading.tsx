@@ -17,7 +17,7 @@ export default function BudgetsLoading() {
         {[0, 1, 2].map((i) => (
           <li key={i}>
             <Frame className="flex items-center gap-4">
-              <Bone className="size-[92px] shrink-0 rounded-full" />
+              <Bone className="size-[92px] shrink-0 rounded-pill" />
               <div className="flex-1 space-y-2">
                 <Bone className="h-4 w-24" />
                 <Bone className="h-6 w-32" />

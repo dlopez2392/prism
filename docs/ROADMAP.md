@@ -68,7 +68,13 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    and save a what-if amount; the plan lives in two validated cookies on this
    browser (`prism-budgets`, `prism-goals`). Once accounts exist, import that
    plan into the account on first sign-in, then retire the cookies.
-4. **Household views** ("yours, mine, ours").
+4. **Household views** ("yours, mine, ours"). **Shared accounts built
+   (2026-09-29):** up to four adults, each with their own login, join by an
+   invitation link; each shares account by account (private until shared);
+   a Me / Household switch shows everyone's shared balances and
+   transactions, labelled by whose they are. Data is shared, never access:
+   members see each other's last stored copy, never a bank token. **Next:**
+   household budgets and goals; sharing Coinbase.
 5. **A fallback aggregator** (Finicity or MX) for when a bank's Plaid
    connection breaks.
 6. **The committed integrations above**, with the MCP server (#6) as soon as

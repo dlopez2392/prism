@@ -20,10 +20,11 @@ import { applyPlan, type Plan } from "@/lib/finance/plan";
 import { feedSnapshot } from "@/lib/finance/calendar";
 import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/finance/types";
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
-import { needsSync, syncTransactions, type StoredSync, type SyncState } from "@/lib/plaid/sync";
+import { needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction, suggestedLimit } from "@/lib/plaid/map";
-import { NO_RULES, recategorize, type CategoryRules } from "@/lib/finance/category-rules";
-import { manualAccount, manualInstitution, type ManualItem } from "@/lib/finance/manual";
+import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
+import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
+import { householdData, narrowTo, type MemberMoney } from "@/lib/finance/household";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
 import { coinbaseNeedsSignIn, mapCoinbase } from "@/lib/coinbase/map";
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
@@ -31,7 +32,8 @@ import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveAccountTimeZone, saveFeedSnapshot } from "./account-store";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
-import { open, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
+import { loadShares, loadSharedMoney, type SharedMoneyRow } from "./household-store";
+import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
 
 export type Loaded = FinanceData & {
   /** A problem worth a banner — the data shown is still real, just incomplete. */
@@ -49,6 +51,10 @@ export type Loaded = FinanceData & {
   carryover: string[];
   /** What the signed-in person added by hand, as they entered it, for the editor on Net worth. */
   manual: ManualItem[];
+  /** Whose money this is: the person's own, or what their household shared. */
+  view: "me" | "household";
+  /** They're in a household, so the Me / Household switch applies. */
+  inHousehold: boolean;
 };
 
 export function hourIn(zone: string | undefined, now = new Date()): number {
@@ -110,6 +116,8 @@ export type Sources = {
   categories: CategoryRules;
   /** What they own or owe that no bank reports, added by hand. A device keeps none. */
   manual: ManualItem[];
+  /** They're in a household. A device never is. */
+  inHousehold: boolean;
   items: VaultItem[];
   /** A live Coinbase access token — or null for a dead link — fetched on demand. */
   coinbase: { config: CoinbaseConfig; token: () => Promise<string | null> } | null;
@@ -156,6 +164,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       plan: a.plan,
       categories: a.categories,
       manual: a.manual,
+      inHousehold: a.inHousehold,
       items: plaid ? a.items : [],
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
@@ -185,6 +194,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     plan: readPlan(jar),
     categories: NO_RULES,
     manual: [],
+    inHousehold: false,
     items: plaid ? vaultItems(jar) : [],
     coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
     feedUpdatedAt: null,
@@ -223,7 +233,7 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "view" | "inHousehold">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
@@ -257,7 +267,26 @@ function greeted(base: Live, firstName: string | null, live: boolean): Live {
   return { ...base, household: { name: firstName && live ? `${firstName}'s household` : base.household.name, firstName: firstName ?? "there" } };
 }
 
+/** "household" while the person looks at their household's shared money; anything else is their own. */
+export const VIEW_COOKIE = "prism-view";
+
+/** The person's own money whatever the switch says: budgets, goals, connections and the account are theirs alone. */
+export const getPersonalFinance = cache(async (): Promise<Loaded> => (await ownMoney()).loaded);
+
+/** The page's money, as the Me / Household switch has it. */
 export const getFinance = cache(async (): Promise<Loaded> => {
+  // One load of the person's own money per request, whichever of the two a layout and its page ask for.
+  const { loaded, base, src, today } = await ownMoney();
+  if ((await cookies()).get(VIEW_COOKIE)?.value !== "household" || !src.account || !src.inHousehold) return loaded;
+  try {
+    // After the calendar's refresh in ownMoney: the feed is only ever the person's own bills.
+    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? base : null, today)), notice: base.notice, view: "household" };
+  } catch {
+    return { ...loaded, notice: "We couldn't load your household just now. This is your own money." };
+  }
+});
+
+const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sources; today: ISODate }> => {
   const jar = await cookies();
   const zone = jar.get("prism-tz")?.value;
   const today = todayIn(zone);
@@ -272,7 +301,7 @@ export const getFinance = cache(async (): Promise<Loaded> => {
     rememberZone(src.account, src.timeZone, zone);
   }
   // The person's own edits win over seeded or drafted budgets and goals.
-  return {
+  const personal: Loaded = {
     ...applyPlan(base, src.plan),
     localHour,
     planEdited,
@@ -280,8 +309,47 @@ export const getFinance = cache(async (): Promise<Loaded> => {
     account: src.account ? { email: src.account.email, firstName: src.firstName, calendarFeed: src.feedUpdatedAt !== null } : null,
     carryover: carryoverOf(jar, src.account !== null),
     manual: src.manual,
+    view: "me",
+    inHousehold: src.inHousehold,
   };
+  return { loaded: personal, base, src, today };
 });
+
+/**
+ * The Household view: my shared accounts, and each other member's, from the
+ * sealed copies the database hands back (never a token), opened here and
+ * narrowed to exactly what each of them shared.
+ */
+async function householdFor(account: Account, mine: Live | null, today: ISODate): Promise<FinanceData> {
+  const key = safeVaultKey();
+  const [shares, rows] = await Promise.all([loadShares(account), loadSharedMoney(account)]);
+  const others = key ? rows.map((r) => openMember(r, key, today)) : [];
+  const own = mine ?? emptyLive(today, plaidConfig() !== null);
+  return householdData(own, new Set(shares.keys()), "You", others);
+}
+
+function openMember(row: SharedMoneyRow, key: VaultKey, today: ISODate): MemberMoney {
+  const rules = row.sealedCategoryRules ? validCategoryRules(openPacked(row.sealedCategoryRules, key)) : NO_RULES;
+  const institutions: Institution[] = [];
+  const accounts: FinanceData["accounts"] = [];
+  const transactions: FinanceData["transactions"] = [];
+  for (const item of row.items) {
+    const state = validState(openPacked(item.sealedSync, key));
+    if (!state?.accounts) continue;
+    const txns = state.transactions.map(mapTransaction);
+    transactions.push(...txns);
+    accounts.push(...state.accounts.map((a) => mapAccount(a, item.itemId, txns, today)));
+    // "As of" is their last visit: nobody else's visit syncs their bank.
+    institutions.push({ id: item.itemId, name: item.institutionName ?? "Their bank", health: "healthy", lastSyncedAt: item.syncedAt, source: "plaid" });
+  }
+  const manual = row.sealedManualItems ? validManualItems(openPacked(row.sealedManualItems, key)) : [];
+  if (manual.length) {
+    institutions.push(manualInstitution());
+    accounts.push(...manual.map((i) => manualAccount(i, today)));
+  }
+  const all = { institutions, accounts, transactions: recategorize(transactions, rules) };
+  return { userId: row.userId, name: row.firstName ?? "Household member", ...narrowTo(all, new Set(row.sharedAccountIds)) };
+}
 
 /**
  * Keep the account's time zone current, so a connected app's "this month" is

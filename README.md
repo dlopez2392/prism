@@ -104,7 +104,10 @@ Signed out, Prism works as before: a demo household, with budgets and goals
 kept on the device. Signed in, banks, Coinbase, budgets, goals and a private
 calendar link live in the person's account. Connecting a bank or Coinbase
 needs an account (`src/lib/linking.ts`); pressing Connect while signed out
-goes to sign-in first and comes back.
+goes to sign-in first and comes back. Up to four adults can form a
+**household** (Account page): each keeps their own login, chooses account by
+account what to share (Connections), and flips between **Me** and
+**Household** in the top bar.
 
 1. Create a Supabase project and apply `supabase/migrations/*.sql`.
 2. Authentication → URL configuration: Site URL `https://<your-domain>`, and
@@ -126,6 +129,12 @@ How it's kept safe:
   the feed's secret.
 - **Tokens are sealed before they're stored** with `PRISM_VAULT_KEY`, which the
   database never sees.
+- **A household shares data, never access.** Another member sees only the
+  accounts someone chose to share, from that person's last stored (sealed)
+  copy: never a bank token, never a bank they share nothing from, and nothing
+  at all through a connected app or before the second step. An invitation is
+  a link whose secret the database keeps only as a sha256, usable once, for
+  seven days, by the email it names. Leaving stops every share at once.
 - **Moving device data into an account asks first**, so signing in on a shared
   computer can't sweep someone else's bank into your account.
 - **Delete account** revokes every bank at Plaid and Coinbase at Coinbase, then
@@ -260,7 +269,8 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
-| **Connections** | Per-institution health, how data is protected, and an honest catalogue of every integration and its real access path |
+| **Connections** | Per-institution health, how data is protected, an honest catalogue of every integration and its real access path, and, in a household, **Shared / Private** for each of the person's accounts |
+| **Household** | Overview, Cash flow, Spending, Future and Net worth over what every member shared, each account marked with whose it is; invitations and members on the Account page, and a join page for the link |
 
 ## How it's built
 

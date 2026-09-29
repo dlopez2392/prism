@@ -70,6 +70,7 @@ export default function PrivacyPage() {
           <p className="font-semibold text-ink-1">What you set up</p>
           <Bullets>
             <li>Your budgets and goals.</li>
+            <li>Your household, if you join one: who is in it, and which of your accounts you share with them.</li>
             <li>Things you add yourself, such as your home, a car or a loan, and what you say they&apos;re worth, stored encrypted.</li>
             <li>Categories you fix, such as &ldquo;everything at this shop is groceries&rdquo;, so Prism files your purchases where you put them. They name the shops, so they&apos;re stored encrypted, like your transactions.</li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
@@ -118,6 +119,11 @@ export default function PrivacyPage() {
                 Account
               </Link>{" "}
               page.
+            </li>
+            <li>
+              <span className="font-semibold text-ink-1">People in your household</span>, if you join one. They see the balances and transactions of
+              the accounts you choose to share, and nothing else: not your other accounts, not your bank sign-in, and never a way into your bank. You
+              can stop sharing an account, or leave the household, at any time, and it takes effect at once.
             </li>
             <li>
               <span className="font-semibold text-ink-1">Your calendar app</span>, if you subscribe to the bills feed. It reads your upcoming bills and paydays,

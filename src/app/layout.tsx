@@ -5,6 +5,7 @@ import { CarryoverBanner } from "@/components/carryover-banner";
 import { HalfwayBanner } from "@/components/halfway-banner";
 import { ThemeToggle, THEME_SCRIPT } from "@/components/theme-toggle";
 import { ConnectBank } from "@/components/connect-bank";
+import { ViewSwitch } from "@/components/household";
 import { BisMark } from "@/components/bis-mark";
 import { BRAND } from "@/lib/brand";
 import { getFinance } from "@/lib/server/finance";
@@ -39,7 +40,12 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const data = await getFinance();
   const halfway = data.accountsEnabled && !data.account && (await awaitingSecondStep()) !== null;
-  const sourceLabel = data.source === "demo" ? "Demo household" : `${data.institutions.length} ${data.institutions.length === 1 ? "connection" : "connections"}`;
+  const sourceLabel =
+    data.view === "household"
+      ? `Household · ${data.accounts.length} shared`
+      : data.source === "demo"
+        ? "Demo household"
+        : `${data.institutions.length} ${data.institutions.length === 1 ? "connection" : "connections"}`;
   const accountNav: AccountNav = data.accountsEnabled ? { signedIn: data.account !== null, email: data.account?.email ?? null } : null;
   return (
     <html lang="en" suppressHydrationWarning>
@@ -56,7 +62,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <span className="text-lg font-extrabold tracking-tight">{BRAND.product}</span>
               </Link>
               <div className="hidden text-sm text-ink-3 lg:block">
-                {data.source === "demo" ? (
+                {data.view === "household" ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="size-2 rounded-pill bg-accent" aria-hidden />
+                    Your household: what everyone has chosen to share
+                  </span>
+                ) : data.source === "demo" ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="size-2 rounded-full bg-accent" aria-hidden />
                     You&apos;re viewing a demo household — nothing here is real money.
@@ -69,6 +80,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {data.inHousehold ? (
+                  <div className="hidden sm:block">
+                    <ViewSwitch view={data.view} />
+                  </div>
+                ) : null}
                 <ConnectBank label="Connect" signInFirst={accountNav?.signedIn === false} className="sm:hidden" />
                 <ConnectBank signInFirst={accountNav?.signedIn === false} className="hidden sm:block" />
                 <ThemeToggle />
@@ -81,6 +97,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Link href="/connections" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
                   Fix it
                 </Link>
+              </div>
+            ) : null}
+            {/* On a phone the header has no room for the switch; it sits just under it. */}
+            {data.inHousehold ? (
+              <div className="px-4 pt-3 sm:hidden">
+                <ViewSwitch view={data.view} />
               </div>
             ) : null}
             {halfway ? <HalfwayBanner /> : null}
