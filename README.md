@@ -241,6 +241,8 @@ select what, key_id, count(*) from (
   select 'calendar bills', case when snapshot->>'sealed' like 'j2.%' then substr(snapshot->>'sealed', 4, 8) else 'unnamed' end from calendar_feeds where snapshot ? 'sealed'
   union all
   select 'category fixes', case when sealed_category_rules like 'z2.%' then substr(sealed_category_rules, 4, 8) else 'unnamed' end from profiles where sealed_category_rules is not null
+  union all
+  select 'added by hand', case when sealed_manual_items like 'z2.%' then substr(sealed_manual_items, 4, 8) else 'unnamed' end from profiles where sealed_manual_items is not null
 ) seals group by what, key_id order by what, key_id;
 ```
 
@@ -257,7 +259,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete |
-| **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors |
+| **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
 | **Connections** | Per-institution health, how data is protected, and an honest catalogue of every integration and its real access path |
 
 ## How it's built

@@ -6,6 +6,7 @@
 // "sync broke silently" is the most common reason people quit these apps.
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Gauge, House, KeyRound, Landmark, Lock, Plus, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
 import { DisconnectButton } from "@/components/disconnect-button";
@@ -127,7 +128,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               </div>
               <div className="num shrink-0 text-right text-sm font-bold text-ink-1 sm:w-28">{money0(total)}</div>
               <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
-                <StatusPill status={HEALTH[inst.health].status}>{HEALTH[inst.health].label}</StatusPill>
+                {inst.source === "manual" ? (
+                  // Nothing connects to it, so there's no health to report: it's edited where it's counted.
+                  <Link href="/net-worth" className="text-xs font-semibold text-accent-ink hover:underline">
+                    Edit on Net worth
+                  </Link>
+                ) : (
+                  <StatusPill status={HEALTH[inst.health].status}>{HEALTH[inst.health].label}</StatusPill>
+                )}
                 {inst.source === "plaid" ? <DisconnectButton itemId={inst.id} name={inst.name} /> : null}
                 {inst.source === "coinbase" ? <DisconnectButton itemId={inst.id} name={inst.name} endpoint="/api/coinbase/disconnect" /> : null}
               </div>
