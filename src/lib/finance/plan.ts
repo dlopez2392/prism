@@ -14,7 +14,7 @@
 
 import { SPEND_CATEGORIES } from "./categories";
 import { addDays, addMonths } from "./dates";
-import type { Budget, Cents, FinanceData, Goal, ISODate, SpendCategoryId } from "./types";
+import type { Account, AccountKind, Budget, Cents, FinanceData, Goal, ISODate, SpendCategoryId } from "./types";
 
 /** A goal as the person states it; `history` is derived, never stored. */
 export type GoalSettings = Omit<Goal, "history">;
@@ -87,6 +87,13 @@ export function validBudgets(x: unknown): Budget[] | null {
   return out.sort((a, b) => SPEND_CATEGORIES.indexOf(a.category) - SPEND_CATEGORIES.indexOf(b.category));
 }
 
+/** An account id a goal may name: a bank's, "manual-…", "coinbase", or a household's "<owner>:<id>". */
+const ACCOUNT_ID = /^[A-Za-z0-9._:-]{1,200}$/;
+
+/** What a goal can follow: money that's saved, never a home's value or a debt. */
+export const TRACKABLE_KINDS: readonly AccountKind[] = ["savings", "checking", "investment", "retirement", "crypto"];
+export const isTrackable = (a: Pick<Account, "kind">) => TRACKABLE_KINDS.includes(a.kind);
+
 export function validGoals(x: unknown): GoalSettings[] | null {
   if (!Array.isArray(x) || x.length > MAX_GOALS) return null;
   const ids = new Set<string>();
@@ -100,6 +107,7 @@ export function validGoals(x: unknown): GoalSettings[] | null {
     if (!GOAL_EMOJIS.includes(r.emoji as (typeof GOAL_EMOJIS)[number])) return null;
     if (!isInt(r.target, 1, MAX_TARGET) || !isInt(r.saved, 0, MAX_TARGET) || !isInt(r.monthlyContribution, 0, MAX_MONTHLY)) return null;
     if (!isISODate(r.targetDate) || !isInt(r.colorSlot, 1, 8)) return null;
+    if (r.accountId !== undefined && (typeof r.accountId !== "string" || !ACCOUNT_ID.test(r.accountId))) return null;
     ids.add(r.id);
     out.push({
       id: r.id,
@@ -110,6 +118,7 @@ export function validGoals(x: unknown): GoalSettings[] | null {
       monthlyContribution: r.monthlyContribution,
       targetDate: r.targetDate,
       colorSlot: r.colorSlot,
+      ...(typeof r.accountId === "string" ? { accountId: r.accountId } : {}),
     });
   }
   return out;
@@ -125,6 +134,7 @@ export function goalSettings(g: Goal): GoalSettings {
     monthlyContribution: g.monthlyContribution,
     targetDate: g.targetDate,
     colorSlot: g.colorSlot,
+    ...(g.accountId ? { accountId: g.accountId } : {}),
   };
 }
 
@@ -145,8 +155,27 @@ export function applyPlan<T extends FinanceData>(data: T, plan: Plan): T {
   return {
     ...data,
     budgets: plan.budgets ?? data.budgets,
-    goals: plan.goals ? plan.goals.map((g) => toGoal(g, byId.get(g.id))) : data.goals,
+    goals: followAccounts(plan.goals ? plan.goals.map((g) => toGoal(g, byId.get(g.id))) : data.goals, data.accounts),
   };
+}
+
+/**
+ * Goals that follow an account take what's saved, month by month, from its
+ * balance: the progress chart shows the account's real past, not one point.
+ * A goal whose account isn't here (disconnected, or no longer shared) keeps
+ * the last amount known; the Goals page says so.
+ */
+export function followAccounts(goals: Goal[], accounts: Account[]): Goal[] {
+  if (!goals.some((g) => g.accountId)) return goals;
+  const byId = new Map(accounts.filter(isTrackable).map((a) => [a.id, a]));
+  return goals.map((g) => {
+    const a = g.accountId ? byId.get(g.accountId) : undefined;
+    if (!a) return g;
+    const clamp = (v: Cents) => Math.min(MAX_TARGET, Math.max(0, Math.round(v)));
+    const saved = clamp(a.balance);
+    const history = a.history.length ? [...a.history.slice(0, -1).map(clamp), saved] : [saved];
+    return { ...g, saved, history };
+  });
 }
 
 /** The lowest colour slot no other goal wears, so two goals never share one. */
@@ -224,7 +253,10 @@ export function readGoalForm(form: FormData, today: ISODate): { goal: GoalInput 
     else if (c > max) errors[key] = tooBig;
     return c ?? 0;
   };
+  const account = text("account");
+  if (account !== "" && !ACCOUNT_ID.test(account)) errors.account = "Pick an account from the list.";
   const target = money("target", true, MAX_TARGET, "That's more than $10,000,000.");
+  // A goal that follows an account sends that account's balance here, as the last amount known.
   const saved = money("saved", false, MAX_TARGET, "That's more than $10,000,000.");
   const monthlyContribution = money("monthly", false, MAX_MONTHLY, "That's more than $1,000,000 a month.");
   if (!errors.target && target === 0) errors.target = "The target needs to be more than $0.";
@@ -236,7 +268,8 @@ export function readGoalForm(form: FormData, today: ISODate): { goal: GoalInput 
   if (!targetDate || month < first || month > last) errors.targetDate = "Pick a month from this one onward.";
 
   if (Object.keys(errors).length) return { errors };
-  return { goal: { name: name!, emoji, target, saved, monthlyContribution, targetDate: targetDate! } };
+  // accountId is always present, undefined when the goal is entered by hand, so an edit can unlink.
+  return { goal: { name: name!, emoji, target, saved, monthlyContribution, targetDate: targetDate!, accountId: account || undefined } };
 }
 
 /** What an editor shows after a save: nothing yet, a confirmation, or what to fix. */

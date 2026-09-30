@@ -171,6 +171,15 @@ describe("get_budgets and get_goals", () => {
     const g = goals(data);
     expect(g.goals).toHaveLength(data.goals.length);
     for (const x of g.goals) expect(typeof x.on_track).toBe("boolean");
+    expect(g.goals.every((x) => x.follows_account === null)).toBe(true);
+  });
+
+  it("say which account a goal's savings follow, and when that account is gone", () => {
+    const data = demo();
+    const savings = data.accounts.find((a) => a.kind === "savings")!;
+    const [first, second, ...rest] = data.goals;
+    const g = goals({ ...data, goals: [{ ...first!, accountId: savings.id }, { ...second!, accountId: "gone" }, ...rest] });
+    expect(g.goals.map((x) => x.follows_account).slice(0, 2)).toEqual([savings.name, "an account that isn't connected any more"]);
   });
 });
 

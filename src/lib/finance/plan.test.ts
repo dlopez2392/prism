@@ -3,6 +3,8 @@ import { buildDemoData } from "./demo";
 import {
   applyPlan,
   cleanGoalName,
+  followAccounts,
+  isTrackable,
   dollarsInput,
   goalId,
   goalSettings,
@@ -203,5 +205,53 @@ describe("readGoalForm", () => {
     expect(out).toEqual({
       errors: { name: expect.any(String), emoji: expect.any(String), target: expect.any(String), monthly: expect.any(String) },
     });
+  });
+});
+
+describe("goals that follow an account", () => {
+  const demo = buildDemoData(TODAY);
+  const savings = demo.accounts.find((a) => a.kind === "savings")!;
+  const card = demo.accounts.find((a) => a.kind === "credit")!;
+
+  it("store the account they follow, and nothing that isn't an account id", () => {
+    expect(validGoals([goal({ accountId: "u-sam:acc_9Xz-1.b" })])).toEqual([goal({ accountId: "u-sam:acc_9Xz-1.b" })]);
+    expect(validGoals([goal()])![0]).not.toHaveProperty("accountId");
+    for (const bad of ["", "has space", "<script>", 42, "x".repeat(201)]) expect(validGoals([goal({ accountId: bad as string })])).toBeNull();
+    expect(goalSettings({ ...goal({ accountId: savings.id }), history: [1] })).toMatchObject({ accountId: savings.id });
+  });
+
+  it("take what's saved, month by month, from the account's balance", () => {
+    const [g] = followAccounts([{ ...goal({ accountId: savings.id, saved: 1 }), history: [1] }], demo.accounts);
+    expect(g!.saved).toBe(savings.balance);
+    expect(g!.history).toEqual(savings.history.map((v) => Math.max(0, v)));
+    expect(g!.history.at(-1)).toBe(g!.saved);
+  });
+
+  it("keep the last amount known when the account is gone, and never follow a debt or a home", () => {
+    const gone = { ...goal({ accountId: "disconnected", saved: 12_300 }), history: [12_300] };
+    expect(followAccounts([gone], demo.accounts)).toEqual([gone]);
+    expect(isTrackable(card)).toBe(false);
+    const onCard = { ...goal({ accountId: card.id, saved: 5 }), history: [5] };
+    expect(followAccounts([onCard], demo.accounts)[0]!.saved).toBe(5);
+  });
+
+  it("never count below zero, even if a checking account is overdrawn", () => {
+    const overdrawn = { ...savings, kind: "checking" as const, balance: -2_000, history: [500, -2_000] };
+    const [g] = followAccounts([{ ...goal({ accountId: savings.id }), history: [0] }], [overdrawn]);
+    expect(g).toMatchObject({ saved: 0, history: [500, 0] });
+  });
+
+  it("are filled in by applyPlan, for the person's own goals", () => {
+    const data = applyPlan(demo, { budgets: null, goals: [goal({ accountId: savings.id, saved: 1 })] });
+    expect(data.goals[0]!.saved).toBe(savings.balance);
+  });
+
+  it("come from the form, and a blank choice unlinks", () => {
+    const base = { name: "Trip", emoji: "🗾", target: "5000", saved: "1200.50", monthly: "200", month: "3", year: "2028" };
+    expect(readGoalForm(form({ ...base, account: "u-sam:acc-1" }), TODAY)).toMatchObject({ goal: { accountId: "u-sam:acc-1", saved: 120_050 } });
+    const unlinked = readGoalForm(form({ ...base, account: "" }), TODAY);
+    expect(unlinked).toMatchObject({ goal: { saved: 120_050 } });
+    expect("goal" in unlinked && "accountId" in unlinked.goal && unlinked.goal.accountId === undefined).toBe(true);
+    expect(readGoalForm(form({ ...base, account: "not an id!" }), TODAY)).toEqual({ errors: { account: expect.any(String) } });
   });
 });

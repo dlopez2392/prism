@@ -309,6 +309,8 @@ export function goals(data: AgentData) {
         projected_finish: p.projectedDate,
         on_track: p.onTrack,
         monthly_needed_to_hit_target_date: usd(p.neededMonthly),
+        // "saved" is that account's balance when the goal follows one; otherwise the person typed it.
+        follows_account: g.accountId ? (data.accounts.find((a) => a.id === g.accountId)?.name ?? "an account that isn't connected any more") : null,
       };
     }),
   };

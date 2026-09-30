@@ -43,21 +43,23 @@ describe("narrowing to what's shared", () => {
 });
 
 describe("the Household view", () => {
-  const h = householdData(mine, new Set(["joint"]), "You", [sam]);
+  const h = householdData(mine, new Set(["joint"]), { userId: "u-me", name: "You" }, [sam]);
 
   it("shows my shared account and everything Sam shared, and nothing I kept private", () => {
     expect(h.accounts.map((a) => a.name)).toEqual(["Joint Checking", "Rewards Visa", "Our house"]);
     expect(JSON.stringify(h)).not.toContain("My Savings");
     expect(JSON.stringify(h)).not.toContain("Secret Bank");
-    expect(h.transactions.map((t) => t.id)).toEqual(["u-sam:t9", "t1"]);
+    expect(h.transactions.map((t) => t.id)).toEqual(["u-sam:t9", "u-me:t1"]);
   });
 
   it("says whose each one is", () => {
     expect(h.institutions.map((i) => i.name)).toEqual(["Northwind Bank · You", "Summit Card · Sam", "Added by you · Sam"]);
   });
 
-  it("keeps another member's ids apart from mine, so the same name for two people's things never collides", () => {
-    const alsoMine = householdData({ ...mine, accounts: [...mine.accounts, { ...acct("manual-our-house", "manual", "Our house", 1), source: "manual" }] }, new Set(["manual-our-house"]), "You", [sam]);
+  it("namespaces every id by its owner, mine too, so an id means one account to everyone and nothing collides", () => {
+    expect(h.accounts.map((a) => a.id)).toEqual(["u-me:joint", "u-sam:card", "u-sam:manual-our-house"]);
+    expect(h.holdings.map((x) => x.accountId)).toEqual(["u-me:joint"]);
+    const alsoMine = householdData({ ...mine, accounts: [...mine.accounts, { ...acct("manual-our-house", "manual", "Our house", 1), source: "manual" }] }, new Set(["manual-our-house"]), { userId: "u-me", name: "You" }, [sam]);
     const houses = alsoMine.accounts.filter((a) => a.name === "Our house");
     expect(new Set(houses.map((a) => a.id)).size).toBe(2);
     const card = h.accounts.find((a) => a.name === "Rewards Visa")!;
@@ -72,7 +74,7 @@ describe("the Household view", () => {
   });
 
   it("is empty, not the example household, when nothing is shared yet", () => {
-    const none = householdData(mine, new Set(), "You", []);
+    const none = householdData(mine, new Set(), { userId: "u-me", name: "You" }, []);
     expect(none).toMatchObject({ source: "plaid", accounts: [], transactions: [], institutions: [] });
   });
 });

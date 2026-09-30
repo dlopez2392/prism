@@ -163,22 +163,34 @@ export function SelectInput({
   label,
   options,
   invalid,
+  showLabel = false,
+  onChange,
 }: {
   name: string;
   defaultValue: string;
   label: string;
   options: { value: string; label: string }[];
   invalid?: boolean;
+  /** Show the label above the field (a fieldset's legend usually names it instead). */
+  showLabel?: boolean;
+  onChange?: (value: string) => void;
 }) {
   // A sibling label, not a wrapping one: wrapped, the select's accessible
   // name swallowed every option ("MonthJanuaryFebruary…").
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="sr-only">
+      <label htmlFor={id} className={showLabel ? "mb-1 block text-[13px] font-semibold text-ink-2" : "sr-only"}>
         {label}
       </label>
-      <select id={id} name={name} defaultValue={defaultValue} aria-invalid={invalid ? true : undefined} className={clsx(control, "border-line-strong px-3 font-semibold")}>
+      <select
+        id={id}
+        name={name}
+        defaultValue={defaultValue}
+        onChange={onChange ? (e) => onChange(e.currentTarget.value) : undefined}
+        aria-invalid={invalid ? true : undefined}
+        className={clsx(control, "border-line-strong px-3 font-semibold")}
+      >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}

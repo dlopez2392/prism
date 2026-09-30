@@ -6,13 +6,15 @@
 // when signed out), or, in the Household view, to the household. The same form
 // serves all three: a new goal starts blank with a finish line a year out; an
 // existing one opens with its numbers and a two-step delete, because a goal's
-// history is the one thing an edit can't bring back.
+// history is the one thing an edit can't bring back. A goal can follow an
+// account instead of a typed amount: then what's saved IS that balance.
 
 import { startTransition, useActionState, useRef, useState, type FormEvent } from "react";
 import { CircleCheck, Pencil, PiggyBank, Plus, RotateCcw, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { buttonGhost, buttonPrimary, buttonSmall, Dialog, FormMessage, MoneyInput, SelectInput, TextInput } from "@/components/dialog";
 import { addMonths } from "@/lib/finance/dates";
+import { money0 } from "@/lib/finance/format";
 import { dollarsInput, GOAL_EMOJIS, GOAL_HORIZON_YEARS, GOAL_NAME_MAX, IDLE, type GoalSettings, type PlanFormState } from "@/lib/finance/plan";
 import { deleteGoal, restoreGoals, saveGoal } from "@/lib/server/plan-actions";
 
@@ -35,6 +37,9 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 
 type Mode = "new" | "edit" | "empty";
 
+/** An account a goal can follow: its balance becomes what's saved. */
+export type FollowableAccount = { id: string; name: string; detail: string; balance: number };
+
 export function GoalEditor({
   goal,
   others,
@@ -42,6 +47,7 @@ export function GoalEditor({
   mode,
   signedIn = false,
   household = false,
+  accounts = [],
 }: {
   goal?: GoalSettings;
   others: GoalSettings[];
@@ -50,6 +56,8 @@ export function GoalEditor({
   signedIn?: boolean;
   /** A household goal: saved for everyone in it. */
   household?: boolean;
+  /** Accounts the goal may follow (the whole list; ones other goals follow are left out here). */
+  accounts?: FollowableAccount[];
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
@@ -103,6 +111,7 @@ export function GoalEditor({
           today={today}
           signedIn={signedIn}
           household={household}
+          accounts={accounts}
           onDone={(message) => {
             setNotice(message);
             dialog.current?.close();
@@ -120,6 +129,7 @@ function GoalForm({
   today,
   signedIn,
   household,
+  accounts,
   onDone,
   onCancel,
 }: {
@@ -128,6 +138,7 @@ function GoalForm({
   today: string;
   signedIn: boolean;
   household: boolean;
+  accounts: FollowableAccount[];
   onDone: (message: string) => void;
   onCancel: () => void;
 }) {
@@ -138,6 +149,12 @@ function GoalForm({
   }, IDLE);
   const [confirming, setConfirming] = useState(false);
   const errors = state.status === "error" ? (state.fields ?? {}) : {};
+  // One account, one goal: the ones other goals follow aren't offered.
+  const free = accounts.filter((a) => !others.some((o) => o.id !== goal?.id && o.accountId === a.id));
+  const [follow, setFollow] = useState(goal?.accountId ?? "");
+  const followed = free.find((a) => a.id === follow);
+  // Still following an account that's gone (unshared, disconnected): keep the choice until they change it.
+  const gone = goal?.accountId && !accounts.some((a) => a.id === goal.accountId) ? goal.accountId : null;
 
   const taken = new Set(others.filter((g) => g.id !== goal?.id).map((g) => g.emoji));
   const emoji = goal?.emoji ?? GOAL_EMOJIS.find((e) => !taken.has(e)) ?? GOAL_EMOJIS[0];
@@ -189,9 +206,40 @@ function GoalForm({
           {errors.emoji ? <p className="mt-1 text-xs font-medium text-crit-ink">{errors.emoji}</p> : null}
         </fieldset>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        {free.length || gone ? (
+          <div>
+            <SelectInput
+              name="account"
+              label="Saved so far comes from"
+              showLabel
+              defaultValue={follow}
+              onChange={setFollow}
+              invalid={Boolean(errors.account)}
+              options={[
+                { value: "", label: "What I enter" },
+                ...free.map((a) => ({ value: a.id, label: `${a.name} · ${a.detail}` })),
+                ...(gone ? [{ value: gone, label: "The account it followed (not available now)" }] : []),
+              ]}
+            />
+            {errors.account ? <p className="mt-1 text-xs font-medium text-crit-ink">{errors.account}</p> : null}
+            {followed ? (
+              <p className="mt-1.5 text-xs text-ink-3">
+                {money0(followed.balance)} in {followed.name} today. What&apos;s saved follows its balance from now on, month by month.
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <input type="hidden" name="account" value="" />
+        )}
+
+        <div className={clsx("grid gap-4", follow ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
           <MoneyInput name="target" label="Target" defaultValue={goal ? dollarsInput(goal.target) : ""} placeholder="5,000" error={errors.target} />
-          <MoneyInput name="saved" label="Saved so far" defaultValue={goal ? dollarsInput(goal.saved) : ""} placeholder="0" error={errors.saved} />
+          {follow ? (
+            // The balance travels as the last amount known, shown if the account ever goes away.
+            <input type="hidden" name="saved" value={dollarsInput(followed ? Math.max(0, followed.balance) : (goal?.saved ?? 0))} />
+          ) : (
+            <MoneyInput name="saved" label="Saved so far" defaultValue={goal ? dollarsInput(goal.saved) : ""} placeholder="0" error={errors.saved} />
+          )}
           <MoneyInput name="monthly" label="Each month" defaultValue={goal ? dollarsInput(goal.monthlyContribution) : ""} placeholder="200" error={errors.monthly} />
         </div>
 
@@ -249,8 +297,8 @@ function GoalForm({
         </div>
       </div>
       <p className="mt-4 text-xs text-ink-3">
-        {household ? "Saved for your household: everyone in it can update it. " : signedIn ? "Saved to your account. " : "Saved in this browser only. "}Update what
-        you&apos;ve saved whenever you like.
+        {household ? "Saved for your household: everyone in it can update it. " : signedIn ? "Saved to your account. " : "Saved in this browser only. "}
+        {follow ? "What's saved updates itself from the account." : "Update what you've saved whenever you like."}
       </p>
     </form>
   );

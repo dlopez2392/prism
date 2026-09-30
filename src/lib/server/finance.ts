@@ -14,7 +14,7 @@ import { after } from "next/server";
 import { draftBudgets } from "@/lib/finance/budgets";
 import { buildDemoData } from "@/lib/finance/demo";
 import type { AgentData } from "@/lib/agent/tools";
-import { applyPlan, toGoal, type Plan } from "@/lib/finance/plan";
+import { applyPlan, followAccounts, toGoal, type Plan } from "@/lib/finance/plan";
 import { feedSnapshot } from "@/lib/finance/calendar";
 import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/finance/types";
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
@@ -327,13 +327,14 @@ async function householdFor(account: Account, mine: Live | null, today: ISODate)
   if (!plan) throw new Error("Not in a household any more.");
   const others = key ? rows.map((r) => openMember(r, key, today)) : [];
   const own = mine ?? emptyLive(today, plaidConfig() !== null);
-  const data = householdData(own, new Set(shares.keys()), "You", others);
+  const data = householdData(own, new Set(shares.keys()), { userId: account.userId, name: "You" }, others);
   const { budgets, goals, ...versions } = plan;
   return {
     ...data,
     // The household's own plan; until someone sets budgets, they're drafted from what the household shares.
     budgets: budgets ?? draftBudgets(data.transactions, today),
-    goals: (goals ?? []).map((g) => toGoal(g, undefined)),
+    // A household goal can follow any shared account; its id means the same account to every member.
+    goals: followAccounts((goals ?? []).map((g) => toGoal(g, undefined)), data.accounts),
     planEdited: { budgets: budgets !== null, goals: goals !== null },
     householdPlan: versions,
   };
