@@ -26,7 +26,7 @@ import { getFinance } from "@/lib/server/finance";
 export default async function OverviewPage() {
   const data = await getFinance();
   const a = analyze(data);
-  // What everyone shared: budgets stay each person's own for now.
+  // What everyone shared, paced against the household's own budgets.
   const household = data.view === "household";
   const lookup = new Map(data.transactions.map((t) => [t.id, t]));
 
@@ -137,42 +137,28 @@ export default async function OverviewPage() {
           sparkColor="var(--c-4)"
           foot={<span>{savedRate !== null ? `${Math.round(savedRate * 100)}% of income` : "No income yet this month"}</span>}
         />
-        {household ? (
-          // Budgets stay each person's own for now, so there's nothing measured to put here: say what IS shared.
-          <StatTile
-            label="Shared accounts"
-            value={String(data.accounts.length)}
-            change={<StatusPill status="neutral">Household budgets next</StatusPill>}
-            foot={
-              <Link href="/connections#share" className="font-semibold text-accent-ink hover:underline">
-                Choose what you share
+        <StatTile
+          label={household ? "Left in household budgets" : "Left in budgets"}
+          value={money0(Math.max(0, a.budgetTotals.remaining))}
+          foot={
+            a.budgetTotals.limit > 0 ? (
+              <span>of {money0(a.budgetTotals.limit)} for {monthLong(a.today)}</span>
+            ) : (
+              <Link href="/budgets" className="font-semibold text-accent-ink hover:underline">
+                Set a budget
               </Link>
-            }
-          />
-        ) : (
-          <StatTile
-            label="Left in budgets"
-            value={money0(Math.max(0, a.budgetTotals.remaining))}
-            foot={
-              a.budgetTotals.limit > 0 ? (
-                <span>of {money0(a.budgetTotals.limit)} for {monthLong(a.today)}</span>
-              ) : (
-                <Link href="/budgets" className="font-semibold text-accent-ink hover:underline">
-                  Set a budget
-                </Link>
-              )
-            }
-            change={
-              a.budgetTotals.limit === 0 ? (
-                <StatusPill status="neutral">No budgets yet</StatusPill>
-              ) : a.budgetTotals.projected > a.budgetTotals.limit ? (
-                <StatusPill status="warn">On pace to go over</StatusPill>
-              ) : (
-                <StatusPill status="good">On track</StatusPill>
-              )
-            }
-          />
-        )}
+            )
+          }
+          change={
+            a.budgetTotals.limit === 0 ? (
+              <StatusPill status="neutral">No budgets yet</StatusPill>
+            ) : a.budgetTotals.projected > a.budgetTotals.limit ? (
+              <StatusPill status="warn">On pace to go over</StatusPill>
+            ) : (
+              <StatusPill status="good">On track</StatusPill>
+            )
+          }
+        />
       </div>
 
       {/* Row 3 — pace and categories. */}
@@ -239,7 +225,7 @@ export default async function OverviewPage() {
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <div className="space-y-5 lg:col-span-5">
           <Card className="p-5 sm:p-6">
-            <CardHeader title="Everyday budgets" subtitle="Each ring fills as you spend" action={<SeeAll href="/budgets">All budgets</SeeAll>} />
+            <CardHeader title={household ? "Household budgets" : "Everyday budgets"} subtitle={household ? "Each ring fills as the household spends" : "Each ring fills as you spend"} action={<SeeAll href="/budgets">All budgets</SeeAll>} />
             {flex.length ? (
               <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row">
                 <ActivityRings
@@ -270,7 +256,7 @@ export default async function OverviewPage() {
                 </ul>
               </div>
             ) : household ? (
-              <EmptyState icon={Sparkles} title="Household budgets are next" body="Budgets are yours alone for now. Switch to Me to see yours, as rings that fill as you spend." />
+              <EmptyState icon={Sparkles} title="No household budgets yet" body="They're drafted once shared accounts have a month of spending, or set them on Budgets. Each appears here as a ring that fills as the household spends." />
             ) : (
               <EmptyState icon={Sparkles} title="No budgets yet" body="Budgets appear here as rings that fill as you spend." />
             )}

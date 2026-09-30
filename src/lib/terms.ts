@@ -8,7 +8,7 @@
 import { BRAND } from "@/lib/brand";
 
 /** Shown on the page. Change it whenever the Terms' substance changes. */
-export const TERMS_UPDATED = "September 29, 2026";
+export const TERMS_UPDATED = "September 30, 2026";
 
 /** Where questions about the Terms go. The same mailbox as privacy requests: one address people can remember. */
 export const TERMS_CONTACT = BRAND.privacyEmail;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { budgetStatuses, budgetTotals, daysLeftInMonth, typicalMonthlySpend } from "./budgets";
+import { budgetStatuses, budgetTotals, daysLeftInMonth, draftBudgets, typicalMonthlySpend } from "./budgets";
 import { monthly, tx } from "./test-helpers";
 
 const history = ["2026-06", "2026-07", "2026-08"];
@@ -63,5 +63,26 @@ describe("typicalMonthlySpend", () => {
     expect(typical.food).toBe(45_000);
     expect(typical.travel).toBe(0);
     expect(Object.keys(typical)).toHaveLength(9);
+  });
+});
+
+describe("draftBudgets", () => {
+  it("drafts one line per category that saw spending in the last three FULL months, rounded up to $25", () => {
+    const txns = [
+      tx("2026-06-30", -999_00, "Too old", "food"),
+      tx("2026-07-05", -100_00, "Grocer", "food"),
+      tx("2026-08-05", -110_00, "Grocer", "food"),
+      tx("2026-09-05", -120_00, "Grocer", "food"),
+      tx("2026-09-12", -5_00, "Bus", "transport"),
+      tx("2026-09-30", -400_00, "This month", "shopping"),
+      tx("2026-08-01", 2_000_00, "Payroll", "income"),
+    ];
+    expect(draftBudgets(txns, "2026-10-01")).toEqual([
+      { category: "food", limit: 125_00 },
+      { category: "transport", limit: 25_00 },
+      { category: "shopping", limit: 150_00 },
+    ]);
+    expect(draftBudgets(txns, "2026-09-15").map((b) => b.category)).toEqual(["food"]);
+    expect(draftBudgets([], "2026-10-01")).toEqual([]);
   });
 });

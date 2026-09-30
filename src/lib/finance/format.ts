@@ -100,3 +100,9 @@ export function monthYear(date: string): string {
 export function weekdayShort(dow: number): string {
   return WEEKDAYS[dow]!;
 }
+
+/** "Last changed by Sam on Sep 30." for a household list; null when nobody has changed it. */
+export function lastChanged(change: { by: string | null; at: string } | null | undefined): string | null {
+  if (!change || !/^\d{4}-\d{2}-\d{2}/.test(change.at)) return null;
+  return `Last changed by ${change.by ?? "a household member"} on ${shortDate(change.at.slice(0, 10))}.`;
+}

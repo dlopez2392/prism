@@ -5,7 +5,8 @@
 // other member's arrives already opened and narrowed to theirs (see
 // server/finance.ts). Every account and institution says whose it is, and
 // another member's ids are namespaced so two people's "Our house" never
-// collide. Budgets and goals stay personal for now: household ones come next.
+// collide. Nobody's own budgets or goals come along: the household's own
+// plan is applied on top by the loader (server/finance.ts).
 
 import type { Account, FinanceData, Institution, Transaction } from "./types";
 

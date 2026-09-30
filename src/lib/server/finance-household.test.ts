@@ -14,10 +14,13 @@ vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => ({ userId:
 const KEY = randomBytes(32);
 const month = new Date().toISOString().slice(0, 7);
 const bank = (id: string, name: string, current: number): PlaidAccount => ({ account_id: id, name, official_name: null, mask: null, type: "depository", subtype: "checking", balances: { available: current, current, iso_currency_code: "USD" } });
-const spend = (id: string, account: string, merchant: string, dollars: number): PlaidTransaction => ({ transaction_id: id, account_id: account, amount: dollars, date: `${month}-02`, name: merchant, merchant_name: merchant, pending: false, personal_finance_category: { primary: "FOOD_AND_DRINK", detailed: "x" } });
+const lastMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+const spend = (id: string, account: string, merchant: string, dollars: number, on = `${month}-02`): PlaidTransaction => ({ transaction_id: id, account_id: account, amount: dollars, date: on, name: merchant, merchant_name: merchant, pending: false, personal_finance_category: { primary: "FOOD_AND_DRINK", detailed: "x" } });
 const copy = (accounts: PlaidAccount[], transactions: PlaidTransaction[]) => ({ v: 1, cursor: "c", ready: true, accounts, transactions });
 
 const inHousehold = { current: true };
+const NO_PLAN = { budgets: null, goals: null, budgetsVersion: 0, goalsVersion: 0, budgetsChanged: null, goalsChanged: null };
+const plan = { current: NO_PLAN as unknown };
 const shared = { mine: new Map<string, string | null>([["joint", "item-me"]]), fails: false };
 vi.mock("./account-store", () => ({
   loadAccount: async () => ({
@@ -42,6 +45,7 @@ vi.mock("./household-store", async () => {
   const { sealPacked } = await import("./vault");
   return {
     loadShares: async () => shared.mine,
+    loadHouseholdPlan: async () => plan.current,
     loadSharedMoney: async () => {
       if (shared.fails) throw new Error("rpc failed");
       return [
@@ -51,7 +55,20 @@ vi.mock("./household-store", async () => {
           sharedAccountIds: ["sam-card"],
           sealedCategoryRules: sealPacked({ v: 1, merchants: { "gas & go": "transport" }, transactions: {} }, KEY),
           sealedManualItems: null,
-          items: [{ itemId: "item-sam", institutionName: "Summit Card", syncedAt: "2026-09-28T09:00:00Z", sealedSync: sealPacked(copy([bank("sam-card", "Rewards Visa", -300), bank("sam-private", "Sam's Savings", 50_000)], [spend("s1", "sam-card", "Gas & Go", 40), spend("s2", "sam-private", "Sam's secret", 99)]), KEY) }],
+          items: [
+            {
+              itemId: "item-sam",
+              institutionName: "Summit Card",
+              syncedAt: "2026-09-28T09:00:00Z",
+              sealedSync: sealPacked(
+                copy(
+                  [bank("sam-card", "Rewards Visa", -300), bank("sam-private", "Sam's Savings", 50_000)],
+                  [spend("s1", "sam-card", "Gas & Go", 40), spend("s0", "sam-card", "Corner Grocer", 1_200, `${lastMonth}-10`), spend("s2", "sam-private", "Sam's secret", 99), spend("s3", "sam-private", "Sam's secret", 9_000, `${lastMonth}-11`)],
+                ),
+                KEY,
+              ),
+            },
+          ],
         },
       ];
     },
@@ -63,6 +80,7 @@ describe("the Household view", () => {
     jar.clear();
     inHousehold.current = true;
     shared.fails = false;
+    plan.current = NO_PLAN;
     vi.stubEnv("PLAID_CLIENT_ID", "id");
     vi.stubEnv("PLAID_SECRET", "secret");
     vi.stubEnv("PRISM_VAULT_KEY", KEY.toString("base64"));
@@ -85,9 +103,33 @@ describe("the Household view", () => {
     for (const secret of ["My Savings", "Secret Gift", "Sam's Savings", "Sam's secret", "access-"]) expect(text).not.toContain(secret);
     // Sam's own category fixes apply to Sam's shared transactions.
     expect(data.transactions.find((t) => t.merchant === "Gas & Go")).toMatchObject({ category: "transport", bankCategory: "food" });
-    // Budgets are each person's own: none in the Household view, mine untouched in Me.
-    expect(data.budgets).toEqual([]);
+    // Nobody's own budgets or goals come along: until the household sets its own,
+    // they're drafted from what it shares (Sam's shared card, never his private savings).
+    expect(data.budgets).toEqual([{ category: "food", limit: 40_000 }]);
+    expect(data.goals).toEqual([]);
+    expect(data).toMatchObject({ planEdited: { budgets: false, goals: false }, householdPlan: { budgetsVersion: 0, goalsVersion: 0 } });
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the household's own budgets and goals once someone sets them, and says who", async () => {
+    jar.set("prism-view", "household");
+    plan.current = {
+      budgets: [{ category: "transport", limit: 20_000 }],
+      goals: [{ id: "trip", name: "Trip", emoji: "🗾", target: 500_000, saved: 50_000, monthlyContribution: 20_000, targetDate: "2027-06-30", colorSlot: 1 }],
+      budgetsVersion: 3,
+      goalsVersion: 5,
+      budgetsChanged: { by: "Sam", at: "2026-09-29T18:00:00Z" },
+      goalsChanged: null,
+    };
+    const { getFinance, getPersonalFinance } = await import("./finance");
+    const data = await getFinance();
+    expect(data.budgets).toEqual([{ category: "transport", limit: 20_000 }]);
+    expect(data.goals).toEqual([expect.objectContaining({ id: "trip", saved: 50_000, history: [50_000] })]);
+    expect(data).toMatchObject({ planEdited: { budgets: true, goals: true }, householdPlan: { budgetsVersion: 3, goalsVersion: 5, budgetsChanged: { by: "Sam" } } });
+    // Me is untouched: the person's own plan, and no household versions.
+    const me = await getPersonalFinance();
+    expect(me.budgets).toEqual([{ category: "food", limit: 30_000 }]);
+    expect(me.householdPlan).toBeNull();
   });
 
   it("keeps the personal pages personal, whatever the switch says", async () => {
@@ -121,6 +163,12 @@ describe("the Household view", () => {
     const data = await getFinance();
     expect(data.view).toBe("me");
     expect(data.notice).toMatch(/couldn't load your household/);
+    // Left the household between loading the account and loading its plan: their own money, said plainly.
+    vi.resetModules();
+    shared.fails = false;
+    plan.current = null;
+    const gone = await (await import("./finance")).getFinance();
+    expect(gone).toMatchObject({ view: "me", householdPlan: null, notice: expect.stringMatching(/couldn't load your household/) });
     expect(data.accounts.map((a) => a.name).sort()).toEqual(["Joint Checking", "My Savings"]);
   });
 });

@@ -9,6 +9,8 @@
 
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
+import { validBudgets, validGoals, type GoalSettings } from "@/lib/finance/plan";
+import type { Budget } from "@/lib/finance/types";
 import type { Account } from "@/lib/supabase/server";
 
 export const HOUSEHOLD_MAX = 4;
@@ -122,9 +124,72 @@ export async function loadSharedMoney(account: Account): Promise<SharedMoneyRow[
   }));
 }
 
-/** What went wrong, as the actions put it to the person; never the database's own words. */
+/** Who last changed one of the household's lists, and when; `by` is null once their account is gone. */
+export type PlanChange = { by: string | null; at: string };
+
+/**
+ * The household's budgets and goals, checked all-or-nothing like a person's
+ * own (null: never edited, or not a plan any more), each with the version a
+ * save must name and who changed it last.
+ */
+export type HouseholdPlan = {
+  budgets: Budget[] | null;
+  goals: GoalSettings[] | null;
+  budgetsVersion: number;
+  goalsVersion: number;
+  budgetsChanged: PlanChange | null;
+  goalsChanged: PlanChange | null;
+};
+
+/** The caller's household plan; null when they're in no household. Throws when it can't tell. */
+export async function loadHouseholdPlan(account: Account): Promise<HouseholdPlan | null> {
+  const { data, error } = await account.supabase.rpc("household_plan");
+  if (error) throw new HouseholdError("failed");
+  const row = ((data ?? []) as {
+    budgets: unknown;
+    goals: unknown;
+    budgets_version: number;
+    goals_version: number;
+    budgets_changed_by_name: string | null;
+    budgets_changed_at: string | null;
+    goals_changed_by_name: string | null;
+    goals_changed_at: string | null;
+  }[])[0];
+  if (!row) return null;
+  return {
+    budgets: validBudgets(row.budgets ?? undefined),
+    goals: validGoals(row.goals ?? undefined),
+    budgetsVersion: row.budgets_version,
+    goalsVersion: row.goals_version,
+    budgetsChanged: row.budgets_changed_at ? { by: row.budgets_changed_by_name, at: row.budgets_changed_at } : null,
+    goalsChanged: row.goals_changed_at ? { by: row.goals_changed_by_name, at: row.goals_changed_at } : null,
+  };
+}
+
+function planError(code: string | undefined): HouseholdError {
+  return new HouseholdError(code === "40001" ? "stale" : code === "42501" ? "outside" : "failed");
+}
+
+/** Replace the household's budgets (null: back to drafted), from `version`. The new version. */
+export async function saveHouseholdBudgets(account: Account, budgets: Budget[] | null, version: number): Promise<number> {
+  const { data, error } = await account.supabase.rpc("set_household_budgets", { p_budgets: budgets, p_version: version });
+  if (error) throw planError(error.code);
+  return data as number;
+}
+
+export async function saveHouseholdGoals(account: Account, goals: GoalSettings[] | null, version: number): Promise<number> {
+  const { data, error } = await account.supabase.rpc("set_household_goals", { p_goals: goals, p_version: version });
+  if (error) throw planError(error.code);
+  return data as number;
+}
+
+/**
+ * What went wrong, as the actions put it to the person; never the database's
+ * own words. "stale": someone else in the household saved first. "outside":
+ * they aren't in a household (any more).
+ */
 export class HouseholdError extends Error {
-  constructor(readonly reason: "full" | "self" | "member" | "failed") {
+  constructor(readonly reason: "full" | "self" | "member" | "stale" | "outside" | "failed") {
     super(reason);
   }
 }

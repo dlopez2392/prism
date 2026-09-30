@@ -11,17 +11,15 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { after } from "next/server";
-import { categoryTotals } from "@/lib/finance/cashflow";
-import { SPEND_CATEGORIES } from "@/lib/finance/categories";
-import { addDays, addMonths, startOfMonth } from "@/lib/finance/dates";
+import { draftBudgets } from "@/lib/finance/budgets";
 import { buildDemoData } from "@/lib/finance/demo";
 import type { AgentData } from "@/lib/agent/tools";
-import { applyPlan, type Plan } from "@/lib/finance/plan";
+import { applyPlan, toGoal, type Plan } from "@/lib/finance/plan";
 import { feedSnapshot } from "@/lib/finance/calendar";
 import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/finance/types";
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
 import { needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
-import { mapAccount, mapHoldings, mapTransaction, suggestedLimit } from "@/lib/plaid/map";
+import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { householdData, narrowTo, type MemberMoney } from "@/lib/finance/household";
@@ -32,7 +30,7 @@ import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveAccountTimeZone, saveFeedSnapshot } from "./account-store";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
-import { loadShares, loadSharedMoney, type SharedMoneyRow } from "./household-store";
+import { loadHouseholdPlan, loadShares, loadSharedMoney, type HouseholdPlan, type SharedMoneyRow } from "./household-store";
 import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
 
 export type Loaded = FinanceData & {
@@ -55,6 +53,8 @@ export type Loaded = FinanceData & {
   view: "me" | "household";
   /** They're in a household, so the Me / Household switch applies. */
   inHousehold: boolean;
+  /** In the Household view: the version each shared list is saved from, and who changed it last. Null in Me. */
+  householdPlan: Omit<HouseholdPlan, "budgets" | "goals"> | null;
 };
 
 export function hourIn(zone: string | undefined, now = new Date()): number {
@@ -233,7 +233,7 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "view" | "inHousehold">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "view" | "inHousehold" | "householdPlan">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
@@ -270,7 +270,7 @@ function greeted(base: Live, firstName: string | null, live: boolean): Live {
 /** "household" while the person looks at their household's shared money; anything else is their own. */
 export const VIEW_COOKIE = "prism-view";
 
-/** The person's own money whatever the switch says: budgets, goals, connections and the account are theirs alone. */
+/** The person's own money whatever the switch says: Connections and the Account page are theirs alone. */
 export const getPersonalFinance = cache(async (): Promise<Loaded> => (await ownMoney()).loaded);
 
 /** The page's money, as the Me / Household switch has it. */
@@ -311,6 +311,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     manual: src.manual,
     view: "me",
     inHousehold: src.inHousehold,
+    householdPlan: null,
   };
   return { loaded: personal, base, src, today };
 });
@@ -320,12 +321,22 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
  * sealed copies the database hands back (never a token), opened here and
  * narrowed to exactly what each of them shared.
  */
-async function householdFor(account: Account, mine: Live | null, today: ISODate): Promise<FinanceData> {
+async function householdFor(account: Account, mine: Live | null, today: ISODate): Promise<FinanceData & Pick<Loaded, "planEdited" | "householdPlan">> {
   const key = safeVaultKey();
-  const [shares, rows] = await Promise.all([loadShares(account), loadSharedMoney(account)]);
+  const [shares, rows, plan] = await Promise.all([loadShares(account), loadSharedMoney(account), loadHouseholdPlan(account)]);
+  if (!plan) throw new Error("Not in a household any more.");
   const others = key ? rows.map((r) => openMember(r, key, today)) : [];
   const own = mine ?? emptyLive(today, plaidConfig() !== null);
-  return householdData(own, new Set(shares.keys()), "You", others);
+  const data = householdData(own, new Set(shares.keys()), "You", others);
+  const { budgets, goals, ...versions } = plan;
+  return {
+    ...data,
+    // The household's own plan; until someone sets budgets, they're drafted from what the household shares.
+    budgets: budgets ?? draftBudgets(data.transactions, today),
+    goals: (goals ?? []).map((g) => toGoal(g, undefined)),
+    planEdited: { budgets: budgets !== null, goals: goals !== null },
+    householdPlan: versions,
+  };
 }
 
 function openMember(row: SharedMoneyRow, key: VaultKey, today: ISODate): MemberMoney {
@@ -541,8 +552,7 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
   const fixed = recategorize(transactions, rules);
   // No budgets are stored yet for a live household, so draft them from the
   // last three FULL months — a starting point the person can see and adjust.
-  const lastThree = categoryTotals(fixed, addMonths(startOfMonth(today), -3), addDays(startOfMonth(today), -1));
-  const budgets = SPEND_CATEGORIES.filter((c) => lastThree[c] > 0).map((c) => ({ category: c, limit: suggestedLimit(lastThree[c]) }));
+  const budgets = draftBudgets(fixed, today);
 
   return {
     source: "plaid",

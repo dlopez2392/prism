@@ -17,7 +17,7 @@ import { IDLE } from "@/lib/finance/plan";
 import type { Goal } from "@/lib/finance/types";
 import { setGoalMonthly } from "@/lib/server/plan-actions";
 
-export function GoalWhatIf({ goals, today }: { goals: Goal[]; today: string }) {
+export function GoalWhatIf({ goals, today, household = false }: { goals: Goal[]; today: string; household?: boolean }) {
   const [id, setId] = useState(goals[0]?.id);
   const goal = goals.find((g) => g.id === id) ?? goals[0];
   const [monthly, setMonthly] = useState<Record<string, number>>({});
@@ -101,6 +101,7 @@ export function GoalWhatIf({ goals, today }: { goals: Goal[]; today: string }) {
       <form action={save} className="mt-4 flex min-h-10 flex-wrap items-center justify-end gap-3">
         <input type="hidden" name="id" value={goal.id} />
         <input type="hidden" name="monthly" value={amount} />
+        {household ? <input type="hidden" name="scope" value="household" /> : null}
         <p role="status" className="flex items-center gap-1 text-xs font-semibold text-good-ink">
           {saved.status === "saved" && amount === goal.monthlyContribution ? (
             <>

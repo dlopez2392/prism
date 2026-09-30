@@ -91,11 +91,26 @@
   inviter sends themselves: the secret rides after `#`, the database keeps
   its sha256, and only the invited email can use it, once, for 7 days. The
   Me / Household switch is the `prism-view` cookie; `getFinance()` follows it
-  and `getPersonalFinance()` never does — budgets, goals, Connections and the
-  Account page are always the person's own. The Household view carries no
-  budgets, goals, credit score or other people's holdings, and nothing in it
-  is editable (fix categories and add items from Me). Coinbase isn't
-  shareable: it loads live, with its owner's own access.
+  and `getPersonalFinance()` never does — Connections and the Account page
+  are always the person's own. The Household view carries no credit score or
+  other people's holdings, and its transactions and items aren't editable
+  (fix categories and add items from Me). Coinbase isn't shareable: it loads
+  live, with its owner's own access.
+- Household budgets and goals (`supabase/migrations/20260930120000_household_plan.sql`):
+  ONE plan per household, on the `households` row, the same JSON and the same
+  all-or-nothing validators as a person's own. Budgets and Goals follow the
+  switch; in the Household view budgets pace what the household spends from
+  SHARED accounts only, drafted with `draftBudgets` until someone sets them.
+  Every member may change them, only through `household_plan()` /
+  `set_household_budgets` / `set_household_goals` (a person, not a connected
+  app, past the second step; no connected app reads the row at all). Each
+  list has a version: a write names the version it was made from or is
+  refused (40001). Budgets are a whole-list edit, so a stale save is refused
+  and the newer list shown ("Sam changed these budgets…"); a goal edit is
+  applied to the LATEST goals and retried once, so nobody's other goals are
+  ever put back. Forms carry `scope=household` (and budgets a `version`);
+  the actions never infer the scope from the view cookie. The plan stays
+  with the household when someone leaves.
 - Connecting real money needs an account (`src/lib/linking.ts`). With
   accounts on, the link-token, exchange and both Coinbase routes refuse a
   signed-out caller BEFORE Plaid or Coinbase is asked for anything, and the

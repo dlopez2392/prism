@@ -3,7 +3,7 @@
 // src/components/goal-editor.tsx
 //
 // Add, edit and delete a savings goal, saved to the account (or this device
-// when signed out). The same form
+// when signed out), or, in the Household view, to the household. The same form
 // serves all three: a new goal starts blank with a finish line a year out; an
 // existing one opens with its numbers and a two-step delete, because a goal's
 // history is the one thing an edit can't bring back.
@@ -41,12 +41,15 @@ export function GoalEditor({
   today,
   mode,
   signedIn = false,
+  household = false,
 }: {
   goal?: GoalSettings;
   others: GoalSettings[];
   today: string;
   mode: Mode;
   signedIn?: boolean;
+  /** A household goal: saved for everyone in it. */
+  household?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
@@ -87,13 +90,19 @@ export function GoalEditor({
           </button>
         </div>
       )}
-      <Dialog dialogRef={dialog} title={goal ? `Edit ${goal.name}` : "A new goal"} description={goal ? undefined : "Name it, give it a number and a month, and Prism charts the way there."} icon={PiggyBank}>
+      <Dialog
+        dialogRef={dialog}
+        title={goal ? `Edit ${goal.name}` : household ? "A new household goal" : "A new goal"}
+        description={goal ? undefined : "Name it, give it a number and a month, and Prism charts the way there."}
+        icon={PiggyBank}
+      >
         <GoalForm
           key={session}
           goal={goal}
           others={others}
           today={today}
           signedIn={signedIn}
+          household={household}
           onDone={(message) => {
             setNotice(message);
             dialog.current?.close();
@@ -110,6 +119,7 @@ function GoalForm({
   others,
   today,
   signedIn,
+  household,
   onDone,
   onCancel,
 }: {
@@ -117,6 +127,7 @@ function GoalForm({
   others: GoalSettings[];
   today: string;
   signedIn: boolean;
+  household: boolean;
   onDone: (message: string) => void;
   onCancel: () => void;
 }) {
@@ -148,12 +159,14 @@ function GoalForm({
     const form = new FormData();
     form.set("intent", "delete");
     form.set("id", goal?.id ?? "");
+    if (household) form.set("scope", "household");
     startTransition(() => action(form));
   }
 
   return (
     <form onSubmit={submit} noValidate>
       <input type="hidden" name="id" value={goal?.id ?? ""} />
+      {household ? <input type="hidden" name="scope" value="household" /> : null}
       <div className="grid gap-4">
         <TextInput name="name" label="What are you saving for?" defaultValue={goal?.name ?? ""} maxLength={GOAL_NAME_MAX} error={errors.name} />
 
@@ -202,7 +215,9 @@ function GoalForm({
 
       {confirming ? (
         <div role="alert" className="mt-5 rounded-ctl border border-line-strong bg-surface-2 p-3">
-          <p className="text-sm font-semibold text-ink-1">Delete “{goal?.name}”? Its progress chart goes with it.</p>
+          <p className="text-sm font-semibold text-ink-1">
+            Delete “{goal?.name}”? Its progress chart goes with it{household ? ", for everyone in your household" : ""}.
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={remove} disabled={pending} className="inline-flex h-9 items-center gap-1.5 rounded-ctl border border-crit bg-surface-1 px-3.5 text-sm font-semibold text-crit-ink transition-colors duration-150 hover:bg-surface-3 disabled:opacity-60">
               <Trash2 aria-hidden className="size-4" />
@@ -234,7 +249,8 @@ function GoalForm({
         </div>
       </div>
       <p className="mt-4 text-xs text-ink-3">
-        {signedIn ? "Saved to your account. " : "Saved in this browser only. "}Update what you&apos;ve saved whenever you like.
+        {household ? "Saved for your household: everyone in it can update it. " : signedIn ? "Saved to your account. " : "Saved in this browser only. "}Update what
+        you&apos;ve saved whenever you like.
       </p>
     </form>
   );
