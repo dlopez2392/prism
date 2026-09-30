@@ -87,7 +87,8 @@ describe("a home RentCast keeps up to date", () => {
     expect(f).toHaveBeenCalledTimes(1);
     const url = new URL(String(f.mock.calls[0]![0]));
     expect(`${url.origin}${url.pathname}`).toBe("https://api.rentcast.io/v1/avm/value");
-    expect(Object.fromEntries(url.searchParams)).toEqual({ address: ADDRESS, compCount: "5" });
+    // The address and nothing else about the person; and RentCast is told not to log it.
+    expect(Object.fromEntries(url.searchParams)).toEqual({ address: ADDRESS, compCount: "5", suppressLogging: "true" });
     expect(new Headers(f.mock.calls[0]![1]!.headers).get("X-Api-Key")).toBe("rc-test-key");
     expect(String(f.mock.calls[0]![0])).not.toMatch(/Our|u1|a@x/);
 
