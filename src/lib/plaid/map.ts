@@ -156,9 +156,6 @@ export function mapHoldings(holdings: PlaidHolding[], securities: PlaidSecurity[
   });
 }
 
-/** An unconfigured budget should still be useful: draft one from the last three months. */
-export function suggestedLimit(threeMonthTotal: Cents): Cents {
-  const monthly = threeMonthTotal / 3;
-  return Math.max(2_500, Math.ceil(monthly / 2_500) * 2_500);
-}
+// Drafting budgets from history lives with the budgets; kept importable here for the bank mapping's tests.
+export { suggestedLimit } from "@/lib/finance/budgets";
 

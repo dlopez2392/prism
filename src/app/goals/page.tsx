@@ -15,32 +15,49 @@ import { GoalWhatIf } from "@/components/goal-what-if";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
 import { slotColor } from "@/lib/finance/categories";
 import { addMonths, lastMonths } from "@/lib/finance/dates";
-import { money0, monthShort, monthYear, percent } from "@/lib/finance/format";
+import { lastChanged, money0, monthShort, monthYear, percent } from "@/lib/finance/format";
 import { projectGoal } from "@/lib/finance/networth";
 import { goalSettings, MAX_GOALS } from "@/lib/finance/plan";
-import { getPersonalFinance } from "@/lib/server/finance";
+import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Goals" };
 
 const AHEAD = 24;
 
 export default async function GoalsPage() {
-  const data = await getPersonalFinance();
+  // The Me / Household switch decides: the person's own goals, or the ones their household saves toward together.
+  const data = await getFinance();
   const { goals, today } = data;
+  const household = data.view === "household";
   const settings = goals.map(goalSettings);
-  const restore = data.source === "demo" && data.planEdited.goals ? <RestoreGoals /> : null;
+  const restore = data.source === "demo" && data.planEdited.goals && !household ? <RestoreGoals /> : null;
+  const changed = household ? lastChanged(data.householdPlan?.goalsChanged) : null;
+  const editor = (mode: "new" | "empty") => <GoalEditor mode={mode} others={settings} today={today} signedIn={data.account !== null} household={household} />;
 
   if (goals.length === 0) {
     return (
       <div>
-        <PageHeader title="Goals" subtitle="What you're saving for, and when you'll get there." action={restore} />
+        <PageHeader
+          title="Goals"
+          subtitle={household ? `What your household is saving for together.${changed ? ` ${changed}` : ""}` : "What you're saving for, and when you'll get there."}
+          action={restore}
+        />
         <Card>
-          <EmptyState
-            icon={PiggyBank}
-            title="Your goals will live here"
-            body="Name something you're saving for and a monthly amount — each goal gets a ring, a finish date, and a what-if slider."
-            action={<GoalEditor mode="empty" others={settings} today={today} signedIn={data.account !== null} />}
-          />
+          {household ? (
+            <EmptyState
+              icon={PiggyBank}
+              title="Your household's goals will live here"
+              body="Save toward something together — a trip, a home, a rainy-day fund. Each goal gets a ring, a finish date and a what-if slider, and everyone in the household can update it."
+              action={editor("empty")}
+            />
+          ) : (
+            <EmptyState
+              icon={PiggyBank}
+              title="Your goals will live here"
+              body="Name something you're saving for and a monthly amount — each goal gets a ring, a finish date, and a what-if slider."
+              action={editor("empty")}
+            />
+          )}
         </Card>
       </div>
     );
@@ -66,15 +83,17 @@ export default async function GoalsPage() {
       <PageHeader
         title="Goals"
         subtitle={
-          data.planEdited.goals
-            ? `What you're saving for, saved ${data.account ? "to your account" : "on this device"}, and when you'll get there.`
-            : "What you're saving for, and when you'll get there."
+          household
+            ? `What your household is saving for together, and when you'll get there.${changed ? ` ${changed}` : ""}`
+            : data.planEdited.goals
+              ? `What you're saving for, saved ${data.account ? "to your account" : "on this device"}, and when you'll get there.`
+              : "What you're saving for, and when you'll get there."
         }
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
             {restore}
             {goals.length < MAX_GOALS ? (
-              <GoalEditor mode="new" others={settings} today={today} signedIn={data.account !== null} />
+              editor("new")
             ) : (
               <span className="text-xs text-ink-3">{MAX_GOALS} goals is the most Prism tracks at once.</span>
             )}
@@ -117,7 +136,7 @@ export default async function GoalsPage() {
         <Card className="p-5 sm:p-6 lg:col-span-8">
           <CardHeader title="What if…" subtitle="Drag to see how a different monthly amount moves the finish line" />
           <div className="mt-4">
-            <GoalWhatIf goals={goals} today={today} />
+            <GoalWhatIf goals={goals} today={today} household={household} />
           </div>
         </Card>
       </div>
@@ -129,7 +148,7 @@ export default async function GoalsPage() {
           return (
             <Card as="li" key={g.id} className="relative flex flex-col items-center p-5 text-center">
               <div className="absolute top-3 right-3">
-                <GoalEditor mode="edit" goal={goalSettings(g)} others={settings} today={today} signedIn={data.account !== null} />
+                <GoalEditor mode="edit" goal={goalSettings(g)} others={settings} today={today} signedIn={data.account !== null} household={household} />
               </div>
               <ProgressRing ratio={p.progress} color={color} size={128} stroke={13} label={`${g.name}: ${percent(p.progress)} saved`}>
                 <span aria-hidden className="text-3xl">

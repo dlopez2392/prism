@@ -101,3 +101,20 @@ export function typicalMonthlySpend(txns: Transaction[], today: ISODate, months 
   const totals = categoryTotals(txns, from, to);
   return Object.fromEntries(SPEND_CATEGORIES.map((c) => [c, Math.max(0, Math.round(totals[c] / months))])) as Record<SpendCategoryId, Cents>;
 }
+
+/** An unconfigured budget should still be useful: draft one from the last three months. */
+export function suggestedLimit(threeMonthTotal: Cents): Cents {
+  const monthly = threeMonthTotal / 3;
+  return Math.max(2_500, Math.ceil(monthly / 2_500) * 2_500);
+}
+
+/**
+ * Budgets nobody has set yet, drafted from the last three FULL months of
+ * spending: a starting point from what's real, one line per category that
+ * actually saw spending. A person's own, or a household's from what its
+ * members share.
+ */
+export function draftBudgets(txns: Transaction[], today: ISODate): Budget[] {
+  const lastThree = categoryTotals(txns, addMonths(startOfMonth(today), -HISTORY_MONTHS), addDays(startOfMonth(today), -1));
+  return SPEND_CATEGORIES.filter((c) => lastThree[c] > 0).map((c) => ({ category: c, limit: suggestedLimit(lastThree[c]) }));
+}

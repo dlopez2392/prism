@@ -610,3 +610,84 @@ describe("a household", () => {
     expect(await rows(`select count(*)::int as n from public.households where id = $1`, [household])).toEqual([{ n: 0 }]);
   });
 });
+
+describe("a household's plan", () => {
+  const person = (n: number) => `5b000000-0000-4000-8000-00000000000${n}`;
+  const [P1, P2, P3, X] = [person(1), person(2), person(3), person(9)];
+  const call = (who: string, sql: string, params: unknown[] = [], claims: Record<string, unknown> = {}) => as("authenticated", who, () => rows(sql, params), claims);
+  const errcode = (who: string, sql: string, params: unknown[] = [], claims: Record<string, unknown> = {}) =>
+    as("authenticated", who, () => rows(sql, params).then(() => null, (e: { code?: string }) => e.code ?? "?"), claims);
+  const hash = (s: string) => createHash("sha256").update(s).digest("hex");
+  const FOOD = JSON.stringify([{ category: "food", limit: 60_000 }]);
+  const TRIP = JSON.stringify([{ id: "trip", name: "Trip", emoji: "🗾", target: 500_000, saved: 0, monthlyContribution: 20_000, targetDate: "2027-06-30", colorSlot: 1 }]);
+
+  beforeAll(async () => {
+    for (const [id, n] of [[P1, 1], [P2, 2], [P3, 3], [X, 9]] as const) {
+      await rows(`insert into auth.users (id, email) values ($1, $2)`, [id, `p${n}@plan.test`]);
+      await rows(`update public.profiles set first_name = $2 where user_id = $1`, [id, `Planner${n}`]);
+    }
+    await call(P1, `select public.create_household_invite('p2@plan.test', $1)`, [hash("plan-2")]);
+    await call(P2, `select public.accept_household_invite($1)`, [hash("plan-2")]);
+  });
+
+  it("starts unedited, and any member can set it, naming who did", async () => {
+    expect(await call(P2, `select budgets, goals, budgets_version, goals_version, budgets_changed_by_name from public.household_plan()`)).toEqual([
+      { budgets: null, goals: null, budgets_version: 0, goals_version: 0, budgets_changed_by_name: null },
+    ]);
+    expect(await call(P2, `select public.set_household_budgets($1::jsonb, 0) as v`, [FOOD])).toEqual([{ v: 1 }]);
+    expect(await call(P1, `select public.set_household_goals($1::jsonb, 0) as v`, [TRIP])).toEqual([{ v: 1 }]);
+    const [plan] = await call(P1, `select * from public.household_plan()`);
+    expect(plan).toMatchObject({ budgets: JSON.parse(FOOD), goals: JSON.parse(TRIP), budgets_version: 1, goals_version: 1, budgets_changed_by_name: "Planner2", goals_changed_by_name: "Planner1" });
+    expect(plan!.budgets_changed_at).not.toBeNull();
+  });
+
+  it("refuses a write made from an older version, so nobody's edit is lost unseen", async () => {
+    expect(await errcode(P1, `select public.set_household_budgets('[]'::jsonb, 0)`)).toBe("40001");
+    expect((await call(P1, `select budgets from public.household_plan()`))[0]!.budgets).toEqual(JSON.parse(FOOD));
+    expect(await errcode(P2, `select public.set_household_goals('[]'::jsonb, 0)`)).toBe("40001");
+    expect((await call(P2, `select goals from public.household_plan()`))[0]!.goals).toEqual(JSON.parse(TRIP));
+    // Budgets and goals are versioned apart: a goal edit never blocks a budget edit.
+    expect(await call(P1, `select public.set_household_budgets(null, 1) as v`)).toEqual([{ v: 2 }]);
+    expect((await call(P1, `select budgets, goals_version from public.household_plan()`))[0]).toEqual({ budgets: null, goals_version: 1 });
+  });
+
+  it("holds only plan-shaped lists, of the plan's own sizes", async () => {
+    expect(await errcode(P1, `select public.set_household_budgets('{"food": 1}'::jsonb, 2)`)).toBe("23514");
+    expect(await errcode(P1, `select public.set_household_goals($1::jsonb, 1)`, [JSON.stringify(Array.from({ length: 9 }, () => ({})))])).toBe("23514");
+    expect(await errcode(P1, `select public.set_household_goals($1::jsonb, 1)`, [JSON.stringify([{ name: "x".repeat(9000) }])])).toBe("23514");
+  });
+
+  it("is the household's alone: outsiders, connected apps and unfinished sign-ins get nothing", async () => {
+    expect(await call(X, `select * from public.household_plan()`)).toEqual([]);
+    expect(await errcode(X, `select public.set_household_budgets('[]'::jsonb, 0)`)).toBe("42501");
+    expect(await errcode(P1, `select * from public.household_plan()`, [], CONNECTED_APP)).toBe("42501");
+    expect(await errcode(P1, `select public.set_household_goals('[]'::jsonb, 1)`, [], CONNECTED_APP)).toBe("42501");
+    expect(await call(P1, `select plan_goals from public.households`, [], CONNECTED_APP)).toEqual([]);
+    // Never written directly, even by a member.
+    expect(await call(P1, `update public.households set plan_goals = '[]'::jsonb, goals_version = 99 returning id`)).toEqual([]);
+    expect((await call(P1, `select goals_version from public.household_plan()`))[0]!.goals_version).toBe(1);
+    const [F, PASSED, EMAIL_ONLY] = ["5f000000-0000-4000-8000-000000000001", "5f000000-0000-4000-8000-000000000002", "5f000000-0000-4000-8000-000000000003"];
+    await rows(`insert into auth.mfa_factors (id, user_id, status) values ($1, $2, 'verified')`, [F, P2]);
+    await rows(`insert into auth.sessions (id, user_id, aal, factor_id) values ($1, $3, 'aal2', $4), ($2, $3, 'aal1', null)`, [PASSED, EMAIL_ONLY, P2, F]);
+    await call(P2, `update public.profiles set totp_factor_id = $2 where user_id = $1`, [P2, F], { session_id: PASSED, aal: "aal2" });
+    const emailOnly = { session_id: EMAIL_ONLY, aal: "aal1" };
+    expect(await errcode(P2, `select * from public.household_plan()`, [], emailOnly)).toBe("42501");
+    expect(await errcode(P2, `select public.set_household_budgets('[]'::jsonb, 2)`, [], emailOnly)).toBe("42501");
+    await rows(`update public.profiles set totp_factor_id = null where user_id = $1`, [P2]);
+  });
+
+  it("stays with the household when someone leaves, reaches whoever joins, and goes with the last one out", async () => {
+    await call(P1, `select public.leave_household()`);
+    expect(await call(P1, `select * from public.household_plan()`)).toEqual([]);
+    expect((await call(P2, `select goals from public.household_plan()`))[0]!.goals).toEqual(JSON.parse(TRIP));
+    // Whoever changed it last may be gone; the change stays, unnamed if their account is.
+    await call(P2, `select public.create_household_invite('p3@plan.test', $1)`, [hash("plan-3")]);
+    await call(P3, `select public.accept_household_invite($1)`, [hash("plan-3")]);
+    await call(P1, `select public.delete_my_account()`);
+    expect((await call(P3, `select goals, goals_changed_by_name from public.household_plan()`))[0]).toEqual({ goals: JSON.parse(TRIP), goals_changed_by_name: null });
+    const household = (await rows(`select household_id from public.household_members where user_id = $1`, [P2]))[0]!.household_id;
+    await call(P2, `select public.leave_household()`);
+    await call(P3, `select public.leave_household()`);
+    expect(await rows(`select count(*)::int as n from public.households where id = $1`, [household])).toEqual([{ n: 0 }]);
+  });
+});

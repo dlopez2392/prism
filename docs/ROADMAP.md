@@ -73,8 +73,13 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    invitation link; each shares account by account (private until shared);
    a Me / Household switch shows everyone's shared balances and
    transactions, labelled by whose they are. Data is shared, never access:
-   members see each other's last stored copy, never a bank token. **Next:**
-   household budgets and goals; sharing Coinbase.
+   members see each other's last stored copy, never a bank token.
+   **Household budgets and goals built (2026-09-30):** one plan per
+   household that every member can change (each list shows who changed it
+   last, and a save from an outdated list is refused rather than lost);
+   budgets pace spending from shared accounts only and are drafted from it
+   until someone sets them. **Next:** link a goal to a shared savings account
+   so its progress fills itself; sharing Coinbase.
 5. **A fallback aggregator** (Finicity or MX) for when a bank's Plaid
    connection breaks.
 6. **The committed integrations above**, with the MCP server (#6) as soon as

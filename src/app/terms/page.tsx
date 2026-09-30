@@ -138,6 +138,10 @@ export default function TermsPage() {
               Share only accounts you have the right to share. For an account you hold with someone else, share it only if they agree. The people you
               share with see that account&apos;s balances and transactions; they never get a way into your bank.
             </li>
+            <li>
+              A household can keep budgets and goals together. Everyone in it sees them and can change them, and {BRAND.product} shows who changed each
+              list last. They belong to the household, so they stay with it when someone leaves, and go when its last member does.
+            </li>
             <li>You can stop sharing an account, or leave the household, at any time. Leaving stops everything you shared at once.</li>
           </Bullets>
         </Section>

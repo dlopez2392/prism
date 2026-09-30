@@ -14,9 +14,9 @@ import { CategoryIcon } from "@/components/category-icon";
 import { Card, CardHeader, EmptyState, Meter, PageHeader, StatusPill } from "@/components/ui";
 import { daysLeftInMonth, monthEnd, typicalMonthlySpend, type BudgetStatus } from "@/lib/finance/budgets";
 import { CATEGORIES, categoryColor } from "@/lib/finance/categories";
-import { money0, monthLong, shortDate } from "@/lib/finance/format";
+import { lastChanged, money0, monthLong, shortDate } from "@/lib/finance/format";
 import { analyze } from "@/lib/finance/model";
-import { getPersonalFinance } from "@/lib/server/finance";
+import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Budgets" };
 
@@ -27,7 +27,10 @@ function state(b: BudgetStatus) {
 }
 
 export default async function BudgetsPage() {
-  const data = await getPersonalFinance();
+  // The Me / Household switch decides: the person's own budgets, or the household's, pacing what it spends from shared accounts.
+  const data = await getFinance();
+  const household = data.view === "household" && data.householdPlan !== null;
+  const changed = household ? lastChanged(data.householdPlan?.budgetsChanged) : null;
   const a = analyze(data);
   const { budgets, budgetTotals: totals } = a;
   const left = daysLeftInMonth(a.today);
@@ -41,6 +44,7 @@ export default async function BudgetsPage() {
       typical={typicalMonthlySpend(data.transactions, a.today)}
       edited={edited}
       signedIn={data.account !== null}
+      household={household ? { version: data.householdPlan!.budgetsVersion } : undefined}
       variant={variant}
       label={label}
     />
@@ -51,9 +55,25 @@ export default async function BudgetsPage() {
   if (budgets.length === 0) {
     return (
       <div>
-        <PageHeader title="Budgets" subtitle={`Your plan for ${month}.`} />
+        <PageHeader title="Budgets" subtitle={household ? `Your household's plan for ${month}.${changed ? ` ${changed}` : ""}` : `Your plan for ${month}.`} />
         <Card>
-          {edited ? (
+          {household ? (
+            edited ? (
+              <EmptyState
+                icon={Target}
+                title="No household budgets set"
+                body="Give any category a monthly limit and we'll pace what the household spends from shared accounts against it all month."
+                action={editor("primary", "Set a budget")}
+              />
+            ) : (
+              <EmptyState
+                icon={Target}
+                title="Household budgets appear once shared accounts have a month of spending"
+                body="We draft them from what your household shares, so you start from what's real. Or set the household's own now."
+                action={editor("primary", "Set a budget")}
+              />
+            )
+          ) : edited ? (
             <EmptyState
               icon={Target}
               title="No budgets set"
@@ -79,11 +99,15 @@ export default async function BudgetsPage() {
         eyebrow={`${left} ${left === 1 ? "day" : "days"} left in ${month}`}
         title="Budgets"
         subtitle={
-          drafted
-            ? "Drafted from your last three months — a starting point from what's real. Change any line to make it yours."
-            : edited
-              ? `Your plan for ${month}, saved ${data.account ? "to your account" : "on this device"}, and how it's going.`
-              : `Your plan for ${month}, and how it's going.`
+          household
+            ? drafted
+              ? "Drafted from what your household shares, over the last three months. Change any line to set the household's own."
+              : `Your household's plan for ${month}, pacing spending from shared accounts.${changed ? ` ${changed}` : ""}`
+            : drafted
+              ? "Drafted from your last three months — a starting point from what's real. Change any line to make it yours."
+              : edited
+                ? `Your plan for ${month}, saved ${data.account ? "to your account" : "on this device"}, and how it's going.`
+                : `Your plan for ${month}, and how it's going.`
         }
         action={editor("ghost")}
       />

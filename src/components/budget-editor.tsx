@@ -5,7 +5,8 @@
 // "Edit budgets": one money field per category, each beside what that
 // category usually costs a month, so a limit is set against what's real. Blank
 // means "don't budget this". Saving writes the person's plan (their account,
-// or this device when signed out) and the page
+// or this device when signed out) — or, in the Household view, the
+// household's, from the version this editor was showing — and the page
 // re-renders around it — rings, pacing and the overview all move together.
 
 import { startTransition, useActionState, useRef, useState, type FormEvent } from "react";
@@ -26,11 +27,13 @@ type Props = {
   edited: boolean;
   /** Signed in: saves go to the account, and the footer says so. */
   signedIn?: boolean;
+  /** The household's budgets, not the person's: saved from this version, for everyone in it. */
+  household?: { version: number };
   variant?: "ghost" | "primary";
   label?: string;
 };
 
-export function BudgetEditor({ budgets, typical, edited, signedIn = false, variant = "ghost", label = "Edit budgets" }: Props) {
+export function BudgetEditor({ budgets, typical, edited, signedIn = false, household, variant = "ghost", label = "Edit budgets" }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   // A fresh form every time the editor opens: nothing half-typed or stale
   // from a cancelled visit survives into the next one.
@@ -59,13 +62,19 @@ export function BudgetEditor({ budgets, typical, edited, signedIn = false, varia
         <Icon aria-hidden className="size-4" />
         {label}
       </button>
-      <Dialog dialogRef={dialog} title="Your monthly budgets" description="Set a limit for any category. Leave one blank to stop budgeting it." icon={Target}>
+      <Dialog
+        dialogRef={dialog}
+        title={household ? "Your household's monthly budgets" : "Your monthly budgets"}
+        description={household ? "Limits for what the household spends from shared accounts. Leave one blank to stop budgeting it." : "Set a limit for any category. Leave one blank to stop budgeting it."}
+        icon={Target}
+      >
         <BudgetForm
           key={session}
           budgets={budgets}
           typical={typical}
           edited={edited}
           signedIn={signedIn}
+          household={household}
           onDone={(message) => {
             setNotice(message);
             dialog.current?.close();
@@ -82,11 +91,12 @@ function BudgetForm({
   typical,
   edited,
   signedIn,
+  household,
   onDone,
   onCancel,
 }: Omit<Props, "variant" | "label"> & { onDone: (message: string) => void; onCancel: () => void }) {
   const [state, action, pending] = useActionState(async (prev: PlanFormState, form: FormData) => {
-    const next = form.get("intent") === "reset" ? await resetBudgets() : await saveBudgets(prev, form);
+    const next = form.get("intent") === "reset" ? await resetBudgets(form) : await saveBudgets(prev, form);
     if (next.status === "saved") onDone(next.message);
     return next;
   }, IDLE);
@@ -107,11 +117,21 @@ function BudgetForm({
   function reset() {
     const form = new FormData();
     form.set("intent", "reset");
+    if (household) {
+      form.set("scope", "household");
+      form.set("version", String(household.version));
+    }
     startTransition(() => action(form));
   }
 
   return (
     <form onSubmit={submit} noValidate>
+      {household ? (
+        <>
+          <input type="hidden" name="scope" value="household" />
+          <input type="hidden" name="version" value={household.version} />
+        </>
+      ) : null}
       <ul className="divide-y divide-[var(--line)] border-y border-line">
         {SPEND_CATEGORIES.map((c) => {
           const limit = limits.get(c);
@@ -140,7 +160,7 @@ function BudgetForm({
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         {edited ? (
           <button type="button" onClick={reset} disabled={pending} className="text-sm font-semibold text-accent-ink hover:underline disabled:opacity-60">
-            Use the suggested budgets
+            {household ? "Go back to the drafted budgets" : "Use the suggested budgets"}
           </button>
         ) : (
           <span />
@@ -155,7 +175,11 @@ function BudgetForm({
         </div>
       </div>
       <p className="mt-4 text-xs text-ink-3">
-        {signedIn ? "Saved to your account — on every device you sign in on." : "Saved in this browser only — they won't follow you to another device."}
+        {household
+          ? "Saved for your household. Everyone in it sees these budgets and can change them."
+          : signedIn
+            ? "Saved to your account — on every device you sign in on."
+            : "Saved in this browser only — they won't follow you to another device."}
       </p>
     </form>
   );
