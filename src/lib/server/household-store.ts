@@ -27,6 +27,8 @@ export type SharedMoneyRow = {
   sealedCategoryRules: string | null;
   sealedManualItems: string | null;
   items: { itemId: string; institutionName: string | null; sealedSync: string | null; syncedAt: string | null }[];
+  /** Their shared Coinbase's value, sealed, as of their last visit; null when not shared or not copied yet. */
+  coinbase: { sealed: string | null; at: string | null } | null;
 };
 
 export type InviteStatus = "ok" | "not_found" | "wrong_email" | "expired" | "already_member" | "in_another" | "full";
@@ -113,6 +115,7 @@ export async function loadSharedMoney(account: Account): Promise<SharedMoneyRow[
     sealed_category_rules: string | null;
     sealed_manual_items: string | null;
     items: { item_id: string; institution_name: string | null; sealed_sync: string | null; synced_at: string | null }[] | null;
+    coinbase: { sealed: string | null; at: string | null } | null;
   }[];
   return rows.map((r) => ({
     userId: r.user_id,
@@ -121,6 +124,7 @@ export async function loadSharedMoney(account: Account): Promise<SharedMoneyRow[
     sealedCategoryRules: r.sealed_category_rules,
     sealedManualItems: r.sealed_manual_items,
     items: (r.items ?? []).map((i) => ({ itemId: i.item_id, institutionName: i.institution_name, sealedSync: i.sealed_sync, syncedAt: i.synced_at })),
+    coinbase: r.coinbase ? { sealed: r.coinbase.sealed ?? null, at: r.coinbase.at ?? null } : null,
   }));
 }
 

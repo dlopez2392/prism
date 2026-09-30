@@ -82,7 +82,9 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    (2026-09-30):** any goal, personal or household, can follow a savings,
    checking, investment, retirement or crypto account, so its progress fills
    itself from the balance, with the account's real history on the chart.
-   **Next:** sharing Coinbase.
+   **Sharing Coinbase built (2026-09-30):** the household sees a shared
+   Coinbase as its total value from the owner's last visit; Prism keeps
+   that one number (sealed) only while it's shared.
 5. **A fallback aggregator** (Finicity or MX) for when a bank's Plaid
    connection breaks.
 6. **The committed integrations above**, with the MCP server (#6) as soon as

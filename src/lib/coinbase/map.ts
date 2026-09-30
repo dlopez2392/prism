@@ -69,3 +69,27 @@ export function mapCoinbase(wallets: CoinbaseAccount[], rates: Record<string, nu
 export function coinbaseNeedsSignIn(): Institution {
   return { id: COINBASE_ID, name: "Coinbase", health: "needs_attention", lastSyncedAt: null, source: "coinbase" };
 }
+
+/**
+ * What a household is shown of someone's shared Coinbase: its total value,
+ * nothing more, as of their own last visit. Stored sealed; checked here as
+ * all-or-nothing like everything else read back from storage.
+ */
+export type CoinbaseValue = { v: 1; balance: Cents };
+
+/** A trillion dollars: a ceiling on corruption, not on anyone's crypto. */
+const MAX_VALUE: Cents = 100_000_000_000_000;
+
+export function validCoinbaseValue(x: unknown): CoinbaseValue | null {
+  if (!x || typeof x !== "object") return null;
+  const { v, balance } = x as Record<string, unknown>;
+  return v === 1 && Number.isSafeInteger(balance) && (balance as number) >= 0 && (balance as number) <= MAX_VALUE ? { v: 1, balance: balance as Cents } : null;
+}
+
+/** Someone's shared Coinbase in the household: one account, one honest point, as of `at`. */
+export function sharedCoinbase(value: CoinbaseValue, at: string | null): { institution: Institution; account: Account } {
+  return {
+    institution: { id: COINBASE_ID, name: "Coinbase", health: "healthy", lastSyncedAt: at, source: "coinbase" },
+    account: { id: COINBASE_ID, institutionId: COINBASE_ID, name: "Coinbase", mask: null, kind: "crypto", balance: value.balance, history: [value.balance], source: "coinbase" },
+  };
+}

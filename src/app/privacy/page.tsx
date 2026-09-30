@@ -126,8 +126,10 @@ export default function PrivacyPage() {
             <li>
               <span className="font-semibold text-ink-1">People in your household</span>, if you join one. They see the balances and transactions of
               the accounts you choose to share, and nothing else: not your other accounts, not your bank sign-in, and never a way into your bank. You
-              can stop sharing an account, or leave the household, at any time, and it takes effect at once. The household&apos;s budgets and goals
-              belong to the household: everyone in it sees them and can change them, and they stay with the household if you leave.
+              can stop sharing an account, or leave the household, at any time, and it takes effect at once. If you share Coinbase, they see only
+              its total value as of your last visit, and {BRAND.product} keeps that one number, sealed, only while you share it. The household&apos;s
+              budgets and goals belong to the household: everyone in it sees them and can change them, and they stay with the household if you
+              leave.
             </li>
             <li>
               <span className="font-semibold text-ink-1">Your calendar app</span>, if you subscribe to the bills feed. It reads your upcoming bills and paydays,

@@ -245,6 +245,8 @@ select what, key_id, count(*) from (
   union all
   select 'coinbase', case when sealed_tokens like 'j2.%' then substr(sealed_tokens, 4, 8) else 'unnamed' end from coinbase_links
   union all
+  select 'coinbase value', case when sealed_snapshot like 'z2.%' then substr(sealed_snapshot, 4, 8) else 'unnamed' end from coinbase_links where sealed_snapshot is not null
+  union all
   select 'calendar link', case when sealed_token like 'j2.%' then substr(sealed_token, 4, 8) else 'unnamed' end from calendar_feeds
   union all
   select 'calendar bills', case when snapshot->>'sealed' like 'j2.%' then substr(snapshot->>'sealed', 4, 8) else 'unnamed' end from calendar_feeds where snapshot ? 'sealed'
@@ -269,7 +271,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
-| **Connections** | Per-institution health, how data is protected, an honest catalogue of every integration and its real access path, and, in a household, **Shared / Private** for each of the person's accounts |
+| **Connections** | Per-institution health, how data is protected, an honest catalogue of every integration and its real access path, and, in a household, **Shared / Private** for each of the person's accounts (Coinbase included: the household sees its total value as of the owner's last visit) |
 | **Household** | Overview, Cash flow, Spending, Budgets, Future, Goals and Net worth over what every member shared, each account marked with whose it is; shared budgets and goals any member can change, showing who changed them last; invitations and members on the Account page, and a join page for the link |
 
 ## How it's built

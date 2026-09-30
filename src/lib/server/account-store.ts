@@ -8,6 +8,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { refreshTokens, type CoinbaseConfig, type TokenSet } from "@/lib/coinbase/client";
+import { validCoinbaseValue } from "@/lib/coinbase/map";
 import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
@@ -38,7 +39,7 @@ type PlaidRow = {
   synced_at: string | null;
   changed_at: string | null;
 };
-type CoinbaseRow = { sealed_tokens: string; expires_at: string; version: number; linked_at: string };
+type CoinbaseRow = { sealed_tokens: string; expires_at: string; version: number; linked_at: string; sealed_snapshot?: string | null; snapshot_at?: string | null };
 type FeedRow = { updated_at: string; sealed_token: string };
 
 export type CoinbaseRecord = { tokens: TokenSet; version: number; linkedAt: string };
@@ -55,6 +56,11 @@ export type AccountSources = {
   /** Each linked bank's stored sync (cursor, transactions, balances), by item id — empty unless asked for. */
   plaidSync: Map<string, StoredSync>;
   coinbase: CoinbaseRecord | null;
+  /**
+   * They share Coinbase with their household: the value the household was
+   * last shown (null before the first copy), and when. Null when they don't.
+   */
+  coinbaseShared: { balance: number | null; at: string | null } | null;
   feedUpdatedAt: string | null;
   /** They're in a household, so the Me / Household switch applies. */
   inHousehold: boolean;
@@ -81,16 +87,17 @@ function openCoinbase(row: CoinbaseRow | null, key: VaultKey | null): CoinbaseRe
  */
 export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
-  const [profile, plaid, coinbase, feed, household] = await Promise.all([
+  const [profile, plaid, coinbase, feed, household, coinbaseShare] = await Promise.all([
     db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
     db
       .from("plaid_items")
       .select(withSync ? "item_id, sealed_token, institution_id, institution_name, linked_at, sealed_sync, sync_version, synced_at, changed_at" : "item_id, sealed_token, institution_id, institution_name, linked_at")
       .eq("user_id", account.userId)
       .returns<PlaidRow[]>(),
-    db.from("coinbase_links").select("sealed_tokens, expires_at, version, linked_at").eq("user_id", account.userId).maybeSingle<CoinbaseRow>(),
+    db.from("coinbase_links").select("sealed_tokens, expires_at, version, linked_at, sealed_snapshot, snapshot_at").eq("user_id", account.userId).maybeSingle<CoinbaseRow>(),
     db.from("calendar_feeds").select("updated_at, sealed_token").eq("user_id", account.userId).maybeSingle<FeedRow>(),
     db.from("household_members").select("household_id").eq("user_id", account.userId).limit(1),
+    db.from("shared_accounts").select("account_id").eq("user_id", account.userId).eq("account_id", "coinbase").limit(1),
   ]);
   if (strict && (profile.error || plaid.error || coinbase.error || feed.error)) throw new Error("Couldn't read the account.");
   const items: VaultItem[] = [];
@@ -110,6 +117,10 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   }
   const coinbaseRecord = openCoinbase(coinbase.data ?? null, key);
   if (coinbaseRecord) stale.coinbase(coinbase.data!, coinbaseRecord);
+  const rawValue = key && coinbase.data?.sealed_snapshot ? openPacked(coinbase.data.sealed_snapshot, key) : null;
+  const value = validCoinbaseValue(rawValue);
+  if (value) stale.coinbaseValue(coinbase.data!, value);
+  const sharesCoinbase = coinbaseRecord !== null && (coinbaseShare.data?.length ?? 0) > 0;
   if (feed.data) stale.feed(feed.data);
   const rawRules = key && profile.data?.sealed_category_rules ? openPacked(profile.data.sealed_category_rules, key) : null;
   const rawManual = key && profile.data?.sealed_manual_items ? openPacked(profile.data.sealed_manual_items, key) : null;
@@ -123,6 +134,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     items,
     plaidSync,
     coinbase: coinbaseRecord,
+    coinbaseShared: sharesCoinbase ? { balance: value?.balance ?? null, at: value ? (coinbase.data?.snapshot_at ?? null) : null } : null,
     feedUpdatedAt: feed.data?.updated_at ?? null,
     inHousehold: (household.data?.length ?? 0) > 0,
     reseal: stale.run(),
@@ -167,6 +179,13 @@ function staleSeals(account: Account, key: VaultKey | null) {
       const { version, sealed_tokens: was } = row;
       const sealed_tokens = sealJson(record.tokens, key!);
       jobs.push(() => db.from("coinbase_links").update({ sealed_tokens }).eq("user_id", account.userId).eq("version", version).eq("sealed_tokens", was));
+    },
+    /** The value a household is shown, guarded by when it was taken: a newer copy is never replaced by this one. */
+    coinbaseValue(row: CoinbaseRow, opened: unknown) {
+      if (!due(row.sealed_snapshot) || !row.snapshot_at) return;
+      const sealed_snapshot = sealPacked(opened, key!);
+      const was = row.snapshot_at;
+      jobs.push(() => db.from("coinbase_links").update({ sealed_snapshot }).eq("user_id", account.userId).eq("snapshot_at", was));
     },
     /**
      * The profile's sealed columns, in ONE write guarded by the profile's
@@ -312,6 +331,19 @@ export async function saveAccountCoinbase(account: Account, tokens: TokenSet, ke
     { onConflict: "user_id" },
   );
   if (error) throw new Error(`Couldn't save the Coinbase link: ${error.message}`);
+}
+
+/**
+ * Keep the household's copy of Coinbase's value current: its total, sealed,
+ * as of now. The database keeps it only while Coinbase is shared (a trigger
+ * blanks it otherwise), and only the owner's own visits write it.
+ */
+export async function saveCoinbaseValue(account: Account, balance: number, key: VaultKey): Promise<void> {
+  const { error } = await account.supabase
+    .from("coinbase_links")
+    .update({ sealed_snapshot: sealPacked({ v: 1, balance }, key), snapshot_at: new Date().toISOString() })
+    .eq("user_id", account.userId);
+  if (error) throw new Error(`Couldn't keep the household's Coinbase value: ${error.message}`);
 }
 
 export async function removeAccountCoinbase(account: Account): Promise<void> {

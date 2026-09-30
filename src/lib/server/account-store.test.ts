@@ -184,6 +184,32 @@ describe("a bank's stored sync", () => {
   });
 });
 
+describe("a shared Coinbase", () => {
+  const withLink = (extra: Row = {}, shared = true) =>
+    fakeDb({ coinbase_links: [{ ...coinbaseRow(1, 1, NOW + 3_600_000), ...extra }], shared_accounts: shared ? [{ user_id: "u1", account_id: "coinbase" }] : [] });
+
+  it("says it's shared, and the value the household was last shown", async () => {
+    const { db } = withLink({ sealed_snapshot: sealPacked({ v: 1, balance: 5_000 }, key), snapshot_at: "2026-09-30T01:00:00.000Z" });
+    expect((await loadAccount(account(db), key)).coinbaseShared).toEqual({ balance: 5_000, at: "2026-09-30T01:00:00.000Z" });
+  });
+
+  it("before the first copy, has no value to compare", async () => {
+    const { db } = withLink();
+    expect((await loadAccount(account(db), key)).coinbaseShared).toEqual({ balance: null, at: null });
+  });
+
+  it("isn't shared when it isn't, or when Coinbase isn't connected at all", async () => {
+    expect((await loadAccount(account(withLink({}, false).db), key)).coinbaseShared).toBeNull();
+    const { db } = fakeDb({ coinbase_links: [], shared_accounts: [{ user_id: "u1", account_id: "coinbase" }] });
+    expect((await loadAccount(account(db), key)).coinbaseShared).toBeNull();
+  });
+
+  it("treats a copy that won't open as no copy, so the next visit writes a fresh one", async () => {
+    const { db } = withLink({ sealed_snapshot: sealPacked({ v: 1, balance: -3 }, key), snapshot_at: "2026-09-30T01:00:00.000Z" });
+    expect((await loadAccount(account(db), key)).coinbaseShared).toEqual({ balance: null, at: null });
+  });
+});
+
 describe("replacing the vault key", () => {
   const k1 = randomBytes(32);
   const k2 = randomBytes(32);
@@ -195,6 +221,7 @@ describe("replacing the vault key", () => {
   const bills = { bills: [{ name: "Rent", date: "2026-10-01" }] };
   const fixes = { v: 1, merchants: { "blue bottle": "food" }, transactions: { t9: "transfer" } };
   const owned = [{ id: "our-house", kind: "home", name: "Our house", values: [{ month: "2026-01", value: 35_000_000 }] }];
+  const coinValue = { v: 1, balance: 123_456 };
 
   /** One person's account, everything in it sealed by `k` — as it stood before the key was replaced. */
   const sealedBy = (k: typeof before) => ({
@@ -213,7 +240,16 @@ describe("replacing the vault key", () => {
         changed_at: null,
       },
     ],
-    coinbase_links: [{ ...coinbaseRow(1, 4, NOW + 3_600_000), sealed_tokens: sealJson(tokens(1, NOW + 3_600_000), k) }],
+    coinbase_links: [
+      {
+        ...coinbaseRow(1, 4, NOW + 3_600_000),
+        sealed_tokens: sealJson(tokens(1, NOW + 3_600_000), k),
+        // Coinbase is shared with their household, so its value is kept too.
+        sealed_snapshot: sealPacked(coinValue, k),
+        snapshot_at: "2026-09-29T09:00:00.000Z",
+      },
+    ],
+    shared_accounts: [{ user_id: "u1", account_id: "coinbase" }],
     calendar_feeds: [{ user_id: "u1", updated_at: "2026-09-02T00:00:00Z", sealed_token: sealJson({ token: "feed-secret" }, k), snapshot: sealFeedSnapshot(bills, k) }],
   });
 
@@ -226,6 +262,7 @@ describe("replacing the vault key", () => {
     expect(a.coinbase?.tokens.accessToken).toBe("at1");
     expect(a.categories).toEqual(fixes);
     expect(a.manual).toEqual(owned);
+    expect(a.coinbaseShared).toEqual({ balance: 123_456, at: "2026-09-29T09:00:00.000Z" });
     expect(a.reseal).not.toBeNull();
     await a.reseal!();
 
@@ -233,7 +270,16 @@ describe("replacing the vault key", () => {
     const [link] = tables.coinbase_links! as Row[];
     const [feed] = tables.calendar_feeds! as Row[];
     const [profile] = tables.profiles! as Row[];
-    for (const sealed of [item!.sealed_token, item!.sealed_sync, link!.sealed_tokens, feed!.sealed_token, (feed!.snapshot as { sealed: string }).sealed, profile!.sealed_category_rules, profile!.sealed_manual_items]) {
+    for (const sealed of [
+      item!.sealed_token,
+      item!.sealed_sync,
+      link!.sealed_tokens,
+      link!.sealed_snapshot,
+      feed!.sealed_token,
+      (feed!.snapshot as { sealed: string }).sealed,
+      profile!.sealed_category_rules,
+      profile!.sealed_manual_items,
+    ]) {
       expect(needsReseal(sealed as string, during)).toBe(false);
     }
     // Versions never move, so a save made meanwhile can't be refused because of this.
@@ -243,6 +289,8 @@ describe("replacing the vault key", () => {
     expect(openJson(item!.sealed_token as string, after)).toEqual({ accessToken: "access-1" });
     expect(openPacked(item!.sealed_sync as string, after)).toEqual(sync);
     expect(openJson(link!.sealed_tokens as string, after)).toEqual(tokens(1, NOW + 3_600_000));
+    expect(openPacked(link!.sealed_snapshot as string, after)).toEqual(coinValue);
+    expect(link!.snapshot_at).toBe("2026-09-29T09:00:00.000Z");
     expect(openJson(feed!.sealed_token as string, after)).toEqual({ token: "feed-secret" });
     expect(openFeedSnapshot(feed!.snapshot, after)).toEqual(bills);
     expect(openPacked(profile!.sealed_category_rules as string, after)).toEqual(fixes);
@@ -275,7 +323,9 @@ describe("replacing the vault key", () => {
     const newer = sealPacked({ ...sync, cursor: "c-10" }, during);
     const refreshed = sealJson(tokens(2, NOW + 7_200_000), during);
     Object.assign(item!, { sealed_token: relinked, sealed_sync: newer, sync_version: 4 });
-    Object.assign(link!, { sealed_tokens: refreshed, version: 5 });
+    // A newer Coinbase value is copied too (every copy moves snapshot_at).
+    const newerValue = sealPacked({ v: 1, balance: 200_000 }, during);
+    Object.assign(link!, { sealed_tokens: refreshed, version: 5, sealed_snapshot: newerValue, snapshot_at: "2026-09-29T10:00:00.000Z" });
     // …and a new category fix is saved (every profile write moves updated_at).
     const [profile] = tables.profiles! as Row[];
     const newFixes = sealPacked({ ...fixes, merchants: { ...fixes.merchants, "corner shop": "food" } }, during);
@@ -284,6 +334,7 @@ describe("replacing the vault key", () => {
     expect(item!.sealed_token).toBe(relinked);
     expect(item!.sealed_sync).toBe(newer);
     expect(link!.sealed_tokens).toBe(refreshed);
+    expect(link!.sealed_snapshot).toBe(newerValue);
     expect(profile!.sealed_category_rules).toBe(newFixes);
   });
 

@@ -21,7 +21,7 @@ const copy = (accounts: PlaidAccount[], transactions: PlaidTransaction[]) => ({ 
 const inHousehold = { current: true };
 const NO_PLAN = { budgets: null, goals: null, budgetsVersion: 0, goalsVersion: 0, budgetsChanged: null, goalsChanged: null };
 const plan = { current: NO_PLAN as unknown };
-const shared = { mine: new Map<string, string | null>([["joint", "item-me"]]), fails: false };
+const shared = { mine: new Map<string, string | null>([["joint", "item-me"]]), fails: false, samCoinbase: false as false | "good" | "bad" };
 vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: "Dana",
@@ -52,9 +52,10 @@ vi.mock("./household-store", async () => {
         {
           userId: "u-sam",
           firstName: "Sam",
-          sharedAccountIds: ["sam-card"],
+          sharedAccountIds: shared.samCoinbase ? ["coinbase", "sam-card"] : ["sam-card"],
           sealedCategoryRules: sealPacked({ v: 1, merchants: { "gas & go": "transport" }, transactions: {} }, KEY),
           sealedManualItems: null,
+          coinbase: shared.samCoinbase ? { sealed: sealPacked({ v: 1, balance: shared.samCoinbase === "good" ? 777_00 : -5 }, KEY), at: "2026-09-30T08:00:00Z" } : null,
           items: [
             {
               itemId: "item-sam",
@@ -80,6 +81,7 @@ describe("the Household view", () => {
     jar.clear();
     inHousehold.current = true;
     shared.fails = false;
+    shared.samCoinbase = false;
     plan.current = NO_PLAN;
     vi.stubEnv("PLAID_CLIENT_ID", "id");
     vi.stubEnv("PLAID_SECRET", "secret");
@@ -109,6 +111,23 @@ describe("the Household view", () => {
     expect(data.goals).toEqual([]);
     expect(data).toMatchObject({ planEdited: { budgets: false, goals: false }, householdPlan: { budgetsVersion: 0, goalsVersion: 0 } });
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("shows a member's shared Coinbase as its value from their last visit, and nothing more", async () => {
+    jar.set("prism-view", "household");
+    shared.samCoinbase = "good";
+    let { getFinance } = await import("./finance");
+    let data = await getFinance();
+    expect(data.accounts.find((a) => a.id === "u-sam:coinbase")).toMatchObject({ name: "Coinbase", kind: "crypto", balance: 777_00, source: "coinbase" });
+    expect(data.institutions.find((i) => i.id === "u-sam:coinbase")).toMatchObject({ name: "Coinbase · Sam", lastSyncedAt: "2026-09-30T08:00:00Z" });
+    expect(data.holdings.filter((h) => h.accountId.startsWith("u-sam:"))).toEqual([]);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // A stored value that doesn't read as one shows no Coinbase at all, never a made-up number.
+    vi.resetModules();
+    shared.samCoinbase = "bad";
+    ({ getFinance } = await import("./finance"));
+    data = await getFinance();
+    expect(data.accounts.some((a) => a.source === "coinbase")).toBe(false);
   });
 
   it("uses the household's own budgets and goals once someone sets them, and says who", async () => {
