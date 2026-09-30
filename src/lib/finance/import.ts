@@ -325,6 +325,13 @@ export type StoredPart = { v: 1; rows: ImportRow[]; meta?: ImportMeta };
 /** An import as Prism shows it: every part present and every row checked. */
 export type ImportedHistory = { id: string; meta: ImportMeta; rows: ImportRow[]; importedAt: string };
 
+/**
+ * An import some part of which no key opens: sealed under a vault key that has since been retired. It can't be
+ * shown, and is never removed for it (the key may only be missing for a moment), but the person is told it's there
+ * and can remove it, so it never sits in their account unseen or holds one of their twenty places for good.
+ */
+export type LockedImport = { id: string; importedAt: string };
+
 /** Rows already stored were checked against the day they arrived; opening them again only checks their shape. */
 const ANY_DAY = "9999-12-31";
 
@@ -334,16 +341,17 @@ export const UNFINISHED_MS = 24 * 60 * 60_000;
 /**
  * The person's imports from their opened parts: only those with part 0 and
  * every part it counts, each checked again. Also the ids of imports left
- * unfinished for over a day, to be removed.
+ * unfinished for over a day, to be removed, and the imports that won't open.
  */
 export function assembleImports(
   parts: { importId: string; part: number; opened: unknown; createdAt: string }[],
   now = Date.now(),
-): { imports: ImportedHistory[]; abandoned: string[] } {
+): { imports: ImportedHistory[]; abandoned: string[]; locked: LockedImport[] } {
   const byImport = new Map<string, typeof parts>();
   for (const p of parts) byImport.set(p.importId, [...(byImport.get(p.importId) ?? []), p]);
   const imports: ImportedHistory[] = [];
   const abandoned: string[] = [];
+  const locked: LockedImport[] = [];
   for (const [id, list] of byImport) {
     const opened = new Map(list.map((p) => [p.part, p.opened as Partial<StoredPart> | null]));
     const head = opened.get(0);
@@ -354,14 +362,18 @@ export function assembleImports(
       // from this deployment for a moment) is unreadable, not unfinished, and is never removed for it.
       const readable = list.every((p) => p.opened !== null);
       const oldest = Math.min(...list.map((p) => Date.parse(p.createdAt)));
-      if (readable && now - oldest > UNFINISHED_MS) abandoned.push(id);
+      if (!readable) locked.push({ id, importedAt: new Date(oldest).toISOString() });
+      else if (now - oldest > UNFINISHED_MS) abandoned.push(id);
       continue;
     }
     const rows = Array.from({ length: meta.parts }, (_, n) => opened.get(n)!.rows!).flat().filter((r) => validImportRow(r, ANY_DAY));
     imports.push({ id, meta, rows, importedAt: list.find((p) => p.part === 0)!.createdAt });
   }
-  imports.sort((a, b) => (a.importedAt < b.importedAt ? -1 : a.importedAt > b.importedAt ? 1 : a.id.localeCompare(b.id)));
-  return { imports, abandoned };
+  const byDate = (a: { id: string; importedAt: string }, b: { id: string; importedAt: string }) =>
+    a.importedAt < b.importedAt ? -1 : a.importedAt > b.importedAt ? 1 : a.id.localeCompare(b.id);
+  imports.sort(byDate);
+  locked.sort(byDate);
+  return { imports, abandoned, locked };
 }
 
 /** What Connections lists of an import: never its rows. */

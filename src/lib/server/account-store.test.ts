@@ -441,6 +441,7 @@ describe("history a person imported", () => {
     const { db, tables, writes } = fakeDb(stored(before));
     const a = await loadAccount(account(db), before, { withImports: true });
     expect(a.imports.map((i) => [i.id, i.rows.length])).toEqual([[FINISHED, 2]]);
+    expect(a.lockedImports).toEqual([]);
     await a.reseal!();
     expect(writes).toEqual([{ table: "imported_history", op: "delete", filters: { user_id: "u1", import_id: LEFT } }]);
     expect(ids(tables.imported_history!)).toEqual([`u1:${FINISHED}:1`, `u1:${FINISHED}:0`, `u2:${LEFT}:1`]);
@@ -455,6 +456,15 @@ describe("history a person imported", () => {
       expect(a.reseal).toBeNull();
       expect(writes).toEqual([]);
     }
+  });
+
+  it("tells the person about an import no key opens, so they can remove it, but not while there's no key at all", async () => {
+    const retired = vaultKey({ PRISM_VAULT_KEY: b64(randomBytes(32)) })!;
+    const withKey = await loadAccount(account(fakeDb(stored(before)).db), retired, { withImports: true });
+    expect(withKey.lockedImports.map((i) => i.id)).toEqual([FINISHED, LEFT]);
+    // Without a key nothing opens, so it can't say which are gone for good: it offers none for removal.
+    const noKey = await loadAccount(account(fakeDb(stored(before)).db), null, { withImports: true });
+    expect(noKey.lockedImports).toEqual([]);
   });
 
   it("moves to a new vault key part by part, like everything else sealed", async () => {

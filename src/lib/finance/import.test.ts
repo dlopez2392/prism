@@ -169,8 +169,8 @@ describe("putting an import back together", () => {
     expect(summarize(imports[0]!)).toEqual({ id: "a", name: "Old Visa", attachTo: null, rows: 3, from: "2020-01-01", to: "2020-01-03", importedAt: at(1) });
   });
 
-  it("gives up on one left unfinished for over a day, but never on one it merely can't open", () => {
-    const { imports, abandoned } = assembleImports(
+  it("gives up on one left unfinished for over a day, but never on one it merely can't open, which it reports instead", () => {
+    const { imports, abandoned, locked } = assembleImports(
       [
         { importId: "old", part: 1, opened: { v: 1, rows: [row(1)] }, createdAt: at(30) },
         // Sealed under a key this deployment doesn't have (or has none at all, for a moment): unreadable, not abandoned.
@@ -182,5 +182,19 @@ describe("putting an import back together", () => {
     );
     expect(imports).toEqual([]);
     expect(abandoned).toEqual(["old"]);
+    expect(locked).toEqual([{ id: "sealed-elsewhere", importedAt: at(30) }]);
+  });
+
+  it("reports an import as locked when even one of its parts won't open, finished or not", () => {
+    const { imports, abandoned, locked } = assembleImports(
+      [
+        { importId: "half", part: 0, opened: { v: 1, meta: { name: "Old Visa", kind: "credit", attachTo: null, source: "csv", parts: 2 }, rows: [row(1)] }, createdAt: at(40) },
+        { importId: "half", part: 1, opened: null, createdAt: at(41) },
+      ],
+      NOW,
+    );
+    expect(imports).toEqual([]);
+    expect(abandoned).toEqual([]);
+    expect(locked).toEqual([{ id: "half", importedAt: at(41) }]);
   });
 });

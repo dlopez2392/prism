@@ -124,7 +124,8 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    Only the mapped rows travel, 2,000 at a time; the server checks every row
    again and stores them sealed, and the import shows only once every batch
    has arrived (one left unfinished for a day is removed; one that won't open
-   is never removed). An import becomes the older history of a linked bank
+   is never removed automatically, but is listed on Connections so the person
+   can remove it). An import becomes the older history of a linked bank
    account, adding only the days before that bank's own, or an account of its
    own. Category fixes apply to it; connected apps can read it; a household
    never sees it. Up to twenty imports a person, enforced by the database.

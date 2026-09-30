@@ -17,7 +17,7 @@ vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => ({ userId:
 const checking: PlaidAccount = { account_id: "chk", name: "Everyday Checking", official_name: null, mask: "4821", type: "depository", subtype: "checking", balances: { available: 900, current: 900, iso_currency_code: "USD" } };
 const tx = (id: string, date: string, dollars: number, name: string): PlaidTransaction => ({ transaction_id: id, account_id: "chk", amount: dollars, date, name, merchant_name: name, pending: false, personal_finance_category: { primary: "FOOD_AND_DRINK", detailed: "x" } });
 
-const money = { banks: true, manual: [] as unknown[], imports: [] as ImportedHistory[], rules: { v: 1, merchants: {} as Record<string, string>, transactions: {} as Record<string, string> } };
+const money = { banks: true, manual: [] as unknown[], imports: [] as ImportedHistory[], locked: [] as { id: string; importedAt: string }[], rules: { v: 1, merchants: {} as Record<string, string>, transactions: {} as Record<string, string> } };
 vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: "Dana",
@@ -26,6 +26,7 @@ vi.mock("./account-store", () => ({
     categories: money.rules,
     manual: money.manual,
     imports: money.imports,
+    lockedImports: money.locked,
     inHousehold: false,
     coinbaseShared: null,
     items: money.banks ? [{ itemId: "item-1", accessToken: "access-1", institutionId: null, institutionName: "Northwind Bank", linkedAt: "2026-09-01" }] : [],
@@ -61,7 +62,7 @@ describe("imported history", () => {
     vi.stubEnv("PLAID_SECRET", "secret");
     vi.stubEnv("PRISM_VAULT_KEY", randomBytes(32).toString("base64"));
     vi.stubGlobal("fetch", vi.fn());
-    Object.assign(money, { banks: true, manual: [], imports: [], rules: { v: 1, merchants: {}, transactions: {} } });
+    Object.assign(money, { banks: true, manual: [], imports: [], locked: [], rules: { v: 1, merchants: {}, transactions: {} } });
   });
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -123,5 +124,13 @@ describe("imported history", () => {
     const data = await mine();
     expect(data.source).toBe("import");
     expect(data.transactions.map((t) => t.merchant)).toEqual(["Just Imported"]);
+  });
+
+  it("lists an import that won't open for Connections, so it can be removed, without a row of it on any screen", async () => {
+    money.locked = [{ id: "gone", importedAt: "2026-09-01T10:00:00Z" }];
+    const data = await mine();
+    expect(data.lockedImports).toEqual([{ id: "gone", importedAt: "2026-09-01T10:00:00Z" }]);
+    expect(data.imports).toEqual([]);
+    expect(data.transactions.some((t) => t.id.startsWith("imp-gone-"))).toBe(false);
   });
 });

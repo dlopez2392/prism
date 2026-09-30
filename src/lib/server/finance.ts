@@ -17,7 +17,7 @@ import type { AgentData } from "@/lib/agent/tools";
 import { applyPlan, followAccounts, toGoal, type Plan } from "@/lib/finance/plan";
 import { feedSnapshot } from "@/lib/finance/calendar";
 import type { Cents, FinanceData, Goal, Holding, Institution, ISODate, Transaction } from "@/lib/finance/types";
-import { importAccountId, summarize, type ImportedHistory, type ImportSummary } from "@/lib/finance/import";
+import { importAccountId, summarize, type ImportedHistory, type ImportSummary, type LockedImport } from "@/lib/finance/import";
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
 import { needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
@@ -53,6 +53,8 @@ export type Loaded = FinanceData & {
   manual: ManualItem[];
   /** The history they imported, for Connections: what each import is, never its rows. */
   imports: ImportSummary[];
+  /** Imports that won't open any more (a retired vault key), listed on Connections so they can be removed. */
+  lockedImports: LockedImport[];
   /** Whose money this is: the person's own, or what their household shared. */
   view: "me" | "household";
   /** They're in a household, so the Me / Household switch applies. */
@@ -122,6 +124,8 @@ export type Sources = {
   manual: ManualItem[];
   /** History they imported from a file. A device keeps none. */
   imports: ImportedHistory[];
+  /** Imports that won't open under any key this deployment has. A device keeps none. */
+  lockedImports: LockedImport[];
   /** They're in a household. A device never is. */
   inHousehold: boolean;
   /** They share Coinbase with their household: the value last copied for it, and when. A device never does. */
@@ -174,6 +178,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       categories: a.categories,
       manual: a.manual,
       imports: a.imports,
+      lockedImports: a.lockedImports,
       inHousehold: a.inHousehold,
       coinbaseShared: a.coinbaseShared,
       items: plaid ? a.items : [],
@@ -206,6 +211,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     categories: NO_RULES,
     manual: [],
     imports: [],
+    lockedImports: [],
     inHousehold: false,
     coinbaseShared: null,
     items: plaid ? vaultItems(jar) : [],
@@ -246,7 +252,7 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "imports" | "view" | "inHousehold" | "householdPlan">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
@@ -367,6 +373,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     carryover: carryoverOf(jar, src.account !== null),
     manual: src.manual,
     imports: src.imports.map(summarize),
+    lockedImports: src.lockedImports,
     view: "me",
     inHousehold: src.inHousehold,
     householdPlan: null,

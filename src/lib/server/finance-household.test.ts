@@ -32,6 +32,7 @@ vi.mock("./account-store", () => ({
     categories: { v: 1, merchants: {}, transactions: {} },
     manual: [],
     imports: mineImports.current,
+    lockedImports: [],
     inHousehold: inHousehold.current,
     items: [{ itemId: "item-me", accessToken: "access-me", institutionId: null, institutionName: "Northwind Bank", linkedAt: "2026-09-01" }],
     plaidSync: new Map([["item-me", { state: copy([bank("joint", "Joint Checking", 500), bank("private", "My Savings", 9000)], [spend("m1", "joint", "Corner Café", 12), spend("m2", "private", "Secret Gift", 80)]), version: 1, syncedAt: new Date().toISOString(), changedAt: null }]]),

@@ -10,7 +10,7 @@ import { randomBytes } from "node:crypto";
 import { refreshTokens, type CoinbaseConfig, type TokenSet } from "@/lib/coinbase/client";
 import { validCoinbaseValue } from "@/lib/coinbase/map";
 import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
-import { assembleImports, type ImportedHistory } from "@/lib/finance/import";
+import { assembleImports, type ImportedHistory, type LockedImport } from "@/lib/finance/import";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
 import type { Budget } from "@/lib/finance/types";
@@ -56,6 +56,8 @@ export type AccountSources = {
   manual: ManualItem[];
   /** History they imported from a file, finished imports only — empty unless asked for. */
   imports: ImportedHistory[];
+  /** Imports no key in the ring opens, so they can be removed; none when there's no key at all. */
+  lockedImports: LockedImport[];
   items: VaultItem[];
   /** Each linked bank's stored sync (cursor, transactions, balances), by item id — empty unless asked for. */
   plaidSync: Map<string, StoredSync>;
@@ -138,7 +140,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     if (opened !== null) stale.importPart(r, opened);
     return { importId: r.import_id, part: r.part, opened, createdAt: r.created_at };
   });
-  const { imports, abandoned } = assembleImports(parts);
+  const { imports, abandoned, locked } = assembleImports(parts);
   // Without a key nothing opens, so nothing can be told apart from abandoned: nothing is removed.
   if (key) for (const id of abandoned) stale.abandonedImport(id);
   return {
@@ -148,6 +150,8 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     categories: rawRules === null ? NO_RULES : validCategoryRules(rawRules),
     manual: rawManual === null ? [] : validManualItems(rawManual),
     imports,
+    // Without a key nothing opens, so none is known to be locked for good: none is offered for removal.
+    lockedImports: key ? locked : [],
     items,
     plaidSync,
     coinbase: coinbaseRecord,
