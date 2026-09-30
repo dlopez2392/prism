@@ -158,7 +158,15 @@ export function redirectUriFor(env: Env, origin: string, plaidEnv: PlaidEnv): { 
  * change to the Terms and the privacy policy first.
  */
 export const LINK_PRODUCTS = ["transactions"] as const;
-export const LINK_OPTIONAL_PRODUCTS = ["investments", "liabilities"] as const;
+/** Fetched when the bank supports it, and billed from the moment a bank links: only what Prism reads today. */
+export const LINK_OPTIONAL_PRODUCTS = ["investments"] as const;
+/**
+ * Consent only: Plaid asks the person's permission at link time, fetches
+ * nothing, and bills nothing until Prism first calls the product. So a later
+ * feature (a card's due date and minimum payment, say) needs no re-linking,
+ * and nobody pays for, or hands over, data Prism doesn't use yet.
+ */
+export const LINK_CONSENTED_PRODUCTS = ["liabilities"] as const;
 /** The Terms say accounts are for people in the United States. */
 export const LINK_COUNTRIES = ["US"] as const;
 
@@ -182,6 +190,7 @@ export async function createLinkToken(
     products: [...LINK_PRODUCTS],
     // Asked for when the institution supports them; never blocks the link.
     optional_products: [...LINK_OPTIONAL_PRODUCTS],
+    additional_consented_products: [...LINK_CONSENTED_PRODUCTS],
     transactions: { days_requested: 730 },
   };
   if (opts.redirectUri) body.redirect_uri = opts.redirectUri;
