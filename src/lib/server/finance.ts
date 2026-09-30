@@ -490,7 +490,7 @@ async function loadCoinbase(config: CoinbaseConfig, accessToken: string | null, 
   } catch (e) {
     const reauth = e instanceof CoinbaseError && e.needsReconnect;
     return {
-      institution: coinbaseNeedsSignIn(),
+      institution: coinbaseNeedsSignIn(reauth),
       account: null,
       holdings: [],
       problem: reauth ? "Coinbase needs you to sign in again." : "We couldn't reach Coinbase just now.",
@@ -515,30 +515,32 @@ const isReauth = (e: unknown) => e instanceof PlaidError && (e.code === "ITEM_LO
  * A bank as of now: the stored copy — balances and transactions — while it's
  * fresh and Plaid has been quiet (no Plaid call at all); else the balances
  * plus only what changed since its cursor, or the whole history the first
- * time. If Plaid can't be reached, the last copy still stands (and the page
- * says so), unless the bank needs the person to sign in again.
+ * time. If Plaid can't be reached, or the bank needs the person to sign in
+ * again, the last copy still stands (and the page says so): a bank waiting
+ * on its owner mustn't vanish from their net worth and goals meanwhile, nor
+ * show them less than their household already sees of it.
  */
 async function bankFor(
   config: PlaidConfig,
   item: VaultItem,
   sync: PlaidSync | null,
   today: ISODate,
-): Promise<{ accounts: PlaidAccount[]; transactions: PlaidTransaction[]; ready: boolean; syncedAt: string; fromCopy: boolean }> {
+): Promise<{ accounts: PlaidAccount[]; transactions: PlaidTransaction[]; ready: boolean; syncedAt: string; fromCopy: boolean; signInAgain: boolean }> {
   const stored = sync?.stored.get(item.itemId) ?? null;
   const copy = stored?.state ?? null;
-  if (copy?.accounts && !needsSync(stored)) return { accounts: copy.accounts, transactions: copy.transactions, ready: copy.ready, syncedAt: stored!.syncedAt!, fromCopy: false };
+  if (copy?.accounts && !needsSync(stored)) return { accounts: copy.accounts, transactions: copy.transactions, ready: copy.ready, syncedAt: stored!.syncedAt!, fromCopy: false, signInAgain: false };
   const startedAt = new Date().toISOString();
   let next: SyncState;
   try {
     const [acc, synced] = await Promise.all([getAccounts(config, item.accessToken), syncTransactions(config, item.accessToken, copy, { today })]);
     next = { ...synced, accounts: acc.accounts };
   } catch (e) {
-    if (copy?.accounts && stored?.syncedAt && !isReauth(e)) return { accounts: copy.accounts, transactions: copy.transactions, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true };
+    if (copy?.accounts && stored?.syncedAt) return { accounts: copy.accounts, transactions: copy.transactions, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true, signInAgain: isReauth(e) };
     throw e;
   }
   // Outside the try: a problem keeping the copy is never mistaken for Plaid being down.
   sync?.save?.(item.itemId, next, stored?.version ?? 0, startedAt);
-  return { accounts: next.accounts ?? [], transactions: next.transactions, ready: next.ready, syncedAt: startedAt, fromCopy: false };
+  return { accounts: next.accounts ?? [], transactions: next.transactions, ready: next.ready, syncedAt: startedAt, fromCopy: false, signInAgain: false };
 }
 
 async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate, sync: PlaidSync | null = null, rules: CategoryRules = NO_RULES): Promise<Live> {
@@ -556,9 +558,15 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
         const txns = bank.transactions.map(mapTransaction);
         transactions.push(...txns);
         accounts.push(...bank.accounts.map((a) => mapAccount(a, item.itemId, txns, today)));
-        institutions.push({ id: item.itemId, name, health: bank.ready ? "healthy" : "syncing", lastSyncedAt: bank.syncedAt, source: "plaid" });
-        if (bank.fromCopy) problems.push(`${name} couldn't be updated just now — showing it as of the last sync.`);
-        if (bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
+        institutions.push(
+          bank.signInAgain
+            ? { id: item.itemId, name, health: "needs_attention", signInAgain: true, lastSyncedAt: bank.syncedAt, source: "plaid" }
+            : { id: item.itemId, name, health: bank.ready ? "healthy" : "syncing", lastSyncedAt: bank.syncedAt, source: "plaid" },
+        );
+        if (bank.signInAgain) problems.push(`${name} needs you to sign in again — showing it as of the last sync.`);
+        else if (bank.fromCopy) problems.push(`${name} couldn't be updated just now — showing it as of the last sync.`);
+        // Holdings aren't kept in the copy, and a bank waiting on a sign-in would only refuse again.
+        if (!bank.signInAgain && bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
           try {
             const h = await getHoldings(config, item.accessToken);
             holdings.push(...mapHoldings(h.holdings, h.securities));
@@ -568,7 +576,7 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
         }
       } catch (e) {
         const reauth = isReauth(e);
-        institutions.push({ id: item.itemId, name, health: "needs_attention", lastSyncedAt: null, source: "plaid" });
+        institutions.push({ id: item.itemId, name, health: "needs_attention", ...(reauth ? { signInAgain: true as const } : {}), lastSyncedAt: null, source: "plaid" });
         problems.push(reauth ? `${name} needs you to sign in again.` : `We couldn't reach ${name} just now.`);
       }
     }),

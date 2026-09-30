@@ -2,9 +2,12 @@
 // this browser's household. 503 with `not_configured` when no Plaid keys are
 // set, which the client turns into the "you're on demo data" explanation.
 //
-// Body: `{ from }`, the page the person is on, so that a bank which signs
-// them in on its own website can send them back to it
-// (/connections/return).
+// Body: `{ from, itemId? }`. `from` is the page the person is on, so that a
+// bank which signs them in on its own website can send them back to it
+// (/connections/return). `itemId` asks to sign in to one of THEIR OWN linked
+// banks again (Plaid's update mode): the same connection carries on, so
+// nothing is exchanged afterwards. Anyone else's bank, or one that's gone,
+// is a 404.
 //
 // With accounts on, only a signed-in account may connect a bank: 401
 // `sign_in_required` otherwise (src/lib/linking.ts says why).
@@ -16,6 +19,7 @@ import { clearedReturnCookie, packReturn, RETURN_COOKIE, returnCookieOptions, re
 import { linkingRefusal } from "@/lib/linking";
 import { requestOrigin } from "@/lib/server/origin";
 import { sameOriginJson } from "@/lib/server/request-guard";
+import { loadAccount } from "@/lib/server/account-store";
 import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey, type VaultKey } from "@/lib/server/vault";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
@@ -34,12 +38,18 @@ export async function POST(req: Request) {
   }
   if (!key) return NextResponse.json({ error: "vault_key_missing", message: "Set PRISM_VAULT_KEY to link banks in production." }, { status: 500 });
 
-  const body = (await req.json().catch(() => null)) as { from?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { from?: unknown; itemId?: unknown } | null;
   const account = await currentAccount();
   const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: config.env !== "sandbox" });
   if (refusal) return NextResponse.json({ error: refusal.error, message: refusal.message }, { status: refusal.status });
   const jar = await cookies();
   const vault = account ? null : (open(jar.get(VAULT_COOKIE)?.value, key) ?? emptyVault());
+  // Signing in to one of this person's own banks again: the only way to its access token is their own list.
+  const again = body?.itemId === undefined ? null : ((account ? (await loadAccount(account, key)).items : vault!.items).find((i) => i.itemId === body.itemId) ?? null);
+  if (body?.itemId !== undefined && !again) {
+    return NextResponse.json({ error: "not_found", message: "That bank isn't connected any more. Connect it again from Connections." }, { status: 404 });
+  }
+  const accessToken = again?.accessToken;
   // The origin as the browser saw it (a TLS-terminating proxy makes req.url say http).
   const origin = await requestOrigin();
   const redirect = redirectUriFor(process.env, origin, config.env);
@@ -53,18 +63,18 @@ export async function POST(req: Request) {
     let redirectUri = redirect.uri;
     let linkToken: string;
     try {
-      linkToken = (await createLinkToken(config, userId, { webhookUrl, redirectUri })).link_token;
+      linkToken = (await createLinkToken(config, userId, { webhookUrl, redirectUri, accessToken })).link_token;
     } catch (e) {
       // Plaid refuses an address missing from its allow-list, and a setting made before (or
       // without) that step must never stop anyone linking: without it the bank opens in a pop-up.
       if (!redirectUri || !(e instanceof PlaidError) || !["INVALID_FIELD", "INVALID_REQUEST"].includes(e.code)) throw e;
       console.error(`Plaid refused PLAID_REDIRECT_URI (${redirectUri}): ${e.message}. Add it to Allowed redirect URIs in Plaid's dashboard. Linking without it.`);
       redirectUri = null;
-      linkToken = (await createLinkToken(config, userId, { webhookUrl })).link_token;
+      linkToken = (await createLinkToken(config, userId, { webhookUrl, accessToken })).link_token;
     }
     if (vault) jar.set(VAULT_COOKIE, seal(vault, key), cookieOptions());
     // Only a token Plaid may redirect with needs remembering; any older one is dropped either way.
-    if (redirectUri) jar.set(RETURN_COOKIE, packReturn({ linkToken, back: returnPath(body?.from) }), returnCookieOptions());
+    if (redirectUri) jar.set(RETURN_COOKIE, packReturn({ linkToken, back: returnPath(body?.from), reconnect: again?.itemId ?? null }), returnCookieOptions());
     else if (jar.has(RETURN_COOKIE)) jar.set(RETURN_COOKIE, "", clearedReturnCookie());
     return NextResponse.json({ linkToken, env: config.env });
   } catch (e) {

@@ -241,7 +241,7 @@ export function buildDemoData(today: ISODate): FinanceData {
     { id: "northwind", name: "Northwind Bank", health: "healthy", lastSyncedAt: synced, source: "demo" },
     { id: "summit", name: "Summit Card", health: "healthy", lastSyncedAt: synced, source: "demo" },
     { id: "evergreen", name: "Evergreen Investments", health: "healthy", lastSyncedAt: synced, source: "demo" },
-    { id: "beacon", name: "Beacon Crypto", health: "needs_attention", lastSyncedAt: `${addDays(today, -6)}T19:02:00Z`, source: "demo" },
+    { id: "beacon", name: "Beacon Crypto", health: "needs_attention", signInAgain: true, lastSyncedAt: `${addDays(today, -6)}T19:02:00Z`, source: "demo" },
     { id: "harbor", name: "Harbor Auto Finance", health: "syncing", lastSyncedAt: `${addDays(today, -1)}T22:40:00Z`, source: "demo" },
     { id: "manual", name: "Added by you", health: "healthy", lastSyncedAt: null, source: "manual" },
   ];

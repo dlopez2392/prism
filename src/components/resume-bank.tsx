@@ -4,9 +4,10 @@
 //
 // Back from a bank's own sign-in page: reopen Link with the SAME Link token
 // and this page's full address (Plaid's oauth_state_id included), so Link
-// picks up exactly where it left off. Then save the bank as usual and take
-// the person back to where they started. A full page load, so every
-// screen, the layout included, redraws with the new bank.
+// picks up exactly where it left off. Then save the bank as usual (or, when
+// they were signing in to an already-linked bank again, nothing to save: the
+// same connection carries on) and take the person back to where they
+// started. A full page load, so every screen, the layout included, redraws.
 
 import { useEffect, useRef, useState } from "react";
 import { Landmark } from "lucide-react";
@@ -18,7 +19,7 @@ import { loadLink, saveBank, type PlaidHandler } from "@/lib/plaid/link";
 type State =
   | { kind: "resuming" }
   | { kind: "saving"; name: string }
-  | { kind: "done"; name: string }
+  | { kind: "done"; name: string; reconnected: boolean }
   | { kind: "cancelled" }
   | { kind: "error"; message: string };
 
@@ -30,7 +31,8 @@ const TITLE: Record<State["kind"], string> = {
   error: "We couldn't finish connecting",
 };
 
-export function ResumeBank({ linkToken, back }: { linkToken: string; back: string }) {
+/** `reconnect`: the linked bank being signed in to again, if that's what this was. */
+export function ResumeBank({ linkToken, back, reconnect = null }: { linkToken: string; back: string; reconnect?: string | null }) {
   const [state, setState] = useState<State>({ kind: "resuming" });
   // Link resumes a bank sign-in once. React's development double-run of effects must not start it twice.
   const started = useRef(false);
@@ -46,6 +48,13 @@ export function ResumeBank({ linkToken, back }: { linkToken: string; back: strin
           receivedRedirectUri: window.location.href,
           onSuccess: async (publicToken, metadata) => {
             const name = metadata.institution?.name ?? "Your bank";
+            if (reconnect) {
+              // Update mode: the connection Prism already holds works again; there's nothing to exchange.
+              handler?.destroy();
+              setState({ kind: "done", name, reconnected: true });
+              window.location.replace(back);
+              return;
+            }
             setState({ kind: "saving", name });
             const saved = await saveBank(publicToken);
             handler?.destroy();
@@ -57,7 +66,7 @@ export function ResumeBank({ linkToken, back }: { linkToken: string; back: strin
               setState({ kind: "error", message: saved.message });
               return;
             }
-            setState({ kind: "done", name: saved.institutionName ?? name });
+            setState({ kind: "done", name: saved.institutionName ?? name, reconnected: false });
             window.location.replace(back);
           },
           onExit: (err) => {
@@ -68,7 +77,7 @@ export function ResumeBank({ linkToken, back }: { linkToken: string; back: strin
         handler.open();
       })
       .catch(() => setState({ kind: "error", message: "The secure connection window didn't load. Check your connection, then try again." }));
-  }, [linkToken, back]);
+  }, [linkToken, back, reconnect]);
 
   const settled = state.kind === "cancelled" || state.kind === "error";
   return (
@@ -88,12 +97,18 @@ export function ResumeBank({ linkToken, back }: { linkToken: string; back: strin
             <StatusPill status="syncing">Saving {state.name}…</StatusPill>
           ) : state.kind === "done" ? (
             <div>
-              <StatusPill status="good">{state.name} is connected</StatusPill>
-              <p className="mt-2 text-sm text-ink-2">Taking you back and pulling in your transactions…</p>
+              <StatusPill status="good">
+                {state.name} is {state.reconnected ? "reconnected" : "connected"}
+              </StatusPill>
+              <p className="mt-2 text-sm text-ink-2">Taking you back and {state.reconnected ? "bringing it up to date" : "pulling in your transactions"}…</p>
             </div>
           ) : state.kind === "cancelled" ? (
             // The heading says it in words; a status pill here would wear the kit's neutral check mark, which reads as success.
-            <p className="text-sm text-ink-2">You closed the window before finishing, so nothing was shared. You can start again any time.</p>
+            <p className="text-sm text-ink-2">
+              {reconnect
+                ? "You closed the window before finishing, so your bank still needs you to sign in. You can try again any time."
+                : "You closed the window before finishing, so nothing was shared. You can start again any time."}
+            </p>
           ) : (
             <div>
               <StatusPill status="warn">Not connected</StatusPill>
@@ -103,7 +118,7 @@ export function ResumeBank({ linkToken, back }: { linkToken: string; back: strin
         </div>
         {settled ? (
           <div className="mt-6 flex flex-wrap items-start gap-3">
-            <ConnectBank variant="primary" label="Try again" landOn={back} />
+            <ConnectBank variant="primary" label="Try again" landOn={back} reconnect={reconnect ?? undefined} />
             <ButtonLink href={back}>Go back</ButtonLink>
           </div>
         ) : null}

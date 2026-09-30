@@ -21,7 +21,7 @@ export const metadata: Metadata = { title: "Finishing your connection", robots: 
 export default async function BankReturnPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const view = returnView((await searchParams).oauth_state_id, (await cookies()).get(RETURN_COOKIE)?.value);
 
-  if (view.kind === "resume") return <ResumeBank linkToken={view.linkToken} back={view.back} />;
+  if (view.kind === "resume") return <ResumeBank linkToken={view.linkToken} back={view.back} reconnect={view.reconnect} />;
 
   if (view.kind === "unfinished") {
     // Back from the bank with nothing to resume. Often it's already done: pressing Back after connecting lands here.

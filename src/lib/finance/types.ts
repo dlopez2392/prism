@@ -47,6 +47,8 @@ export type Institution = {
   name: string;
   /** Status of the live connection; drives the Connections health screen. */
   health: "healthy" | "syncing" | "needs_attention";
+  /** Needs the person to sign in at the source again (a changed password, an expired consent); only they can fix it. */
+  signInAgain?: true;
   lastSyncedAt: string | null;
   source: DataSource;
 };

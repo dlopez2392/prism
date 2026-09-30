@@ -188,11 +188,16 @@ export const LINK_COUNTRIES = ["US"] as const;
  * `webhookUrl` is where Plaid announces new transactions (PLAID_WEBHOOK_URL
  * overrides it); `redirectUri` is where a bank's own sign-in page sends the
  * person back (see redirectUriFor).
+ *
+ * With `accessToken`, Link opens in UPDATE MODE for that one bank: the person
+ * signs in to it again (a changed password, an expired consent) and the SAME
+ * connection carries on — same access token, same accounts, nothing new to
+ * exchange or pay for. Plaid asks for no products in update mode.
  */
 export async function createLinkToken(
   config: PlaidConfig,
   clientUserId: string,
-  opts: { webhookUrl?: string | null; redirectUri?: string | null } = {},
+  opts: { webhookUrl?: string | null; redirectUri?: string | null; accessToken?: string } = {},
   env: Env = process.env,
 ) {
   const body: Record<string, unknown> = {
@@ -201,12 +206,16 @@ export async function createLinkToken(
     client_name: BRAND.product,
     language: "en",
     country_codes: [...LINK_COUNTRIES],
-    products: [...LINK_PRODUCTS],
-    // Asked for when the institution supports them; never blocks the link.
-    optional_products: [...LINK_OPTIONAL_PRODUCTS],
-    additional_consented_products: [...LINK_CONSENTED_PRODUCTS],
-    transactions: { days_requested: 730 },
   };
+  if (opts.accessToken) {
+    body.access_token = opts.accessToken;
+  } else {
+    body.products = [...LINK_PRODUCTS];
+    // Asked for when the institution supports them; never blocks the link.
+    body.optional_products = [...LINK_OPTIONAL_PRODUCTS];
+    body.additional_consented_products = [...LINK_CONSENTED_PRODUCTS];
+    body.transactions = { days_requested: 730 };
+  }
   if (opts.redirectUri) body.redirect_uri = opts.redirectUri;
   const webhook = env.PLAID_WEBHOOK_URL?.trim() || opts.webhookUrl;
   if (webhook) body.webhook = webhook;

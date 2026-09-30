@@ -30,7 +30,9 @@ vi.mock("next/headers", () => ({
 const signedIn = { current: null as null | { userId: string; email: string } };
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn.current }));
 const addAccountPlaidItem = vi.fn(async () => undefined);
-vi.mock("@/lib/server/account-store", () => ({ loadAccount: async () => ({ items: [] }), addAccountPlaidItem: (...a: unknown[]) => addAccountPlaidItem(...(a as [])) }));
+/** The banks the signed-in account holds, as loadAccount returns them. */
+const accountItems = { current: [] as { itemId: string; accessToken: string; institutionId: string | null; institutionName: string | null; linkedAt: string }[] };
+vi.mock("@/lib/server/account-store", () => ({ loadAccount: async () => ({ items: accountItems.current }), addAccountPlaidItem: (...a: unknown[]) => addAccountPlaidItem(...(a as [])) }));
 
 const { POST: linkToken } = await import("@/app/api/plaid/link-token/route");
 const { POST: exchange } = await import("@/app/api/plaid/exchange/route");
@@ -80,7 +82,7 @@ describe("a bank that signs people in on its own website", () => {
     expect(res.status).toBe(200);
     expect(sentToPlaid()[0]!.redirect_uri).toBe(`${SITE}/connections/return`);
     const saved = jar.get(RETURN_COOKIE)!;
-    expect(readReturn(saved.value)).toEqual({ linkToken: "link-sandbox-4f1e", back: "/budgets" });
+    expect(readReturn(saved.value)).toEqual({ linkToken: "link-sandbox-4f1e", back: "/budgets", reconnect: null });
     expect(saved.options).toMatchObject({ httpOnly: true, sameSite: "lax", path: "/", maxAge: 3600 });
   });
 
@@ -236,5 +238,59 @@ describe("connecting a bank needs an account", () => {
     expect((await post(linkToken, "/api/plaid/link-token", { from: "/" })).status).toBe(200);
     expect((await post(exchange, "/api/plaid/exchange", { publicToken: "public-sandbox-77aa" })).status).toBe(200);
     expect(vaultSet()).toBe(true);
+  });
+});
+
+// A bank that stopped updating (a changed password, an expired consent) is
+// signed in to again with Plaid's update mode: the SAME connection, so its
+// accounts, goals and household shares carry on and nothing is paid twice.
+describe("signing in to a linked bank again", () => {
+  beforeEach(() => {
+    jar.clear();
+    signedIn.current = { userId: "u1", email: "a@x.test" };
+    accountItems.current = [{ itemId: "item-chase", accessToken: "access-production-chase", institutionId: "ins_56", institutionName: "Chase", linkedAt: "2026-09-30" }];
+    allowList = [`${SITE}/connections/return`];
+    plaid.mockClear();
+    vi.stubGlobal("fetch", plaid);
+    vi.stubEnv("PLAID_CLIENT_ID", "id");
+    vi.stubEnv("PLAID_SECRET", "secret");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://ref.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test");
+  });
+  afterEach(() => {
+    accountItems.current = [];
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("opens Link for that bank's existing connection, asking for no products", async () => {
+    vi.stubEnv("PLAID_REDIRECT_URI", `${SITE}/connections/return`);
+    const res = await post(linkToken, "/api/plaid/link-token", { from: "/net-worth", itemId: "item-chase" });
+    expect(res.status).toBe(200);
+    const sent = sentToPlaid()[0]!;
+    expect(sent).toMatchObject({ access_token: "access-production-chase", user: { client_user_id: "u1" }, redirect_uri: `${SITE}/connections/return` });
+    for (const product of ["products", "optional_products", "additional_consented_products", "transactions"]) expect(sent).not.toHaveProperty(product);
+    // The access token went to Plaid, never to the browser.
+    expect(JSON.stringify(await res.json())).not.toContain("access-production-chase");
+    // Back from the bank's own site, the return page knows it's this bank again: nothing to exchange, and "Try again" means it again.
+    expect(readReturn(jar.get(RETURN_COOKIE)!.value)).toEqual({ linkToken: "link-sandbox-4f1e", back: "/net-worth", reconnect: "item-chase" });
+  });
+
+  it("is only ever for the person's own banks: anyone else's, or one that's gone, reaches no Plaid at all", async () => {
+    for (const itemId of ["item-someone-elses", "", 42, null]) {
+      const res = await post(linkToken, "/api/plaid/link-token", { from: "/", itemId });
+      expect(res.status, String(itemId)).toBe(404);
+      expect(await res.json()).toMatchObject({ error: "not_found" });
+    }
+    expect(plaid).not.toHaveBeenCalled();
+    expect(jar.has(RETURN_COOKIE)).toBe(false);
+  });
+
+  it("leaves a new connection exactly as it was", async () => {
+    await post(linkToken, "/api/plaid/link-token", { from: "/" });
+    const sent = sentToPlaid()[0]!;
+    expect(sent).not.toHaveProperty("access_token");
+    expect(sent).toMatchObject({ products: ["transactions"], optional_products: ["investments"], additional_consented_products: ["liabilities"] });
   });
 });

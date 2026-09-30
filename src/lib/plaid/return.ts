@@ -22,19 +22,25 @@ const LINK_TOKEN = /^link-(sandbox|production)-[\w-]{1,200}$/;
 /** Where to land when the page that started the connection can't be trusted. */
 export const RETURN_FALLBACK = "/connections";
 
-export type BankReturn = { linkToken: string; back: string };
+/**
+ * `reconnect`: the linked bank (its item id) Link was signing in to again —
+ * Plaid's update mode — so there's nothing to exchange afterwards, and
+ * "Try again" means that bank again, never a second connection to it.
+ */
+export type BankReturn = { linkToken: string; back: string; reconnect: string | null };
+const ITEM_ID = /^[\w-]{1,200}$/;
 
 export function packReturn(r: BankReturn): string {
-  return Buffer.from(JSON.stringify({ t: r.linkToken, b: r.back }), "utf8").toString("base64url");
+  return Buffer.from(JSON.stringify({ t: r.linkToken, b: r.back, ...(r.reconnect ? { u: r.reconnect } : {}) }), "utf8").toString("base64url");
 }
 
 /** The saved return, or null when there is none or it isn't one of ours. */
 export function readReturn(raw: string | undefined | null): BankReturn | null {
   if (!raw || raw.length > 2048) return null;
   try {
-    const x = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as { t?: unknown; b?: unknown };
+    const x = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as { t?: unknown; b?: unknown; u?: unknown };
     if (typeof x.t !== "string" || !LINK_TOKEN.test(x.t)) return null;
-    return { linkToken: x.t, back: returnPath(x.b) };
+    return { linkToken: x.t, back: returnPath(x.b), reconnect: typeof x.u === "string" && ITEM_ID.test(x.u) ? x.u : null };
   } catch {
     return null;
   }
