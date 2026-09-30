@@ -10,6 +10,7 @@
 // Pure apart from the Plaid calls, which take an injectable fetch.
 
 import { plaidRequest, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "./client";
+import { validLiabilities, type StoredLiabilities } from "./liabilities";
 
 /** What is kept per linked bank, sealed: Plaid's cursor, every transaction synced so far, and the balances at that sync. */
 export type SyncState = {
@@ -20,6 +21,8 @@ export type SyncState = {
   ready: boolean;
   /** The accounts and balances as of this sync — so a fresh copy needs no Plaid call at all, and an outage still has a picture to show. */
   accounts?: PlaidAccount[] | null;
+  /** Its cards' and loans' terms, read at most daily and only when switched on (liabilities.ts). */
+  liabilities?: StoredLiabilities | null;
 };
 
 type SyncPage = {
@@ -149,5 +152,7 @@ export function validState(x: unknown): SyncState | null {
   const ok = s.transactions.every(
     (t) => t && typeof t.transaction_id === "string" && typeof t.account_id === "string" && typeof t.amount === "number" && typeof t.date === "string" && typeof t.pending === "boolean",
   );
-  return ok ? (s as SyncState) : null;
+  // Terms that don't check out are dropped and read again; they never cost the bank its copy.
+  if (!ok) return null;
+  return (s.liabilities === undefined ? s : { ...s, liabilities: validLiabilities(s.liabilities) }) as SyncState;
 }

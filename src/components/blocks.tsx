@@ -144,7 +144,7 @@ export function UpcomingList({ events, limit = 6 }: { events: ForecastEvent[]; l
               <div className="truncate text-sm font-semibold text-ink-1">{e.merchant}</div>
               <div className="text-xs text-ink-3">
                 {incoming ? "Paycheck" : e.kind === "transfer" ? "Transfer" : e.kind === "subscription" ? "Subscription" : "Bill"}
-                {e.variable ? " · estimate" : ""}
+                {e.fromLender ? " · from your statement" : e.variable ? " · estimate" : ""}
               </div>
             </div>
             <div className={clsx("num text-sm font-bold", incoming ? "text-good-ink" : "text-ink-1")}>

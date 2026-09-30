@@ -16,6 +16,7 @@ import { TreemapChart } from "@/components/charts/treemap-chart";
 import { AddManualItem, ManualItemRow } from "@/components/manual-item-editor";
 import { Card, CardHeader, Change, EmptyState, PageHeader, StatusPill, type Status } from "@/components/ui";
 import { slotColor } from "@/lib/finance/categories";
+import { termsLine } from "@/lib/finance/debts";
 import { money0, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
 import { allocation, ASSET_CLASS_SLOT, groupAccounts, netWorthSeries } from "@/lib/finance/networth";
 import { getFinance } from "@/lib/server/finance";
@@ -174,6 +175,8 @@ export default async function NetWorthPage() {
                     const debt = acc.balance < 0;
                     const moved = acc.history.length > 1 ? (debt ? Math.abs(acc.history.at(-1)!) - Math.abs(acc.history[0]!) : acc.history.at(-1)! - acc.history[0]!) : null;
                     const mine = editable.get(acc.id);
+                    // A card's or a loan's own terms, when the lender sends them: when it's due, the minimum and the rate.
+                    const terms = termsLine(acc);
                     const content = (
                       <>
                         {/* On a phone the name gets the row and may wrap; from sm up it shares it with the trend line. */}
@@ -184,6 +187,12 @@ export default async function NetWorthPage() {
                             {acc.mask ? ` ·· ${acc.mask}` : ""}
                             {mine ? ` · updated ${monthYear(`${mine.values.at(-1)!.month}-01`)}` : ""}
                           </div>
+                          {terms || acc.liability?.overdue ? (
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-2">
+                              {acc.liability?.overdue ? <StatusPill status="warn">Overdue</StatusPill> : null}
+                              {terms ? <span className="num">{terms}</span> : null}
+                            </div>
+                          ) : null}
                         </div>
                         <div className="hidden shrink-0 sm:block">
                           <Sparkline values={acc.history} color={acc.balance < 0 ? "var(--flow-out)" : up ? "var(--flow-in)" : "var(--c-other)"} width={84} height={28} />

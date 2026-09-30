@@ -5,14 +5,14 @@
 // app accepts. Choices arrive from a URL, so each is parsed to a closed set.
 
 import { BRAND } from "@/lib/brand";
-import { buildCalendar, parseReminder, type CalendarOptions } from "@/lib/finance/calendar";
+import { buildCalendar, dueReminders, parseReminder, type CalendarOptions, type DueReminder } from "@/lib/finance/calendar";
 import { detectRecurring } from "@/lib/finance/recurring";
 import type { FinanceData } from "@/lib/finance/types";
 
-/** From transactions (a download, the demo feed) or from a stored snapshot's streams (a person's feed). */
-type Source = { accounts: CalendarOptions["accounts"]; today: FinanceData["today"] } & (
-  | { transactions: FinanceData["transactions"] }
-  | { streams: CalendarOptions["streams"] }
+/** From transactions and accounts (a download, the demo feed) or from a stored snapshot (a person's feed). */
+type Source = { today: FinanceData["today"] } & (
+  | { transactions: FinanceData["transactions"]; accounts: FinanceData["accounts"] }
+  | { streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"]; dues: DueReminder[] }
 );
 
 export function calendarResponse(
@@ -25,6 +25,7 @@ export function calendarResponse(
   const paydays = q.get("paydays") !== "0";
   const body = buildCalendar({
     streams: "streams" in data ? data.streams : detectRecurring(data.transactions, data.today),
+    dues: "streams" in data ? data.dues : dueReminders(data.accounts, data.today),
     accounts: data.accounts,
     today: data.today,
     now: new Date(),

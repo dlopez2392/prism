@@ -64,6 +64,20 @@ export type Account = {
   /** Month-end balances, oldest first, ending with the current balance. */
   history: Cents[];
   source: DataSource;
+  /** A card's or a loan's own terms, from the lender (Plaid Liabilities), when Prism reads them. */
+  liability?: Liability;
+};
+
+/** What a card or a loan asks for next. Amounts are what's owed, as positive cents. */
+export type Liability = {
+  /** The next payment's due date; null once it has passed or when the lender doesn't say. */
+  dueDate: ISODate | null;
+  minimumPayment: Cents | null;
+  /** The last statement's balance: what pays the card off without interest. */
+  statementBalance: Cents | null;
+  /** The purchase APR on a card, the interest rate on a loan, as a percentage. */
+  apr: number | null;
+  overdue: boolean;
 };
 
 export type Transaction = {

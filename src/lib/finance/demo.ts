@@ -268,6 +268,23 @@ export function buildDemoData(today: ISODate): FinanceData {
     acct(ACCOUNT_IDS.studentLoan, "northwind", "Student loan", "6614", "loan", walk(-1_690_000, -1_472_000, 0, 59)),
   ];
 
+  // What each lender says is due next — in a real household, Plaid Liabilities.
+  // The same days and amounts Alex pays them on above, so the demo agrees
+  // with itself: the loans on the 14th and 25th, the card on the 18th, in full,
+  // for the month before.
+  const next = (day: number): ISODate => {
+    const thisMonth = `${today.slice(0, 8)}${String(day).padStart(2, "0")}`;
+    return thisMonth >= today ? thisMonth : addMonths(thisMonth, 1);
+  };
+  const cardDue = next(18);
+  const statement = Math.abs(cardSpendByMonth.get(monthKey(addMonths(cardDue, -1))) ?? 0);
+  const terms: Record<string, Account["liability"]> = {
+    [card]: { dueDate: cardDue, minimumPayment: 3_500, statementBalance: statement || null, apr: 24.49, overdue: false },
+    [ACCOUNT_IDS.autoLoan]: { dueDate: next(14), minimumPayment: 38_900, statementBalance: null, apr: 6.9, overdue: false },
+    [ACCOUNT_IDS.studentLoan]: { dueDate: next(25), minimumPayment: 21_000, statementBalance: null, apr: 5.05, overdue: false },
+  };
+  for (const a of accounts) if (terms[a.id]) a.liability = terms[a.id];
+
   const balanceOf = (id: string) => accounts.find((a) => a.id === id)!.balance;
   const split = (accountId: string, parts: [string, string, Holding["assetClass"], number][]): Holding[] => {
     const total = balanceOf(accountId);

@@ -20,6 +20,7 @@ import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/fin
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
 import { needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
+import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiability, type StoredLiability } from "@/lib/plaid/liabilities";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { householdData, narrowTo, type MemberMoney } from "@/lib/finance/household";
@@ -525,22 +526,49 @@ async function bankFor(
   item: VaultItem,
   sync: PlaidSync | null,
   today: ISODate,
-): Promise<{ accounts: PlaidAccount[]; transactions: PlaidTransaction[]; ready: boolean; syncedAt: string; fromCopy: boolean; signInAgain: boolean }> {
+): Promise<{
+  accounts: PlaidAccount[];
+  transactions: PlaidTransaction[];
+  liabilities: StoredLiability[];
+  ready: boolean;
+  syncedAt: string;
+  fromCopy: boolean;
+  signInAgain: boolean;
+}> {
   const stored = sync?.stored.get(item.itemId) ?? null;
   const copy = stored?.state ?? null;
-  if (copy?.accounts && !needsSync(stored)) return { accounts: copy.accounts, transactions: copy.transactions, ready: copy.ready, syncedAt: stored!.syncedAt!, fromCopy: false, signInAgain: false };
+  const kept = copy?.liabilities?.list ?? [];
+  if (copy?.accounts && !needsSync(stored)) {
+    return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored!.syncedAt!, fromCopy: false, signInAgain: false };
+  }
   const startedAt = new Date().toISOString();
   let next: SyncState;
   try {
     const [acc, synced] = await Promise.all([getAccounts(config, item.accessToken), syncTransactions(config, item.accessToken, copy, { today })]);
     next = { ...synced, accounts: acc.accounts };
   } catch (e) {
-    if (copy?.accounts && stored?.syncedAt) return { accounts: copy.accounts, transactions: copy.transactions, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true, signInAgain: isReauth(e) };
+    if (copy?.accounts && stored?.syncedAt) {
+      return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true, signInAgain: isReauth(e) };
+    }
     throw e;
   }
+  // A card's or a loan's terms: billed per bank from the first read, so only when switched on, only for a bank that
+  // holds one, at most daily, and never for a connected app (it can't keep what it reads, so it would read again).
+  let liabilities = copy?.liabilities ?? null;
+  const mayRead = sync === null || sync.save !== null;
+  if (mayRead && liabilitiesEnabled() && holdsDebt(next.accounts ?? []) && liabilitiesStale(liabilities)) {
+    try {
+      liabilities = { at: startedAt, list: await getLiabilities(config, item.accessToken) };
+    } catch (e) {
+      // No bank data in the message: Plaid's code and reason only. The last terms stand, and today's attempt counts.
+      console.warn(`Plaid Liabilities not read for a bank: ${e instanceof Error ? e.message : "unknown error"}`);
+      liabilities = { at: startedAt, list: liabilities?.list ?? [] };
+    }
+  }
+  if (liabilities) next = { ...next, liabilities };
   // Outside the try: a problem keeping the copy is never mistaken for Plaid being down.
   sync?.save?.(item.itemId, next, stored?.version ?? 0, startedAt);
-  return { accounts: next.accounts ?? [], transactions: next.transactions, ready: next.ready, syncedAt: startedAt, fromCopy: false, signInAgain: false };
+  return { accounts: next.accounts ?? [], transactions: next.transactions, liabilities: liabilities?.list ?? [], ready: next.ready, syncedAt: startedAt, fromCopy: false, signInAgain: false };
 }
 
 async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate, sync: PlaidSync | null = null, rules: CategoryRules = NO_RULES): Promise<Live> {
@@ -557,7 +585,15 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
         const bank = await bankFor(config, item, sync, today);
         const txns = bank.transactions.map(mapTransaction);
         transactions.push(...txns);
-        accounts.push(...bank.accounts.map((a) => mapAccount(a, item.itemId, txns, today)));
+        // Shown only while reading them is switched on: terms that stopped updating would go quietly out of date.
+        const terms = liabilitiesEnabled() ? new Map(bank.liabilities.map((l) => [l.account_id, l])) : null;
+        accounts.push(
+          ...bank.accounts.map((a) => {
+            const account = mapAccount(a, item.itemId, txns, today);
+            const t = terms?.get(a.account_id);
+            return t ? { ...account, liability: toLiability(t, today) } : account;
+          }),
+        );
         institutions.push(
           bank.signInAgain
             ? { id: item.itemId, name, health: "needs_attention", signInAgain: true, lastSyncedAt: bank.syncedAt, source: "plaid" }
