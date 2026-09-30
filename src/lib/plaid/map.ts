@@ -10,7 +10,7 @@
 //      twice — once when you buy, once when you pay the card.
 
 import { lastMonths, monthKey } from "@/lib/finance/dates";
-import type { Account, AccountKind, AssetClass, CategoryId, Cents, Holding, ISODate, Transaction } from "@/lib/finance/types";
+import type { Account, AccountKind, AssetClass, CategoryId, Cents, Holding, IncomeKind, ISODate, Transaction } from "@/lib/finance/types";
 import type { PlaidAccount, PlaidHolding, PlaidSecurity, PlaidTransaction } from "./client";
 
 export const toCents = (dollars: number | null | undefined): Cents => Math.round((dollars ?? 0) * 100);
@@ -80,7 +80,33 @@ export function mapCategory(pfc: { primary: string; detailed: string } | null | 
   }
 }
 
+/** Plaid's detailed INCOME category → what kind of income it is (both of Plaid's category versions). */
+export function incomeKindOf(pfc: { primary: string; detailed: string } | null | undefined): IncomeKind | undefined {
+  if (pfc?.primary !== "INCOME") return undefined;
+  switch (pfc.detailed) {
+    case "INCOME_WAGES":
+    case "INCOME_SALARY":
+    case "INCOME_MILITARY":
+    case "INCOME_GIG_ECONOMY":
+      return "pay";
+    case "INCOME_INTEREST_EARNED":
+      return "interest";
+    case "INCOME_DIVIDENDS":
+      return "dividends";
+    case "INCOME_RETIREMENT_PENSION":
+      return "retirement";
+    case "INCOME_UNEMPLOYMENT":
+    case "INCOME_LONG_TERM_DISABILITY":
+      return "benefits";
+    case "INCOME_TAX_REFUND":
+      return "tax-refund";
+    default:
+      return "other";
+  }
+}
+
 export function mapTransaction(t: PlaidTransaction): Transaction {
+  const incomeKind = incomeKindOf(t.personal_finance_category);
   return {
     id: t.transaction_id,
     accountId: t.account_id,
@@ -88,6 +114,7 @@ export function mapTransaction(t: PlaidTransaction): Transaction {
     amount: -toCents(t.amount),
     merchant: (t.merchant_name || t.name || "Unknown").trim(),
     category: mapCategory(t.personal_finance_category),
+    ...(incomeKind ? { incomeKind } : {}),
     pending: t.pending,
   };
 }

@@ -80,6 +80,9 @@ export type Liability = {
   overdue: boolean;
 };
 
+/** What kind of money an income transaction is, when the bank says (Plaid's detailed category). */
+export type IncomeKind = "pay" | "interest" | "dividends" | "retirement" | "benefits" | "tax-refund" | "other";
+
 export type Transaction = {
   id: string;
   accountId: string;
@@ -90,6 +93,8 @@ export type Transaction = {
   category: CategoryId;
   /** The bank's own category, kept when the person fixed it to `category` (finance/category-rules.ts). */
   bankCategory?: CategoryId;
+  /** Income only, when the bank says what kind (finance/income.ts reads the name otherwise). */
+  incomeKind?: IncomeKind;
   pending: boolean;
 };
 

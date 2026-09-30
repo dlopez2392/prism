@@ -186,9 +186,9 @@ Prism is an MCP server at **`/mcp`** (production:
 `https://prism.bis-rgv.com/mcp`). Add it to Claude (Customize → Connectors →
 Add custom connector) or ChatGPT (Developer mode → custom connector); the app
 sends the person to Prism to sign in and approve it, and from then on can ask
-nine read-only questions: `get_overview`, `list_accounts`,
+ten read-only questions: `get_overview`, `list_accounts`,
 `search_transactions`, `spending_breakdown`, `get_cash_flow`, `get_budgets`,
-`get_goals`, `upcoming_bills`, `get_net_worth`. Answers cite the transactions
+`get_goals`, `upcoming_bills`, `get_income`, `get_net_worth`. Answers cite the transactions
 they rest on, carry the person's own "today" and time zone, and say
 `demo: true` when nothing is linked yet.
 
@@ -300,7 +300,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | Screen | What it shows |
 |---|---|
 | **Overview** | Net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
-| **Cash flow** | Income → categories → saved **Sankey**, money in vs out by month, what you kept each month, savings-rate trend |
+| **Cash flow** | Income → categories → saved **Sankey**; **your paychecks** (who pays you, how often, what lands, the next payday) and where your income comes from, by kind; money in vs out by month, what you kept each month, savings-rate trend |
 | **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop, kept sealed in their account and applied everywhere, Claude included) |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |

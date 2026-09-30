@@ -7,7 +7,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileUp, Gauge, House, KeyRound, Landmark, Lock, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
+import { Banknote, FileUp, Gauge, House, KeyRound, Landmark, Lock, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
 import { DisconnectButton } from "@/components/disconnect-button";
 import { RemoveImport } from "@/components/remove-import";
@@ -309,6 +309,15 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                           >
                             <FileUp aria-hidden className="size-4" />
                             {signInFirst ? "Sign in to import a file" : "Import a file"}
+                          </Link>
+                        ) : null}
+                        {it.id === "payroll" ? (
+                          <Link
+                            href="/cash-flow#income"
+                            className="mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-ctl border border-line-strong px-3.5 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
+                          >
+                            <Banknote aria-hidden className="size-4" />
+                            See your paychecks
                           </Link>
                         ) : null}
                         {it.id === "mcp" && data.accountsEnabled ? (

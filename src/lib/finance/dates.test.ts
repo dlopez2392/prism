@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, addMonths, daysBetween, eachDay, lastMonths } from "./dates";
+import { addDays, addMonths, bankHolidays, daysBetween, eachDay, isBusinessDay, lastMonths, nthWeekdayOfMonth, previousBusinessDay } from "./dates";
 import { money, money0, moneyCompact, shortDate, signedMoney0 } from "./format";
 
 describe("calendar arithmetic", () => {
@@ -21,6 +21,33 @@ describe("calendar arithmetic", () => {
 
   it("walks every day inclusive", () => {
     expect(eachDay("2026-02-27", "2026-03-01")).toEqual(["2026-02-27", "2026-02-28", "2026-03-01"]);
+  });
+});
+
+describe("the days banks are open", () => {
+  it("finds the nth and the last weekday of a month", () => {
+    expect(nthWeekdayOfMonth(2026, 11, 4, 4)).toBe("2026-11-26"); // Thanksgiving
+    expect(nthWeekdayOfMonth(2026, 5, 1, -1)).toBe("2026-05-25"); // Memorial Day
+    expect(nthWeekdayOfMonth(2026, 9, 1, 1)).toBe("2026-09-07"); // Labor Day
+  });
+
+  it("knows the Federal Reserve's holidays, a Sunday one moved to Monday and a Saturday one closing nothing", () => {
+    expect([...bankHolidays(2026)].sort()).toEqual([
+      "2026-01-01", "2026-01-19", "2026-02-16", "2026-05-25", "2026-06-19", "2026-07-04",
+      "2026-09-07", "2026-10-12", "2026-11-11", "2026-11-26", "2026-12-25",
+    ]);
+    // July 4, 2026 is a Saturday: banks open the Friday before as usual.
+    expect(isBusinessDay("2026-07-03")).toBe(true);
+    expect(isBusinessDay("2026-07-04")).toBe(false);
+    // June 19, 2022 was a Sunday: observed Monday the 20th.
+    expect(bankHolidays(2022).has("2022-06-20")).toBe(true);
+  });
+
+  it("moves a payday back to the last business day on or before it", () => {
+    expect(previousBusinessDay("2026-10-15")).toBe("2026-10-15"); // a Thursday
+    expect(previousBusinessDay("2026-10-31")).toBe("2026-10-30"); // Saturday → Friday
+    expect(previousBusinessDay("2026-12-25")).toBe("2026-12-24"); // Christmas, a Friday → Thursday
+    expect(previousBusinessDay("2026-09-07")).toBe("2026-09-04"); // Labor Day Monday → Friday
   });
 });
 

@@ -7,6 +7,7 @@ import {
   cashFlow,
   citeable,
   goals,
+  income,
   listAccounts,
   netWorth,
   overview,
@@ -46,6 +47,7 @@ describe("every result", () => {
       budgets(data),
       goals(data),
       upcomingBills(data, {}),
+      income(data),
       netWorth(data),
     ];
     expect(data).toEqual(before);
@@ -252,3 +254,23 @@ describe("card and loan terms from the lenders", () => {
     expect(upcomingBills(data, { days: 10 }).card_and_loan_payments_due).toHaveLength(2);
   });
 });
+
+describe("get_income", () => {
+  it("names the paycheck, when it comes, what lands and the next payday, citing the deposits", () => {
+    const data = demo();
+    const r = income(data);
+    expect(r).toMatchObject({ as_of: TODAY, demo: true });
+    expect(r.paychecks).toHaveLength(1);
+    const [p] = r.paychecks;
+    expect(p).toMatchObject({ payer: "Lumen Design Co.", kind: "pay", how_often: "Every other Friday", account: "Everyday Checking ••4821" });
+    expect(p!.next_payday > TODAY).toBe(true);
+    expect(p!.yearly_take_home).toBe(Math.round(p!.take_home * 26 * 100) / 100);
+    expect(p!.based_on).toHaveLength(3);
+    for (const t of p!.based_on) expect(ids(data).has(t.id)).toBe(true);
+    expect(r.next_payday).toEqual({ date: p!.next_payday, amount: p!.take_home, payer: "Lumen Design Co." });
+    expect(r.averaged_over_months).toEqual(["2026-06", "2026-07", "2026-08"]);
+    expect(r.monthly_average_by_kind[0]).toMatchObject({ kind: "pay", label: "Pay" });
+    expect(r.monthly_average_total).toBeCloseTo(r.monthly_average_by_kind.reduce((s, k) => s + k.monthly, 0), 2);
+  });
+});
+

@@ -9,6 +9,7 @@ import { withLenderTerms } from "./debts";
 import { monthlyCashFlow, monthToDate, sumIncome, sumSpending } from "./cashflow";
 import { lastMonths } from "./dates";
 import { dailyDriftStats, forecastBalance, safeToSpend } from "./forecast";
+import { incomeSummary } from "./income";
 import { generateInsights } from "./insights";
 import { netWorthSeries } from "./networth";
 import { detectRecurring } from "./recurring";
@@ -59,6 +60,7 @@ export function analyze(data: FinanceData) {
     budgets,
     budgetTotals: budgetTotals(budgets),
     streams,
+    income: incomeSummary(txns, streams, today),
     checking,
     forecast,
     safe,

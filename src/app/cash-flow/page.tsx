@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import { Waves } from "lucide-react";
 import { StatTile } from "@/components/blocks";
 import { ChartCard } from "@/components/chart-card";
+import { IncomeCards } from "@/components/income";
 import { BarChart } from "@/components/charts/bar-chart";
 import { Legend } from "@/components/charts/core";
 import { SankeyChart } from "@/components/charts/sankey-chart";
@@ -15,6 +16,8 @@ import { RangeTabs } from "@/components/range-tabs";
 import { Card, Change, EmptyState, PageHeader } from "@/components/ui";
 import { categoryTotals, incomeSources, monthlyCashFlow, sumIncome, sumSpending } from "@/lib/finance/cashflow";
 import { money0, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
+import { incomeSummary } from "@/lib/finance/income";
+import { detectRecurring } from "@/lib/finance/recurring";
 import { buildCashFlowSankey } from "@/lib/finance/sankey";
 import { monthWindow, parseRange } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
@@ -40,6 +43,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
   const axis = flows.map((f) => monthShort(`${f.month}-01`));
   const partial = [flows.length - 1];
   const period = `${monthYear(w.from)} – ${monthYear(w.to)}`;
+  const earning = incomeSummary(txns, detectRecurring(txns, data.today), data.today);
 
   return (
     <div className="space-y-5">
@@ -88,6 +92,8 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
           <EmptyState icon={Waves} title="No money has moved yet" body="Once income and spending land, this shows every dollar flowing from paycheck to category." />
         )}
       </ChartCard>
+
+      <IncomeCards income={earning} accounts={data.accounts} demo={data.source === "demo"} household={data.view === "household"} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <ChartCard

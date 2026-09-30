@@ -114,8 +114,8 @@ export const INTEGRATIONS: IntegrationGroup[] = [
         id: "payroll",
         name: "Paycheck details",
         adds: "Forecasts that know your exact payday and take-home pay.",
-        how: "A payroll-data provider (Plaid Income, Argyle or Pinwheel), with your permission.",
-        status: "partner",
+        how: "Found from the deposits in your linked accounts: who pays you, how often, what lands and your next payday, moved before weekends and bank holidays. No payroll login.",
+        status: "live",
       },
       {
         id: "p2p",
