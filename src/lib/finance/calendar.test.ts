@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billEvents, buildCalendar, escapeText, firstUpcoming, foldLine, parseReminder, remindable, rruleFor, stableHash, type CalendarOptions } from "./calendar";
+import { billEvents, buildCalendar, dueReminders, escapeText, firstUpcoming, foldLine, parseReminder, remindable, rruleFor, stableHash, validDue, type CalendarOptions } from "./calendar";
 import { buildDemoData } from "./demo";
 import { detectRecurring, type RecurringStream } from "./recurring";
 
@@ -205,6 +205,42 @@ describe("feedSnapshot", () => {
 
   it("is empty for a household with nothing repeating", async () => {
     const { feedSnapshot } = await import("./calendar");
-    expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY })).toEqual({ v: 1, builtOn: TODAY, streams: [], accounts: [] });
+    expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY })).toEqual({ v: 1, builtOn: TODAY, streams: [], accounts: [], dues: [] });
+  });
+});
+
+describe("card and loan payments due", () => {
+  const due = { accountId: "card", name: "Visa", mask: "1107", due: "2026-10-14", minimum: 3_500, statement: 124_050 };
+
+  it("are one day each, not a series, with the lender's amounts", () => {
+    const ics = buildCalendar(options({ streams: [], dues: [due] }));
+    const event = ics.split("BEGIN:VEVENT")[1]!;
+    expect(event).toContain("DTSTART;VALUE=DATE:20261014");
+    expect(event).not.toContain("RRULE");
+    expect(event).toContain("SUMMARY:Visa ••1107 payment due · $35.00 min");
+    expect(event.replace(/\r\n /g, "")).toContain("Payment due: minimum $35.00 · statement balance $1\\,240.50.");
+    expect(event).toContain("CATEGORIES:Bills");
+    // No account id in the UID, and a fresh copy updates the same event.
+    expect(event).toContain(`UID:${stableHash("due|card|2026-10-14")}@prism.bis`);
+  });
+
+  it("keep amounts off the title when asked, and leave out a date already past", () => {
+    const [e] = billEvents(options({ streams: [], dues: [due, { ...due, accountId: "old", due: "2026-09-20" }], amountsInTitles: false }));
+    expect(billEvents(options({ streams: [], dues: [due, { ...due, accountId: "old", due: "2026-09-20" }] }))).toHaveLength(1);
+    expect(e!.title).toBe("Visa ••1107 payment due");
+  });
+
+  it("come from the accounts' lender terms, and only those still ahead", () => {
+    const withTerms = [
+      { id: "card", name: "Visa", mask: "1107", liability: { dueDate: "2026-10-14", minimumPayment: 3_500, statementBalance: 124_050, apr: 24.99, overdue: false } },
+      { id: "loan", name: "Auto loan", mask: null, liability: { dueDate: null, minimumPayment: 38_900, statementBalance: null, apr: 6.9, overdue: false } },
+      { id: "chk", name: "Checking", mask: "4821" },
+    ];
+    expect(dueReminders(withTerms, TODAY)).toEqual([due]);
+  });
+
+  it("from a stored feed are checked before they reach a calendar", () => {
+    expect(validDue(due)).toBe(true);
+    for (const bad of [null, { ...due, due: "Oct 14" }, { ...due, minimum: -5 }, { ...due, minimum: 3.5 }, { ...due, name: 7 }, { ...due, mask: undefined }]) expect(validDue(bad)).toBe(false);
   });
 });

@@ -112,7 +112,7 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
     "list_accounts",
     {
       title: "Accounts and balances",
-      description: "Every linked account with its current balance, grouped as cash, investments, property, credit cards and loans. Debts are negative. Account ids here can filter search_transactions.",
+      description: "Every linked account with its current balance, grouped as cash, investments, property, credit cards and loans. Debts are negative. Cards and loans whose lender reports them carry lender_terms: next due date, minimum payment, statement balance and interest rate. Account ids here can filter search_transactions.",
       annotations: { title: "Accounts and balances", ...READ_ONLY },
     },
     run(listAccounts),
@@ -190,7 +190,7 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
     {
       title: "Upcoming bills and paydays",
       description:
-        "Bills, subscriptions and paychecks expected over the next N days, detected from repeating charges (each cites the charges it is based on), the monthly cost of all subscriptions, and the lowest the checking balance is expected to reach.",
+        "Bills, subscriptions and paychecks expected over the next N days, detected from repeating charges (each cites the charges it is based on), card and loan payments due as their lenders report them (due date, minimum, statement balance, rate), the monthly cost of all subscriptions, and the lowest the checking balance is expected to reach.",
       inputSchema: z.object({ days: z.number().int().min(1).max(90).optional().describe("How far ahead, 1–90 days. Default 30.") }),
       annotations: { title: "Upcoming bills and paydays", ...READ_ONLY },
     },

@@ -31,6 +31,12 @@ export type RecurringStream = {
   /** Set when the latest fixed charge differs from the one before it. */
   priceChange: { from: Cents; to: Cents; date: ISODate } | null;
   transactionIds: string[];
+  /**
+   * When this stream pays a card or a loan whose lender states its next
+   * payment (debts.ts, withLenderTerms): that payment, instead of an
+   * estimate. Signed like `amount`.
+   */
+  lender?: { accountId: string; dueDate: ISODate; amount: Cents };
 };
 
 const LOOKBACK_DAYS = 200;

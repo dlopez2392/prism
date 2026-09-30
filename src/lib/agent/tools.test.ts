@@ -227,3 +227,28 @@ describe("a cited transaction", () => {
     expect(citeable({ ...t, bankCategory: undefined }, new Map())).not.toHaveProperty("bank_category");
   });
 });
+
+describe("card and loan terms from the lenders", () => {
+  it("ride along with each card and loan in list_accounts", () => {
+    const cards = listAccounts(demo()).groups.flatMap((g) => g.accounts).filter((a) => "lender_terms" in a);
+    expect(cards.map((a) => a.name)).toEqual(["Summit Rewards Visa", "Auto loan", "Student loan"]);
+    expect(cards[0]).toMatchObject({ lender_terms: { due_date: TODAY, minimum_payment: 35, interest_rate_percent: 24.49 } });
+    // The demo agrees with itself: the statement is what Alex pays the card on its due date.
+    const paid = demo().transactions.find((t) => t.merchant === "Summit Card payment" && t.date === TODAY)!;
+    expect((cards[0] as { lender_terms: { statement_balance: number } }).lender_terms.statement_balance).toBe(Math.abs(paid.amount) / 100);
+  });
+
+  it("are listed in upcoming_bills as they're due, and not added into money_out a second time", () => {
+    const data = demo();
+    const r = upcomingBills(data, { days: 30 });
+    expect(r.card_and_loan_payments_due.map((p) => [p.date, p.account, p.minimum_payment])).toEqual([
+      [TODAY, expect.stringContaining("Summit Rewards Visa"), 35],
+      [addDays(TODAY, 7), expect.stringContaining("Student loan"), 210],
+      [addDays(TODAY, 26), expect.stringContaining("Auto loan"), 389],
+    ]);
+    const without = upcomingBills({ ...data, accounts: data.accounts.map((a) => ({ ...a, liability: undefined })) }, { days: 30 });
+    expect(without.money_out).toBe(r.money_out);
+    expect(without.card_and_loan_payments_due).toEqual([]);
+    expect(upcomingBills(data, { days: 10 }).card_and_loan_payments_due).toHaveLength(2);
+  });
+});

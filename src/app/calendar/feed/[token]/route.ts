@@ -10,13 +10,13 @@
 // can read it: the database never holds the bills themselves.
 
 import { createClient } from "@supabase/supabase-js";
-import type { CalendarOptions } from "@/lib/finance/calendar";
+import { validDue, type CalendarOptions } from "@/lib/finance/calendar";
 import { feedTokenHash, openFeedSnapshot } from "@/lib/server/feed-token";
 import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { calendarResponse } from "@/lib/server/calendar-response";
 import { supabaseEnv } from "@/lib/supabase/config";
 
-type Snapshot = { v: 1; streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"] };
+type Snapshot = { v: 1; streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"]; dues?: unknown };
 
 const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
@@ -38,7 +38,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
 
   return calendarResponse(
     req,
-    { streams: snap.streams, accounts: snap.accounts, today: new Date().toISOString().slice(0, 10) },
+    // Due payments arrived with card and loan terms; a snapshot from before them simply has none.
+    { streams: snap.streams, accounts: snap.accounts, dues: Array.isArray(snap.dues) ? snap.dues.filter(validDue) : [], today: new Date().toISOString().slice(0, 10) },
     // Private: the URL is a secret, so no shared cache may keep a copy.
     { feed: true, filename: "prism-bills.ics", cacheControl: "private, max-age=900", demo: false },
   );

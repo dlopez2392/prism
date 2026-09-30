@@ -67,7 +67,17 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    Prism does. **Sign in again built (2026-09-30):** a bank that wants its
    owner to sign in again stays on screen as of its last sync and gets a
    "Sign in again" button (Plaid's update mode), so the same connection
-   carries on and nothing is billed twice.
+   carries on and nothing is billed twice. **Card and loan due dates built
+   (2026-09-30), off until the owner sets `PLAID_LIABILITIES=on`** (Plaid
+   bills Liabilities per bank from the first read): each card's and loan's due
+   date, minimum, statement balance and rate on Net worth, on Future, in the
+   calendar and for connected apps; read at most daily, never for a connected
+   app, and not shown to the household. The forecast uses them too: a
+   repeating payment is tied to the card or loan it pays when its payments
+   show up on both sides (out of checking, into the card, same amount, within
+   three days, at least twice), and its next occurrence becomes the lender's
+   due date and statement balance (or minimum, whichever the person usually
+   pays), replacing the estimate rather than adding to it.
    Known limits: one connection in flight per browser (a second tab's attempt
    replaces the first), and a bank app that returns people to a DIFFERENT
    browser finds nothing to resume and asks them to start again. Keeping the

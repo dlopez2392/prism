@@ -5,6 +5,7 @@
 // the same page cannot disagree about how much was spent.
 
 import { budgetStatuses, budgetTotals } from "./budgets";
+import { withLenderTerms } from "./debts";
 import { monthlyCashFlow, monthToDate, sumIncome, sumSpending } from "./cashflow";
 import { lastMonths } from "./dates";
 import { dailyDriftStats, forecastBalance, safeToSpend } from "./forecast";
@@ -21,7 +22,8 @@ export function analyze(data: FinanceData) {
   const flows = monthlyCashFlow(txns, months);
   const mtd = monthToDate(today);
   const budgets = budgetStatuses(data.budgets, txns, today);
-  const streams = detectRecurring(txns, today);
+  // A card's or a loan's payment takes the lender's own date and amount when it states them.
+  const streams = withLenderTerms(detectRecurring(txns, today), data.accounts, txns, today);
   const netWorth = netWorthSeries(data.accounts, today);
 
   const checking =

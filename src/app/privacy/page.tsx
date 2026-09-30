@@ -15,6 +15,7 @@ import { Ban, KeyRound, Lock, ShieldCheck, Trash2, type LucideIcon } from "lucid
 import { Bullets, legalLink as link, Section, ShortVersion } from "@/components/legal";
 import { Card, PageHeader } from "@/components/ui";
 import { BRAND } from "@/lib/brand";
+import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
 import { POLICY_UPDATED, PRIVACY_CONTACT, PROVIDERS, STORED_ON_DEVICE } from "@/lib/privacy";
 
 export const metadata: Metadata = {
@@ -59,8 +60,20 @@ export default function PrivacyPage() {
             <li>
               Banks, cards, loans and investments, through Plaid: account names, the last four digits of account numbers, balances, transactions (merchant, amount,
               date and category) and investment holdings. You sign in to your bank through Plaid; {BRAND.product} never sees your bank username or password.
-              Plaid also asks your permission for loan details, such as a card&apos;s due date and minimum payment, so a future feature won&apos;t need you to
-              connect again. {BRAND.product} doesn&apos;t read them yet, and this page will say so before it does.
+              {/* Reading loan details is switched on by the operator (PLAID_LIABILITIES); this sentence changes with it, in the same deploy. */}
+              {liabilitiesEnabled() ? (
+                <>
+                  With your permission, which Plaid asks for when you connect, {BRAND.product} also reads loan details: each card&apos;s or loan&apos;s due
+                  date, minimum payment, statement balance and interest rate, at most once a day. It uses them to show when each payment is due, on Future,
+                  on Net worth, in your calendar reminders and to AI apps you connect, and keeps them encrypted with the rest of that bank&apos;s copy. They
+                  aren&apos;t shown to your household.
+                </>
+              ) : (
+                <>
+                  Plaid also asks your permission for loan details, such as a card&apos;s due date, minimum payment and interest rate, so a future feature
+                  won&apos;t need you to connect again. {BRAND.product} doesn&apos;t read them yet, and this page will say so before it does.
+                </>
+              )}
             </li>
             <li>Coinbase, if you connect it: your crypto balances, read-only.</li>
             <li>

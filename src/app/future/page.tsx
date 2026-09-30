@@ -6,7 +6,7 @@
 // payday and bill. Most budgeting apps only look backwards; this looks ahead.
 
 import type { Metadata } from "next";
-import { CalendarClock, Repeat, Telescope } from "lucide-react";
+import { CalendarClock, CreditCard, Repeat, Telescope } from "lucide-react";
 import { AddToCalendar } from "@/components/add-to-calendar";
 import { UpcomingList } from "@/components/blocks";
 import { ChartCard } from "@/components/chart-card";
@@ -14,7 +14,8 @@ import { Legend } from "@/components/charts/core";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { CategoryIcon } from "@/components/category-icon";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
-import { remindable } from "@/lib/finance/calendar";
+import { dueReminders, remindable } from "@/lib/finance/calendar";
+import { dueIn, paymentsDue, rateText, statementText } from "@/lib/finance/debts";
 import { addDays } from "@/lib/finance/dates";
 import { dayDate, money, money0, shortDate } from "@/lib/finance/format";
 import { analyze, FORECAST_DAYS } from "@/lib/finance/model";
@@ -65,7 +66,10 @@ export default async function FuturePage() {
   const outflow = next30.filter((e) => e.amount < 0).reduce((s, e) => s - e.amount, 0);
   const subs = a.streams.filter((s) => s.kind === "subscription" && s.amount < 0).sort((x, y) => monthlyCost(y) - monthlyCost(x));
   const subsMonthly = subs.reduce((s, x) => s + monthlyCost(x), 0);
-  const reminders = remindable(a.streams, data.accounts, true).length;
+  // Cards and loans whose lender sends their terms (Plaid Liabilities, when switched on).
+  const withTerms = data.accounts.filter((acc) => acc.liability);
+  const due = paymentsDue(data.accounts, a.today);
+  const reminders = remindable(a.streams, data.accounts, true).length + dueReminders(data.accounts, a.today).length;
   const personal = data.account ? { path: await ownFeedPath() } : undefined;
   const lowest = forecast.lowest;
   const end = forecast.points.at(-1)!;
@@ -155,7 +159,50 @@ export default async function FuturePage() {
           </div>
         </Card>
 
-        <Card className="p-5 sm:p-6 lg:col-span-5">
+        <div className="space-y-5 lg:col-span-5">
+        {withTerms.length ? (
+          <Card className="p-5 sm:p-6">
+            <CardHeader title="Card and loan payments" subtitle="Due dates and minimums from your lenders" />
+            {due.length ? (
+              <ul className="mt-3 divide-y divide-[var(--line)]">
+                {due.map(({ account, liability }) => (
+                  <li key={account.id} className="flex items-center gap-3 py-2.5">
+                    <div className="grid size-8 shrink-0 place-items-center rounded-ctl bg-surface-2 text-ink-2">
+                      <CreditCard aria-hidden className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 text-sm font-semibold text-ink-1">
+                        <span className="truncate">{account.name}</span>
+                        {account.mask ? <span className="shrink-0 font-normal text-ink-3">&nbsp;·· {account.mask}</span> : null}
+                      </div>
+                      <div className="text-xs text-ink-3">
+                        Due {shortDate(liability.dueDate)}, {dueIn(liability.dueDate, a.today)}
+                        {liability.apr !== null ? ` · ${rateText(liability.apr, account.kind)}` : ""}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="num text-sm font-bold text-ink-1">{liability.minimumPayment !== null ? `${money(liability.minimumPayment)} min` : "—"}</div>
+                      {liability.overdue ? (
+                        <StatusPill status="warn" className="mt-1">
+                          Overdue
+                        </StatusPill>
+                      ) : statementText(liability) ? (
+                        <div className="num text-xs text-ink-3">{statementText(liability)}</div>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState
+                icon={CreditCard}
+                title="Nothing due in the next few weeks"
+                body="When a card or loan issues its next statement, its due date and minimum payment show up here."
+              />
+            )}
+          </Card>
+        ) : null}
+        <Card className="p-5 sm:p-6">
           <CardHeader title="Subscriptions" subtitle={subs.length ? `${money0(subsMonthly)} a month · ${money0(subsMonthly * 12)} a year` : undefined} />
           {subs.length ? (
             <ul className="mt-3 divide-y divide-[var(--line)]">
@@ -183,6 +230,7 @@ export default async function FuturePage() {
             <EmptyState icon={Repeat} title="No subscriptions spotted" body="Anything that charges you the same amount every month shows up here, with price rises flagged." />
           )}
         </Card>
+        </div>
       </div>
     </div>
   );

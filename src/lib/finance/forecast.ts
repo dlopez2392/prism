@@ -21,7 +21,29 @@ export type ForecastEvent = {
   amount: Cents;
   kind: RecurringStream["kind"];
   variable: boolean;
+  /** The amount and date are the lender's own (a statement), not an estimate from past payments. */
+  fromLender?: true;
 };
+
+/** How close an estimated payment must be to the lender's due date to be the same payment. */
+const SAME_PAYMENT_DAYS = 12;
+
+/** One stream's events in the window: its estimates, with the lender's own next payment in place of the one it replaces. */
+export function streamEvents(s: RecurringStream, from: ISODate, to: ISODate): ForecastEvent[] {
+  const base = { merchant: s.merchant, kind: s.kind };
+  const dates = occurrences(s, from, to);
+  const due = s.lender && s.lender.dueDate >= from && s.lender.dueDate <= to ? s.lender : null;
+  if (!due) return dates.map((date) => ({ ...base, date, amount: s.amount, variable: s.variable }));
+  // The estimate nearest the due date is that same payment: it gives way to the statement.
+  const nearest = dates.reduce<ISODate | null>((best, d) => {
+    const gap = Math.abs(daysBetween(d, due.dueDate));
+    return gap <= SAME_PAYMENT_DAYS && (best === null || gap < Math.abs(daysBetween(best, due.dueDate))) ? d : best;
+  }, null);
+  return [
+    ...dates.filter((d) => d !== nearest).map((date) => ({ ...base, date, amount: s.amount, variable: s.variable })),
+    { ...base, date: due.dueDate, amount: due.amount, variable: false, fromLender: true as const },
+  ];
+}
 
 export type ForecastPoint = {
   date: ISODate;
@@ -73,15 +95,7 @@ export function forecastBalance(opts: {
   const tomorrow = addDays(today, 1);
 
   const events: ForecastEvent[] = streams
-    .flatMap((s) =>
-      occurrences(s, tomorrow, end).map((date) => ({
-        date,
-        merchant: s.merchant,
-        amount: s.amount,
-        kind: s.kind,
-        variable: s.variable,
-      })),
-    )
+    .flatMap((s) => streamEvents(s, tomorrow, end))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.amount - b.amount));
 
   const points: ForecastPoint[] = [{ date: today, expected: startBalance, low: startBalance, high: startBalance }];

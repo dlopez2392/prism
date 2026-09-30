@@ -15,10 +15,11 @@ import { budgetTotals, daysLeftInMonth } from "@/lib/finance/budgets";
 import { categoryBreakdown, inRange, isSpending, monthlyCashFlow, sumIncome, sumSpending, topMerchants } from "@/lib/finance/cashflow";
 import { CATEGORIES, isSpendCategory } from "@/lib/finance/categories";
 import { addDays, daysBetween, lastMonths, monthKey } from "@/lib/finance/dates";
+import { paymentsDue } from "@/lib/finance/debts";
 import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences } from "@/lib/finance/recurring";
-import type { Account, CategoryId, Cents, FinanceData, ISODate, Transaction } from "@/lib/finance/types";
+import type { Account, CategoryId, Cents, FinanceData, ISODate, Liability, Transaction } from "@/lib/finance/types";
 
 /** The money a connected app is shown, and what kind of money it is. */
 export type AgentData = FinanceData & {
@@ -141,6 +142,17 @@ export function overview(data: AgentData) {
 
 // — list_accounts ——————————————————————————————————————————————
 
+/** A card's or a loan's terms as its lender states them (Plaid Liabilities). */
+function lenderTerms(l: Liability) {
+  return {
+    due_date: l.dueDate,
+    minimum_payment: l.minimumPayment === null ? null : usd(l.minimumPayment),
+    statement_balance: l.statementBalance === null ? null : usd(l.statementBalance),
+    interest_rate_percent: l.apr,
+    ...(l.overdue ? { overdue: true } : {}),
+  };
+}
+
 export function listAccounts(data: AgentData) {
   const institutions = new Map(data.institutions.map((i) => [i.id, i]));
   return {
@@ -156,6 +168,7 @@ export function listAccounts(data: AgentData) {
         mask: a.mask,
         balance: usd(a.balance),
         ...(institutions.get(a.institutionId)?.health === "needs_attention" ? { needs_attention: true } : {}),
+        ...(a.liability ? { lender_terms: lenderTerms(a.liability) } : {}),
       })),
     })),
   };
@@ -358,6 +371,13 @@ export function upcomingBills(data: AgentData, args: { days?: number }) {
     money_out: usd(items.filter((i) => i.amount < 0).reduce((s, i) => s + Math.round(i.amount * 100), 0)),
     money_in: usd(items.filter((i) => i.amount > 0).reduce((s, i) => s + Math.round(i.amount * 100), 0)),
     items,
+    // From the lenders, not from spending patterns — and not added into money_out, because the checking
+    // account's usual card payment is already counted there when Prism has seen it repeat.
+    card_and_loan_payments_due: paymentsDue(data.accounts, a.today, days).map(({ account, liability }) => ({
+      date: liability.dueDate,
+      account: accountLabel(account),
+      ...lenderTerms(liability),
+    })),
     subscriptions_per_month: usd(subscriptions.reduce((s, x) => s + monthlyCost(x), 0)),
     ...(lowest && a.checking && lowest.date <= to
       ? { lowest_expected_checking_balance: { amount: usd(lowest.balance), date: lowest.date, account: accountLabel(a.checking) } }

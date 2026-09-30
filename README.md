@@ -40,6 +40,23 @@ so Prism can be built and tried without a database; anything real refuses.
 For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 (`openssl rand -base64 32`); the app refuses to store tokens without one.
 
+**Card and loan due dates (Plaid Liabilities) are off until you set
+`PLAID_LIABILITIES=on`.** People already consent to them when they link a bank
+(Link asks for Liabilities as consent only), but Plaid bills per bank from the
+FIRST read, so nothing is read until the operator decides. Once on, Prism reads
+them at most once a day per bank, only for banks holding a card or a loan,
+never for a connected app, and keeps them sealed inside the bank's sync copy.
+They show as the due date, minimum, statement balance and rate on Net worth, a
+"Card and loan payments" list on Future, one-day reminders in the calendar
+download and feed, and `lender_terms` for connected apps. The forecast uses
+them as well: a repeating payment that shows up on both sides (out of
+checking, into the card, same amount, at least twice) takes the lender's due
+date and statement balance, or minimum, whichever the person usually pays, in
+place of the estimate. They are not shown to
+the household. The privacy policy's wording switches with the same setting, and
+turning the setting off hides any terms already kept. Changing it needs a
+redeploy (Vercel applies settings to new deployments).
+
 **Banks that sign you in on their own website** (Chase, Bank of America,
 Wells Fargo, Capital One and most large banks; Plaid calls this OAuth):
 
