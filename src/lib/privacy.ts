@@ -75,3 +75,14 @@ export const PROVIDERS: Provider[] = [
   { name: "Vercel", does: "Hosts the Prism website and servers, in the United States.", policy: "https://vercel.com/legal/privacy-policy" },
   { name: "Resend", does: "Sends your sign-in codes by email.", policy: "https://resend.com/legal/privacy-policy" },
 ];
+
+/** Listed only while the operator has home estimates switched on (RENTCAST_API_KEY), in the same deploy. */
+export const RENTCAST: Provider = {
+  name: "RentCast",
+  does: "Estimates the value of a home you ask Prism to keep up to date. It receives the home's address, and nothing else about you, about once a month.",
+  policy: "https://www.rentcast.io/privacy",
+};
+
+export function providers(homeValues: boolean): Provider[] {
+  return homeValues ? [...PROVIDERS, RENTCAST] : PROVIDERS;
+}

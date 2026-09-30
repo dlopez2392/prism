@@ -14,6 +14,7 @@ import { Sparkline } from "@/components/charts/sparkline";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { TreemapChart } from "@/components/charts/treemap-chart";
 import { AddManualItem, ManualItemRow } from "@/components/manual-item-editor";
+import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { Card, CardHeader, Change, EmptyState, PageHeader, StatusPill, type Status } from "@/components/ui";
 import { slotColor } from "@/lib/finance/categories";
 import { termsLine } from "@/lib/finance/debts";
@@ -31,6 +32,8 @@ export default async function NetWorthPage() {
   // What a person adds by hand lives in their account; the example household's is only for show.
   // In the Household view, everyone's things are shown, and each person edits their own from Me.
   const canAdd = data.account !== null && data.view === "me";
+  // RentCast can keep a home's value up to date once the operator has switched it on.
+  const estimates = homeValuesEnabled();
   const editable = new Map(canAdd && data.source !== "demo" ? data.manual.map((i) => [`manual-${i.id}`, i]) : []);
 
   if (data.accounts.length === 0) {
@@ -42,7 +45,7 @@ export default async function NetWorthPage() {
             icon={Landmark}
             title="Your whole picture, in one number"
             body={canAdd ? "Link your accounts, or add your home, a car or a loan, and this becomes your net worth, month by month." : "Link your accounts and this becomes your net worth, month by month."}
-            action={canAdd ? <AddManualItem /> : undefined}
+            action={canAdd ? <AddManualItem estimates={estimates} /> : undefined}
           />
         </Card>
       </div>
@@ -159,7 +162,7 @@ export default async function NetWorthPage() {
           <CardHeader
             title="Accounts"
             subtitle={`${data.accounts.length} ${data.accounts.length === 1 ? "account" : "accounts"} across ${data.institutions.length} ${data.institutions.length === 1 ? "institution" : "institutions"}`}
-            action={canAdd ? <AddManualItem /> : undefined}
+            action={canAdd ? <AddManualItem estimates={estimates} /> : undefined}
           />
           <div className="mt-3 space-y-5">
             {groups.map((g) => (
@@ -185,7 +188,7 @@ export default async function NetWorthPage() {
                           <div className="truncate text-xs text-ink-3">
                             {institution.get(acc.institutionId) ?? "—"}
                             {acc.mask ? ` ·· ${acc.mask}` : ""}
-                            {mine ? ` · updated ${monthYear(`${mine.values.at(-1)!.month}-01`)}` : ""}
+                            {mine ? ` · ${mine.values.at(-1)!.estimated ? "RentCast estimate" : "updated"} ${monthYear(`${mine.values.at(-1)!.month}-01`)}` : ""}
                           </div>
                           {terms || acc.liability?.overdue ? (
                             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-2">
@@ -210,7 +213,7 @@ export default async function NetWorthPage() {
                     );
                     return mine ? (
                       <li key={acc.id}>
-                        <ManualItemRow item={mine} label={`Edit ${acc.name}, ${money0(acc.balance)}`}>
+                        <ManualItemRow item={mine} label={`Edit ${acc.name}, ${money0(acc.balance)}`} estimates={estimates} valuation={data.homeValues.find((h) => h.itemId === mine.id)}>
                           {content}
                         </ManualItemRow>
                       </li>

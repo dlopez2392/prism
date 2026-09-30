@@ -5,7 +5,9 @@
 // Each item keeps one value per month, the latest the person entered, and
 // that value carries forward until they update it; so the trend lines and
 // "12 mo" changes on Net worth work for these exactly as for a bank account.
-// (When a home-value provider is signed, it fills a home's value the same way.)
+// A home whose value RentCast keeps up to date gets that month's value the
+// same way, marked `estimated` (finance/home-value.ts); a value the person
+// types for a month is theirs, and no estimate replaces it.
 //
 // Stored sealed in the person's account (profiles.sealed_manual_items) and
 // read back as untrusted input: an invalid item is dropped, alone.
@@ -15,12 +17,19 @@ import type { Account, AccountKind, Cents, ISODate, Institution } from "./types"
 
 export type ManualKind = "home" | "vehicle" | "asset" | "debt";
 
+export type ManualValue = {
+  month: string;
+  value: Cents;
+  /** RentCast's estimate for the month, not the person's own figure. */
+  estimated?: true;
+};
+
 export type ManualItem = {
   id: string;
   kind: ManualKind;
   name: string;
   /** Oldest first, one per month ("YYYY-MM"), amounts always positive: a debt's sign comes from its kind. */
-  values: { month: string; value: Cents }[];
+  values: ManualValue[];
 };
 
 export const MANUAL_KINDS: Record<ManualKind, { label: string; accountKind: AccountKind; owed: boolean; placeholder: string }> = {
@@ -59,7 +68,7 @@ function validValues(x: unknown): ManualItem["values"] | null {
     if (typeof e?.month !== "string" || !MONTH.test(e.month)) return null;
     if (!Number.isSafeInteger(e.value) || (e.value as number) < 0 || (e.value as number) > MANUAL_VALUE_MAX) return null;
     if (out.length && out.at(-1)!.month >= e.month) return null; // oldest first, one per month
-    out.push({ month: e.month, value: e.value as number });
+    out.push({ month: e.month, value: e.value as number, ...((v as { estimated?: unknown }).estimated === true ? { estimated: true as const } : {}) });
   }
   return out;
 }
@@ -83,9 +92,9 @@ export function validManualItems(x: unknown): ManualItem[] {
 }
 
 /** The item with `value` as this month's, replacing an earlier entry for the same month, keeping two years. */
-export function withValue(item: ManualItem, month: string, value: Cents): ManualItem {
+export function withValue(item: ManualItem, month: string, value: Cents, estimated = false): ManualItem {
   const values = item.values.filter((v) => v.month < month);
-  values.push({ month, value });
+  values.push({ month, value, ...(estimated ? { estimated: true as const } : {}) });
   return { ...item, values: values.slice(-VALUES_KEPT) };
 }
 

@@ -229,10 +229,11 @@ describe("replacing the vault key", () => {
   const fixes = { v: 1, merchants: { "blue bottle": "food" }, transactions: { t9: "transfer" } };
   const owned = [{ id: "our-house", kind: "home", name: "Our house", values: [{ month: "2026-01", value: 35_000_000 }] }];
   const coinValue = { v: 1, balance: 123_456 };
+  const homes = { v: 1, homes: [{ itemId: "our-house", address: "12 Maple Ct, Austin, TX 78701", key: "9f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f", estimate: null }] };
 
   /** One person's account, everything in it sealed by `k` — as it stood before the key was replaced. */
   const sealedBy = (k: typeof before) => ({
-    profiles: [{ user_id: "u1", first_name: "Dana", plan_budgets: null, plan_goals: null, sealed_category_rules: sealPacked(fixes, k), sealed_manual_items: sealPacked(owned, k), updated_at: "2026-09-29T10:00:00.000Z" }],
+    profiles: [{ user_id: "u1", first_name: "Dana", plan_budgets: null, plan_goals: null, sealed_category_rules: sealPacked(fixes, k), sealed_manual_items: sealPacked(owned, k), sealed_home_values: sealPacked(homes, k), updated_at: "2026-09-29T10:00:00.000Z" }],
     plaid_items: [
       {
         user_id: "u1",
@@ -269,6 +270,7 @@ describe("replacing the vault key", () => {
     expect(a.coinbase?.tokens.accessToken).toBe("at1");
     expect(a.categories).toEqual(fixes);
     expect(a.manual).toEqual(owned);
+    expect(a.homeValues).toEqual(homes.homes);
     expect(a.coinbaseShared).toEqual({ balance: 123_456, at: "2026-09-29T09:00:00.000Z" });
     expect(a.reseal).not.toBeNull();
     await a.reseal!();
@@ -286,6 +288,7 @@ describe("replacing the vault key", () => {
       (feed!.snapshot as { sealed: string }).sealed,
       profile!.sealed_category_rules,
       profile!.sealed_manual_items,
+      profile!.sealed_home_values,
     ]) {
       expect(needsReseal(sealed as string, during)).toBe(false);
     }
@@ -302,6 +305,7 @@ describe("replacing the vault key", () => {
     expect(openFeedSnapshot(feed!.snapshot, after)).toEqual(bills);
     expect(openPacked(profile!.sealed_category_rules as string, after)).toEqual(fixes);
     expect(openPacked(profile!.sealed_manual_items as string, after)).toEqual(owned);
+    expect(openPacked(profile!.sealed_home_values as string, after)).toEqual(homes);
     const later = await loadAccount(account(db), after, { withSync: true });
     expect(later.items.map((i) => i.accessToken)).toEqual(["access-1"]);
     expect(later.reseal).toBeNull();
@@ -356,12 +360,12 @@ describe("replacing the vault key", () => {
     expect(link!.sealed_tokens).toBe(reconnected);
   });
 
-  it("moves both of the profile's sealed columns in one write, since a second would find the first had moved updated_at", async () => {
+  it("moves all the profile's sealed columns in one write, since a second would find the first had moved updated_at", async () => {
     const { db, writes } = fakeDb(sealedBy(before));
     await (await loadAccount(account(db), during)).reseal!();
     const profileWrites = writes.filter((w) => w.table === "profiles");
     expect(profileWrites).toHaveLength(1);
-    expect(Object.keys(profileWrites[0]!.values!).sort()).toEqual(["sealed_category_rules", "sealed_manual_items"]);
+    expect(Object.keys(profileWrites[0]!.values!).sort()).toEqual(["sealed_category_rules", "sealed_home_values", "sealed_manual_items"]);
   });
 
   it("changes nothing on a deploy without a rotation: no writes, and every seal in the format it had", async () => {

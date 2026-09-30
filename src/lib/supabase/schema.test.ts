@@ -412,10 +412,11 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealJson({ token: "t" }, ring(newKey)),
       JSON.stringify({ v: 2, sealed: sealJson({ bills: [] }, ring(newKey)) }),
     ]);
-    await rows(`update public.profiles set sealed_category_rules = $2, sealed_manual_items = $3 where user_id = $1`, [
+    await rows(`update public.profiles set sealed_category_rules = $2, sealed_manual_items = $3, sealed_home_values = $4 where user_id = $1`, [
       D,
       sealPacked({ v: 1, merchants: {}, transactions: {} }, ring(oldKey)),
       sealPacked([], ring(newKey)),
+      sealPacked({ v: 1, homes: [] }, ring(oldKey)),
     ]);
     await rows(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, gen_random_uuid(), 0, $2)`, [D, sealPacked({ v: 1, transactions: [] }, ring(oldKey))]);
     const after = await census();
@@ -430,14 +431,15 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       delta("calendar bills", n),
       delta("category fixes", o),
       delta("added by hand", n),
+      delta("home addresses", o),
       delta("imported history", o),
-    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
     for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
     await rows(`delete from auth.users where id = $1`, [D]);
   });
 });
 
-describe.each(["sealed_category_rules", "sealed_manual_items"])("a person's %s", (column) => {
+describe.each(["sealed_category_rules", "sealed_manual_items", "sealed_home_values"])("a person's %s", (column) => {
   const E = "e0e0e0e0-0000-4000-8000-00000000f1c5";
   const fixes = "z1." + "c".repeat(40);
 
@@ -871,5 +873,76 @@ describe("history a person imports", () => {
     await rows(`update public.profiles set totp_factor_id = null where user_id = $1`, [I]);
     await rows(`delete from auth.users where id in ($1, $2)`, [I, J]);
     expect(await rows(`select count(*)::int as n from public.imported_history where user_id in ($1, $2)`, [I, J])).toEqual([{ n: 0 }]);
+  });
+});
+
+describe("home values from RentCast, inside the cap", () => {
+  const people = Array.from({ length: 6 }, (_, i) => `4c000000-0000-4000-8000-00000000000${i}`);
+  const key = (n: number) => `4d000000-0000-4000-8000-0000000000${String(n).padStart(2, "0")}`;
+  const claim = (who: string | null, home: string, claims: Record<string, unknown> = {}) =>
+    as(who ? "authenticated" : "anon", who, () => rows(`select public.claim_home_value_lookup($1) as r`, [home]).then((r) => r[0]!.r as string), claims);
+  const setLimit = (name: string, value: number) => rows(`update public.app_limits set value = $2 where name = $1`, [name, value]);
+
+  beforeAll(async () => {
+    for (const [i, id] of people.entries()) await rows(`insert into auth.users (id, email) values ($1, $2)`, [id, `hv${i}@x.test`]);
+  });
+
+  it("answers only the person themselves: never nobody, never a connected app, never before the second step", async () => {
+    const [P, Q] = [people[0]!, people[1]!];
+    expect(await as("anon", null, () => refused(`select public.claim_home_value_lookup($1)`, [key(1)]))).toBe(true);
+    expect(await claim(P, key(1), CONNECTED_APP)).toBe("refused");
+    // Q turned on an authenticator (from a session that passed it); a session that hasn't is refused, one that has is not.
+    const [F, PASSED, EMAIL_ONLY] = ["4e000000-0000-4000-8000-000000000001", "4e000000-0000-4000-8000-000000000002", "4e000000-0000-4000-8000-000000000003"];
+    await rows(`insert into auth.mfa_factors (id, user_id, status) values ($1, $2, 'verified')`, [F, Q]);
+    await rows(`insert into auth.sessions (id, user_id, aal, factor_id) values ($1, $3, 'aal2', $4), ($2, $3, 'aal1', null)`, [PASSED, EMAIL_ONLY, Q, F]);
+    await as("authenticated", Q, () => rows(`update public.profiles set totp_factor_id = $2 where user_id = $1`, [Q, F]), { session_id: PASSED, aal: "aal2" });
+    expect(await claim(Q, key(2), { session_id: EMAIL_ONLY, aal: "aal1" })).toBe("refused");
+    expect(await claim(Q, key(2), { session_id: PASSED, aal: "aal2" })).toBe("ok");
+    // And none of its bookkeeping can be read or written by anyone but the function.
+    for (const table of ["app_limits", "home_value_calls", "home_value_lookups"]) {
+      expect(await as("authenticated", P, () => refused(`select * from public.${table}`))).toBe(true);
+      expect(await as("anon", null, () => refused(`select * from public.${table}`))).toBe(true);
+    }
+    expect(await as("authenticated", P, () => refused(`update public.app_limits set value = 1000000`))).toBe(true);
+    expect(await as("authenticated", P, () => refused(`delete from public.home_value_calls`))).toBe(true);
+  });
+
+  it("looks each home up once a month, and a person's homes at most three times in 31 days", async () => {
+    const P = people[2]!;
+    expect(await claim(P, key(10))).toBe("ok");
+    expect(await claim(P, key(10))).toBe("already");
+    expect(await claim(P, key(11))).toBe("ok");
+    expect(await claim(P, key(12))).toBe("ok");
+    expect(await claim(P, key(13))).toBe("person-limit");
+  });
+
+  it("never lets everyone together past the cap in any 31 days, and leaving frees no room", async () => {
+    const before = (await rows(`select count(*)::int as n from public.home_value_calls where at > now() - interval '31 days'`))[0]!.n as number;
+    await setLimit("home_value_lookups_31_days", before + 2);
+    expect(await claim(people[3]!, key(20))).toBe("ok");
+    expect(await claim(people[4]!, key(21))).toBe("ok");
+    expect(await claim(people[5]!, key(22))).toBe("limit");
+    // Deleting an account takes its own lookups, never the log the cap counts.
+    await rows(`delete from auth.users where id = $1`, [people[3]]);
+    expect(await claim(people[5]!, key(22))).toBe("limit");
+    // Calls older than 31 days no longer count.
+    await rows(`update public.home_value_calls set at = now() - interval '32 days'`);
+    expect(await claim(people[5]!, key(22))).toBe("ok");
+    await setLimit("home_value_lookups_31_days", 45);
+  });
+
+  it("keeps every address out of what a household is sent", async () => {
+    const [shape] = await rows(`select pg_get_function_result('public.household_shared_money()'::regprocedure) as r`);
+    expect(String(shape!.r)).toMatch(/sealed_manual_items/);
+    expect(String(shape!.r)).not.toMatch(/home/);
+  });
+
+  it("fails closed when a limit is missing", async () => {
+    await rows(`delete from public.app_limits where name = 'home_value_lookups_per_person_31_days'`);
+    expect(await claim(people[4]!, key(30))).toBe("person-limit");
+    await rows(`insert into public.app_limits (name, value) values ('home_value_lookups_per_person_31_days', 3)`);
+    await rows(`delete from public.app_limits where name = 'home_value_lookups_31_days'`);
+    expect(await claim(people[4]!, key(30))).toBe("limit");
+    await rows(`insert into public.app_limits (name, value) values ('home_value_lookups_31_days', 45)`);
   });
 });

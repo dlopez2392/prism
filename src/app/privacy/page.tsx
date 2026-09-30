@@ -16,7 +16,8 @@ import { Bullets, legalLink as link, Section, ShortVersion } from "@/components/
 import { Card, PageHeader } from "@/components/ui";
 import { BRAND } from "@/lib/brand";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
-import { POLICY_UPDATED, PRIVACY_CONTACT, PROVIDERS, STORED_ON_DEVICE } from "@/lib/privacy";
+import { POLICY_UPDATED, PRIVACY_CONTACT, providers, STORED_ON_DEVICE } from "@/lib/privacy";
+import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 
 export const metadata: Metadata = {
   title: "Privacy policy",
@@ -89,6 +90,13 @@ export default function PrivacyPage() {
               with who changed them last.
             </li>
             <li>Things you add yourself, such as your home, a car or a loan, and what you say they&apos;re worth, stored encrypted.</li>
+            {/* Home estimates are switched on by the operator (RENTCAST_API_KEY); this sentence changes with it, in the same deploy. */}
+            {homeValuesEnabled() ? (
+              <li>
+                If you ask {BRAND.product} to keep a home&apos;s value up to date, its address, stored encrypted and never shared with your household, and
+                RentCast&apos;s monthly estimates of its value.
+              </li>
+            ) : null}
             <li>
               History you import from a file, such as a Mint or Monarch export: the transactions you choose to import (each one&apos;s date, description,
               amount and category), stored encrypted in your account. The file itself is read on your device and never sent to {BRAND.product}.
@@ -118,7 +126,7 @@ export default function PrivacyPage() {
         <Section id="share" title="Who else sees it">
           <p>Only the companies that run {BRAND.product} for us, and only what each one needs:</p>
           <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-ctl border border-line">
-            {PROVIDERS.map((p) => (
+            {providers(homeValuesEnabled()).map((p) => (
               <li key={p.name} className="flex flex-col gap-1 bg-surface-2 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
                 <span className="w-24 shrink-0 font-semibold text-ink-1">{p.name}</span>
                 <span className="min-w-0 flex-1">
@@ -180,6 +188,7 @@ export default function PrivacyPage() {
             <li>While you have an account, we keep your data so {BRAND.product} can show it to you.</li>
             <li>Transactions from your bank older than about two years drop out of {BRAND.product}&apos;s copy of them.</li>
             <li>History you import stays until you remove it on Connections, or delete your account.</li>
+            {homeValuesEnabled() ? <li>A home&apos;s address stays until you turn off its estimates, remove the home, or delete your account.</li> : null}
             <li>
               When you delete your account, we disconnect every bank and Coinbase link first, then erase your account and everything in it. Encrypted database
               backups roll off shortly after.
