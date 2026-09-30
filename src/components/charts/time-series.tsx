@@ -8,7 +8,7 @@
 // event markers (paydays, bills) and a "today" rule.
 
 import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { areaPath, bandPath, linear, linePath, niceTicks, thinIndices, type Curve, type Pt } from "@/lib/charts/geometry";
+import { areaPath, bandPath, linear, linePath, niceTicks, spreadLabels, thinIndices, type Curve, type Pt } from "@/lib/charts/geometry";
 import { ChartPlaceholder, ChartTooltip, fmt, useWidth, type TooltipRow, type ValueFormat } from "./core";
 
 export type TimeSeries = {
@@ -117,6 +117,17 @@ export function TimeSeriesChart({
     return { rows, footer: here.length ? here.map((m) => `${m.label} ${m.value}`).join(" · ") : undefined };
   }, [hover, geo, series, band, markers, format]);
 
+  // Where each line ends, and where its label goes: apart from the others, inside the plot.
+  const { ends, endYs } = useMemo(() => {
+    if (!geo) return { ends: [], endYs: [] };
+    const ends = series.flatMap((s) => {
+      const last = geo.pts(s.values).at(-1);
+      const v = [...s.values].reverse().find((x) => x !== null);
+      return !last || s.muted || v === undefined || v === null ? [] : [{ id: s.id, color: s.color, last, v }];
+    });
+    return { ends, endYs: spreadLabels(ends.map((e) => e.last[1]), 14, M.top, height - M.bottom) };
+  }, [geo, series, height]);
+
   return (
     <div ref={ref} className="relative w-full" style={{ height }}>
       {!geo ? (
@@ -215,23 +226,19 @@ export function TimeSeriesChart({
               );
             })}
 
-            {/* End labels and end dots — label the endpoint, not every point. */}
-            {series.map((s) => {
-              const pts = geo.pts(s.values);
-              const last = pts.at(-1);
-              const v = [...s.values].reverse().find((x) => x !== null);
-              if (!last || s.muted || v === undefined || v === null) return null;
-              return (
-                <g key={`${s.id}-end`}>
-                  <circle cx={last[0]} cy={last[1]} r={4.5} fill={s.color} stroke="var(--surface-1)" strokeWidth={2} />
-                  {endLabels ? (
-                    <text x={last[0] + 9} y={last[1]} dy="0.32em" className="num fill-[var(--ink-1)] text-[11px] font-semibold">
-                      {fmt("compact", v)}
-                    </text>
-                  ) : null}
-                </g>
-              );
-            })}
+            {/* End labels and end dots — label the endpoint, not every point.
+                Dots sit on their points; labels are spread apart so two lines
+                ending close together never print one number over another. */}
+            {ends.map(({ id, color, last, v }, k) => (
+              <g key={`${id}-end`}>
+                <circle cx={last[0]} cy={last[1]} r={4.5} fill={color} stroke="var(--surface-1)" strokeWidth={2} />
+                {endLabels ? (
+                  <text x={last[0] + 9} y={endYs[k]} dy="0.32em" className="num fill-[var(--ink-1)] text-[11px] font-semibold">
+                    {fmt("compact", v)}
+                  </text>
+                ) : null}
+              </g>
+            ))}
 
             {markers.map((m, i) => {
               // Sit on whichever series has a value there (actual or forecast).

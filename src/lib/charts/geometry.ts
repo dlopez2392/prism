@@ -204,6 +204,31 @@ export function strokeArc(cx: number, cy: number, r: number, a0: number, a1: num
 }
 
 /** Every `step`-th index, always including the last — for thinning labels by parity. */
+/**
+ * Label positions for points that may sit on top of each other — two lines
+ * ending at nearly the same value, say. Each label stays as close to its own
+ * point as it can, keeps its order, sits at least `gap` from its neighbours,
+ * and stays inside [min, max] (when they fit at all). Returned in input order.
+ */
+export function spreadLabels(ys: number[], gap: number, min: number, max: number): number[] {
+  const order = ys.map((y, i) => [y, i] as const).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const placed = order.map(([y]) => Math.min(max, Math.max(min, y)));
+  for (let k = 1; k < placed.length; k++) placed[k] = Math.max(placed[k]!, placed[k - 1]! + gap);
+  const over = placed.length ? placed.at(-1)! - max : 0;
+  if (over > 0) {
+    placed[placed.length - 1] = max;
+    for (let k = placed.length - 2; k >= 0; k--) placed[k] = Math.min(placed[k]!, placed[k + 1]! - gap);
+    // Too many to fit: keep the top one in bounds and let the rest overflow down, still apart.
+    if (placed[0]! < min) {
+      placed[0] = min;
+      for (let k = 1; k < placed.length; k++) placed[k] = Math.max(placed[k]!, placed[k - 1]! + gap);
+    }
+  }
+  const out = new Array<number>(ys.length);
+  order.forEach(([, i], k) => (out[i] = placed[k]!));
+  return out;
+}
+
 export function thinIndices(count: number, maxLabels: number): number[] {
   if (count <= maxLabels) return Array.from({ length: count }, (_, i) => i);
   const step = Math.ceil(count / maxLabels);
