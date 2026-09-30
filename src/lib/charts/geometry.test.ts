@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barPath, binOf, linear, monotoneSegments, niceTicks, quantileThresholds, squarify, thinIndices } from "./geometry";
+import { barPath, binOf, linear, monotoneSegments, niceTicks, quantileThresholds, spreadLabels, squarify, thinIndices } from "./geometry";
 
 describe("niceTicks", () => {
   it("picks round steps", () => {
@@ -90,5 +90,32 @@ describe("helpers", () => {
     expect(binOf(0, th)).toBe(0);
     expect(binOf(10, th)).toBe(1);
     expect(binOf(50, th)).toBe(5);
+  });
+});
+
+describe("spreadLabels", () => {
+  it("leaves labels that don't touch exactly where their points are", () => {
+    expect(spreadLabels([40, 120, 300], 14, 14, 320)).toEqual([40, 120, 300]);
+  });
+
+  it("pushes two labels on nearly the same value apart, keeping their order", () => {
+    // Net worth's "own" at $130K and "net worth" at $129K end 2px apart.
+    const [own, net] = spreadLabels([100, 102], 14, 14, 320);
+    expect(net! - own!).toBe(14);
+    expect(own).toBe(100);
+    // Order is by position, not by input: the lower point keeps the lower label.
+    const [a, b] = spreadLabels([102, 100], 14, 14, 320);
+    expect(a! - b!).toBe(14);
+  });
+
+  it("stays inside the chart, moving the crowd up from the bottom edge", () => {
+    expect(spreadLabels([318, 319, 320], 14, 14, 320)).toEqual([292, 306, 320]);
+    expect(spreadLabels([2], 14, 14, 320)).toEqual([14]);
+  });
+
+  it("keeps every label apart even when they can't all fit", () => {
+    const ys = spreadLabels([20, 20, 20, 20], 14, 14, 40);
+    expect(ys[0]).toBe(14);
+    for (let k = 1; k < ys.length; k++) expect(ys[k]! - ys[k - 1]!).toBe(14);
   });
 });
