@@ -26,6 +26,7 @@ vi.mock("./account-store", () => ({
     manual: [],
     imports: [],
     lockedImports: [],
+    wallets: [],
     items: [{ itemId: "item-1", accessToken: "access-production-1", institutionId: null, institutionName: "First Bank", linkedAt: "2026-09-01" }],
     // Old enough that this visit asks Plaid again.
     plaidSync: new Map(hasCopy.current ? [["item-1", { state: { v: 1, cursor: "c-1", ready: true, accounts: [savings, brokerage], transactions: [] }, version: 1, syncedAt: LAST_SYNC, changedAt: null }]] : []),

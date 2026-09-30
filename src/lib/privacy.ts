@@ -83,6 +83,20 @@ export const RENTCAST: Provider = {
   policy: "https://www.rentcast.io/privacy",
 };
 
-export function providers(homeValues: boolean): Provider[] {
-  return homeValues ? [...PROVIDERS, RENTCAST] : PROVIDERS;
+/** Reads the balance of a Bitcoin wallet a person adds. Listed always: Bitcoin wallets need no key. */
+export const MEMPOOL: Provider = {
+  name: "mempool.space",
+  does: "Reads the balance of a Bitcoin wallet you add. It receives the wallet's public address, and nothing else about you, about every 15 minutes while you use Prism.",
+  policy: "https://mempool.space/privacy-policy",
+};
+
+/** Listed only while the operator has Ethereum and Solana wallets switched on (ALCHEMY_API_KEY), in the same deploy. */
+export const ALCHEMY: Provider = {
+  name: "Alchemy",
+  does: "Reads the balance of an Ethereum or Solana wallet you add. It receives the wallet's public address, and nothing else about you, about every 15 minutes while you use Prism.",
+  policy: "https://www.alchemy.com/policies/privacy-policy",
+};
+
+export function providers(homeValues: boolean, alchemy = false): Provider[] {
+  return [...PROVIDERS, MEMPOOL, ...(alchemy ? [ALCHEMY] : []), ...(homeValues ? [RENTCAST] : [])];
 }

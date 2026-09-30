@@ -21,6 +21,7 @@ export default defineConfig({
       PLAID_LIABILITIES: "",
       RENTCAST_API_KEY: "",
       RENTCAST_API_URL: "",
+      ALCHEMY_API_KEY: "",
       PRISM_VAULT_KEY: "",
       COINBASE_CLIENT_ID: "",
       COINBASE_CLIENT_SECRET: "",

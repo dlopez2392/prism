@@ -24,6 +24,8 @@ const plan = { current: NO_PLAN as unknown };
 const shared = { mine: new Map<string, string | null>([["joint", "item-me"]]), fails: false, samCoinbase: false as false | "good" | "bad" };
 /** History I imported: none unless a test adds some. */
 const mineImports = { current: [] as unknown[] };
+/** Wallets I added: none unless a test adds some. */
+const mineWallets = { current: [] as unknown[] };
 vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: "Dana",
@@ -33,6 +35,7 @@ vi.mock("./account-store", () => ({
     manual: [],
     imports: mineImports.current,
     lockedImports: [],
+    wallets: mineWallets.current,
     inHousehold: inHousehold.current,
     items: [{ itemId: "item-me", accessToken: "access-me", institutionId: null, institutionName: "Northwind Bank", linkedAt: "2026-09-01" }],
     plaidSync: new Map([["item-me", { state: copy([bank("joint", "Joint Checking", 500), bank("private", "My Savings", 9000)], [spend("m1", "joint", "Corner Café", 12), spend("m2", "private", "Secret Gift", 80)]), version: 1, syncedAt: new Date().toISOString(), changedAt: null }]]),
@@ -184,6 +187,34 @@ describe("the Household view", () => {
     // The bank's own copy of the shared account is still there.
     expect(household.transactions.map((t) => t.merchant)).toContain("Corner Café");
     mineImports.current = [];
+  });
+
+  it("never shows the household a wallet, even one a share row names", async () => {
+    // Read just now, so nothing is asked of any service.
+    mineWallets.current = [
+      {
+        id: "a1b2c3d4e5f6",
+        chain: "bitcoin",
+        address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+        name: "Cold storage",
+        reading: { at: new Date().toISOString(), assets: [{ symbol: "BTC", name: "Bitcoin", units: "5120000", decimals: 8, usd: 428_000 }] },
+      },
+    ];
+    shared.mine.set("wallet-a1b2c3d4e5f6", null);
+    const { getFinance } = await import("./finance");
+    const me = await getFinance();
+    expect(me.accounts.find((a) => a.id === "wallet-a1b2c3d4e5f6")).toMatchObject({ name: "Cold storage", balance: 428_000, source: "wallet" });
+    expect(me.holdings.some((h) => h.accountId === "wallet-a1b2c3d4e5f6")).toBe(true);
+    expect(me.wallets.map((w) => w.name)).toEqual(["Cold storage"]);
+    jar.set("prism-view", "household");
+    vi.resetModules();
+    const household = await (await import("./finance")).getFinance();
+    expect(household.view).toBe("household");
+    expect(household.accounts.some((a) => a.source === "wallet" || a.id.startsWith("wallet-"))).toBe(false);
+    expect(household.holdings.some((h) => h.accountId.startsWith("wallet-"))).toBe(false);
+    expect(household.institutions.some((i) => i.source === "wallet")).toBe(false);
+    shared.mine.delete("wallet-a1b2c3d4e5f6");
+    mineWallets.current = [];
   });
 
   it("keeps the personal pages personal, whatever the switch says", async () => {

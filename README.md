@@ -141,6 +141,26 @@ Coinbase refresh tokens can be used once, so `src/proxy.ts` refreshes a link
 shortly before its hour is up and stores the new pair in the same response.
 It runs only for browsers holding a Coinbase link.
 
+## Crypto wallets you hold yourself
+
+A signed-in person adds a wallet on Connections by its **public address**:
+Prism can see what it holds and can never move it. There is nothing to sign,
+and no seed phrase or private key is ever asked for.
+
+- **Bitcoin needs nothing**: mempool.space's public API, confirmed coins only.
+  Every address kind is checked in full before it's kept (base58check, bech32,
+  and bech32m for Taproot), so a typo never reaches a service.
+- **Ethereum and Solana are off until you set `ALCHEMY_API_KEY`** (free tier,
+  Sensitive, in Vercel). ETH and SOL, plus a short list of well-known tokens
+  named by CONTRACT or MINT (USDC, USDT, DAI, WBTC), never by symbol: scam
+  tokens copy real names and airdrop themselves into every wallet.
+- Priced from Coinbase's public USD rates. A wallet is read again once its
+  last reading is 15 minutes old, on a visit that draws money; a page waits at
+  most 4 seconds, and a wallet that can't be read keeps its last reading.
+- An address shows everything it has ever held, so it's **sealed** in its own
+  column (`profiles.sealed_wallets`), never sent to a household, and only the
+  address (never who it belongs to) goes to the balance service.
+
 ## Accounts (Supabase)
 
 Signed out, Prism works as before: a demo household, with budgets and goals
@@ -304,6 +324,8 @@ select what, key_id, count(*) from (
   select 'added by hand', case when sealed_manual_items like 'z2.%' then substr(sealed_manual_items, 4, 8) else 'unnamed' end from profiles where sealed_manual_items is not null
   union all
   select 'home addresses', case when sealed_home_values like 'z2.%' then substr(sealed_home_values, 4, 8) else 'unnamed' end from profiles where sealed_home_values is not null
+  union all
+  select 'wallets', case when sealed_wallets like 'z2.%' then substr(sealed_wallets, 4, 8) else 'unnamed' end from profiles where sealed_wallets is not null
   union all
   select 'imported history', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from imported_history
 ) seals group by what, key_id order by what, key_id;

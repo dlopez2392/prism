@@ -27,6 +27,7 @@ vi.mock("./account-store", () => ({
     manual: money.manual,
     imports: money.imports,
     lockedImports: money.locked,
+    wallets: [],
     inHousehold: false,
     coinbaseShared: null,
     items: money.banks ? [{ itemId: "item-1", accessToken: "access-1", institutionId: null, institutionName: "Northwind Bank", linkedAt: "2026-09-01" }] : [],

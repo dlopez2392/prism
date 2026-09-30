@@ -36,6 +36,7 @@ vi.mock("./account-store", () => ({
     manual: [],
     imports: [],
     lockedImports: [],
+    wallets: [],
     inHousehold: true,
     coinbaseShared: shared.current,
     items: [],

@@ -18,6 +18,7 @@ import { BRAND } from "@/lib/brand";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
 import { POLICY_UPDATED, PRIVACY_CONTACT, providers, STORED_ON_DEVICE } from "@/lib/privacy";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
+import { chainEnabled } from "@/lib/crypto/balances";
 
 export const metadata: Metadata = {
   title: "Privacy policy",
@@ -101,6 +102,10 @@ export default function PrivacyPage() {
               History you import from a file, such as a Mint or Monarch export: the transactions you choose to import (each one&apos;s date, description,
               amount and category), stored encrypted in your account. The file itself is read on your device and never sent to {BRAND.product}.
             </li>
+            <li>
+              The public address of each crypto wallet you add, and what it last held, stored encrypted and never shared with your household. A public address is
+              the one you&apos;d give someone to pay you: {BRAND.product} can see what it holds and can never move it, and never asks for a seed phrase or private key.
+            </li>
             <li>Categories you fix, such as &ldquo;everything at this shop is groceries&rdquo;, so Prism files your purchases where you put them. They name the shops, so they&apos;re stored encrypted, like your transactions.</li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
             <li>Which AI apps you&apos;ve allowed to read your money, if any.</li>
@@ -126,7 +131,7 @@ export default function PrivacyPage() {
         <Section id="share" title="Who else sees it">
           <p>Only the companies that run {BRAND.product} for us, and only what each one needs:</p>
           <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-ctl border border-line">
-            {providers(homeValuesEnabled()).map((p) => (
+            {providers(homeValuesEnabled(), chainEnabled("ethereum")).map((p) => (
               <li key={p.name} className="flex flex-col gap-1 bg-surface-2 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
                 <span className="w-24 shrink-0 font-semibold text-ink-1">{p.name}</span>
                 <span className="min-w-0 flex-1">
@@ -189,6 +194,7 @@ export default function PrivacyPage() {
             <li>Transactions from your bank older than about two years drop out of {BRAND.product}&apos;s copy of them.</li>
             <li>History you import stays until you remove it on Connections, or delete your account.</li>
             {homeValuesEnabled() ? <li>A home&apos;s address stays until you turn off its estimates, remove the home, or delete your account.</li> : null}
+            <li>A wallet&apos;s address stays until you remove the wallet on Connections, or delete your account.</li>
             <li>
               When you delete your account, we disconnect every bank and Coinbase link first, then erase your account and everything in it. Encrypted database
               backups roll off shortly after.
