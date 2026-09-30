@@ -24,6 +24,10 @@ import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
 import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiability, type StoredLiability } from "@/lib/plaid/liabilities";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
+import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
+import { monthKey } from "@/lib/finance/dates";
+import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
+import { refreshDueHomeValues } from "./home-values";
 import { householdData, narrowTo, type MemberMoney } from "@/lib/finance/household";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
 import { coinbaseNeedsSignIn, mapCoinbase, sharedCoinbase, validCoinbaseValue } from "@/lib/coinbase/map";
@@ -51,6 +55,8 @@ export type Loaded = FinanceData & {
   carryover: string[];
   /** What the signed-in person added by hand, as they entered it, for the editor on Net worth. */
   manual: ManualItem[];
+  /** Their homes RentCast keeps up to date: the address and last range, for the editor. Never the household's. */
+  homeValues: HomeValuation[];
   /** The history they imported, for Connections: what each import is, never its rows. */
   imports: ImportSummary[];
   /** Imports that won't open any more (a retired vault key), listed on Connections so they can be removed. */
@@ -122,6 +128,8 @@ export type Sources = {
   categories: CategoryRules;
   /** What they own or owe that no bank reports, added by hand. A device keeps none. */
   manual: ManualItem[];
+  /** Where their homes are, for RentCast. A device keeps none. */
+  homeValues: HomeValuation[];
   /** History they imported from a file. A device keeps none. */
   imports: ImportedHistory[];
   /** Imports that won't open under any key this deployment has. A device keeps none. */
@@ -170,6 +178,19 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     const a = await loadAccount(account, key, { withSync, withImports: true });
     // Seals an older vault key made move to the current one, after the response (vault.ts, "Keyring").
     if (a.reseal) after(a.reseal);
+    // A home due this month's estimate gets it after the response, on a visit that draws money (never a plan edit).
+    if (withSync && key && homeValuesEnabled() && a.homeValues.length) {
+      const today = todayIn(jar.get("prism-tz")?.value);
+      if (a.manual.some((i) => valuationDue(i, a.homeValues.find((h) => h.itemId === i.id), monthKey(today)))) {
+        // The next visit draws the new value: pages are rendered fresh each time.
+        after(() =>
+          refreshDueHomeValues(account, key, today).catch((e: unknown) =>
+            // No address or amount in the message: only that an estimate waits for next time.
+            console.error("Prism: a home's estimate wasn't saved:", e instanceof Error ? e.name : "unknown error"),
+          ),
+        );
+      }
+    }
     const record = a.coinbase;
     return {
       account,
@@ -177,6 +198,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       plan: a.plan,
       categories: a.categories,
       manual: a.manual,
+      homeValues: a.homeValues,
       imports: a.imports,
       lockedImports: a.lockedImports,
       inHousehold: a.inHousehold,
@@ -210,6 +232,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     plan: readPlan(jar),
     categories: NO_RULES,
     manual: [],
+    homeValues: [],
     imports: [],
     lockedImports: [],
     inHousehold: false,
@@ -252,7 +275,7 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "homeValues" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
@@ -372,6 +395,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     account: src.account ? { email: src.account.email, firstName: src.firstName, calendarFeed: src.feedUpdatedAt !== null } : null,
     carryover: carryoverOf(jar, src.account !== null),
     manual: src.manual,
+    homeValues: src.homeValues,
     imports: src.imports.map(summarize),
     lockedImports: src.lockedImports,
     view: "me",

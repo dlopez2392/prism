@@ -19,6 +19,8 @@ export default defineConfig({
       PLAID_WEBHOOK_URL: "",
       PLAID_REDIRECT_URI: "",
       PLAID_LIABILITIES: "",
+      RENTCAST_API_KEY: "",
+      RENTCAST_API_URL: "",
       PRISM_VAULT_KEY: "",
       COINBASE_CLIENT_ID: "",
       COINBASE_CLIENT_SECRET: "",

@@ -17,6 +17,7 @@ import { money0, monthYear, shortDate } from "@/lib/finance/format";
 import { coinbaseConfig } from "@/lib/coinbase/client";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/finance/integrations";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
+import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { signInToConnect } from "@/lib/linking";
 import type { Institution } from "@/lib/finance/types";
 import { getPersonalFinance } from "@/lib/server/finance";
@@ -291,7 +292,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 <ul className="mt-4 space-y-4">
                   {g.items.map((it) => {
                     // Coinbase is live wherever this deployment has its keys; due dates wherever reading them is switched on.
-                    const status: IntegrationStatus = (it.id === "coinbase" && cbReady) || (it.id === "due-dates" && liabilitiesEnabled()) ? "live" : it.status;
+                    const status: IntegrationStatus = (it.id === "coinbase" && cbReady) || (it.id === "due-dates" && liabilitiesEnabled()) || (it.id === "home" && homeValuesEnabled()) ? "live" : it.status;
                     return (
                       <li key={it.id}>
                         <div className="flex items-start justify-between gap-3">

@@ -11,6 +11,7 @@ import { refreshTokens, type CoinbaseConfig, type TokenSet } from "@/lib/coinbas
 import { validCoinbaseValue } from "@/lib/coinbase/map";
 import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { assembleImports, type ImportedHistory, type LockedImport } from "@/lib/finance/import";
+import { storedHomeValues, validHomeValues, type HomeValuation } from "@/lib/finance/home-value";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
 import type { Budget } from "@/lib/finance/types";
@@ -27,6 +28,7 @@ type ProfileRow = {
   time_zone: string | null;
   sealed_category_rules: string | null;
   sealed_manual_items: string | null;
+  sealed_home_values: string | null;
   updated_at: string;
 };
 type PlaidRow = {
@@ -54,6 +56,8 @@ export type AccountSources = {
   categories: CategoryRules;
   /** What they own or owe that no bank reports, added by hand. */
   manual: ManualItem[];
+  /** Homes whose value RentCast keeps up to date: their addresses, never shared with a household. */
+  homeValues: HomeValuation[];
   /** History they imported from a file, finished imports only — empty unless asked for. */
   imports: ImportedHistory[];
   /** Imports no key in the ring opens, so they can be removed; none when there's no key at all. */
@@ -94,7 +98,7 @@ function openCoinbase(row: CoinbaseRow | null, key: VaultKey | null): CoinbaseRe
 export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false, withImports = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
   const [profile, plaid, coinbase, feed, household, coinbaseShare, imported] = await Promise.all([
-    db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
+    db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
     db
       .from("plaid_items")
       .select(withSync ? "item_id, sealed_token, institution_id, institution_name, linked_at, sealed_sync, sync_version, synced_at, changed_at" : "item_id, sealed_token, institution_id, institution_name, linked_at")
@@ -133,7 +137,8 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   if (feed.data) stale.feed(feed.data);
   const rawRules = key && profile.data?.sealed_category_rules ? openPacked(profile.data.sealed_category_rules, key) : null;
   const rawManual = key && profile.data?.sealed_manual_items ? openPacked(profile.data.sealed_manual_items, key) : null;
-  if (profile.data) stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual });
+  const rawHomes = key && profile.data?.sealed_home_values ? openPacked(profile.data.sealed_home_values, key) : null;
+  if (profile.data) stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual, sealed_home_values: rawHomes });
   // A part that won't open under any key in the ring counts as missing, and its import as unfinished.
   const parts = (imported.data ?? []).map((r) => {
     const opened = key ? openPacked(r.sealed, key) : null;
@@ -149,6 +154,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     plan: { budgets: validBudgets(profile.data?.plan_budgets ?? undefined), goals: validGoals(profile.data?.plan_goals ?? undefined) },
     categories: rawRules === null ? NO_RULES : validCategoryRules(rawRules),
     manual: rawManual === null ? [] : validManualItems(rawManual),
+    homeValues: rawHomes === null ? [] : validHomeValues(rawHomes),
     imports,
     // Without a key nothing opens, so none is known to be locked for good: none is offered for removal.
     lockedImports: key ? locked : [],
@@ -214,10 +220,10 @@ function staleSeals(account: Account, key: VaultKey | null) {
      * too big to send as a filter. One write, because a second guarded by
      * the same updated_at would always find it moved by the first.
      */
-    profile(row: ProfileRow, opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items">) {
+    profile(row: ProfileRow, opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values">) {
       const k = key!;
       const patch: Record<string, string> = {};
-      for (const column of ["sealed_category_rules", "sealed_manual_items"] as const) {
+      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values"] as const) {
         if (opened[column] !== null && due(row[column])) patch[column] = sealPacked(opened[column], k);
       }
       if (Object.keys(patch).length === 0) return;
@@ -312,6 +318,27 @@ export async function loadAccountManualItems(account: Account, key: VaultKey): P
 /** Sealed: what someone owns and what it's worth is financial data. Null when nothing is left. */
 export function saveAccountManualItems(account: Account, items: ManualItem[], key: VaultKey) {
   return upsertProfile(account, { sealed_manual_items: items.length ? sealPacked(items, key) : null });
+}
+
+/** Read strictly before a save, like the items: a failed read is an error, never "no homes" to write over. */
+export async function loadAccountHomeValues(account: Account, key: VaultKey): Promise<HomeValuation[]> {
+  const { data, error } = await account.supabase.from("profiles").select("sealed_home_values").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_home_values">>();
+  if (error) throw new Error("Couldn't read your homes' addresses.");
+  return data?.sealed_home_values ? validHomeValues(openPacked(data.sealed_home_values, key)) : [];
+}
+
+/**
+ * What someone owns and where their homes are, in one write, so an item and
+ * its address never disagree. Sealed: where someone lives. The addresses keep
+ * a column of their own, so they never travel with what a person shares.
+ */
+export function saveAccountManualItemsAndHomes(account: Account, items: ManualItem[], homes: HomeValuation[], key: VaultKey) {
+  // A home's address goes with the home: none is kept for an item that isn't there, or isn't a home.
+  const kept = homes.filter((h) => items.some((i) => i.id === h.itemId && i.kind === "home"));
+  return upsertProfile(account, {
+    sealed_manual_items: items.length ? sealPacked(items, key) : null,
+    sealed_home_values: kept.length ? sealPacked(storedHomeValues(kept), key) : null,
+  });
 }
 
 export async function addAccountPlaidItem(account: Account, item: VaultItem, key: VaultKey): Promise<void> {

@@ -87,7 +87,7 @@ export const INTEGRATIONS: IntegrationGroup[] = [
         id: "home",
         name: "Your home's value",
         adds: "An automatic estimate so net worth includes your biggest asset.",
-        how: "A property-data provider (ATTOM or Estated). Zillow closed its public API in 2021.",
+        how: "RentCast's automated valuation, about once a month, for a home you add on Net worth with its address.",
         status: "planned",
       },
       {
