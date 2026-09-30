@@ -80,8 +80,8 @@ export const INTEGRATIONS: IntegrationGroup[] = [
       {
         id: "wallets",
         name: "Crypto wallets you hold yourself",
-        adds: "Bitcoin, Ethereum and Solana in your net worth, by public address.",
-        how: "Add a wallet's public address: Prism reads what it holds (Bitcoin through mempool.space, Ethereum and Solana through Alchemy) and can never move it. Nothing to sign, and no seed phrase, ever.",
+        adds: "Bitcoin, Ethereum and Solana in your net worth, by public address, and whole Bitcoin wallets.",
+        how: "Add a wallet's public address, or a Bitcoin wallet's extended public key (xpub) to see every address in it: Prism reads what it holds (Bitcoin through mempool.space, Ethereum and Solana through Alchemy) and can never move it. Nothing to sign, and no recovery phrase, ever.",
         status: "live",
       },
     ],

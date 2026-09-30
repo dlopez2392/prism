@@ -86,7 +86,7 @@ export const RENTCAST: Provider = {
 /** Reads the balance of a Bitcoin wallet a person adds. Listed always: Bitcoin wallets need no key. */
 export const MEMPOOL: Provider = {
   name: "mempool.space",
-  does: "Reads the balance of a Bitcoin wallet you add. It receives the wallet's public address, and nothing else about you, about every 15 minutes while you use Prism.",
+  does: "Reads the balance of a Bitcoin wallet you add. It receives the wallet's public address, and nothing else about you, about every 15 minutes while you use Prism. For a whole wallet it receives each of the wallet's addresses, which Prism works out itself, never the extended public key, about every 30 minutes.",
   policy: "https://mempool.space/privacy-policy",
 };
 

@@ -147,11 +147,26 @@ It runs only for browsers holding a Coinbase link.
 
 A signed-in person adds a wallet on Connections by its **public address**:
 Prism can see what it holds and can never move it. There is nothing to sign,
-and no seed phrase or private key is ever asked for.
+and no recovery phrase or private key is ever asked for; one pasted by mistake
+is stopped in the browser before it's sent, and refused again on the server
+(`src/lib/crypto/secrets.ts`), never kept, logged or repeated back.
 
 - **Bitcoin needs nothing**: mempool.space's public API, confirmed coins only.
   Every address kind is checked in full before it's kept (base58check, bech32,
   and bech32m for Taproot), so a typo never reaches a service.
+- **A whole Bitcoin wallet by its extended public key** (`src/lib/crypto/xpub.ts`):
+  an xpub, ypub or zpub, or the descriptor a wallet such as Sparrow exports
+  (`pkh`, `sh(wpkh)`, `wpkh`, `tr` around one key). Prism works out every
+  address itself (BIP 44/49/84/86, receiving and change, until 20 in a row are
+  unused) and sends mempool.space one address at a time, never the key. A
+  bare xpub doesn't say which kind of address it pays to, so the first address
+  of each kind is checked and the used kinds are kept. Key arithmetic is
+  `@scure/bip32` and `@noble/curves` (audited, pinned), never hand-rolled.
+  Reading one takes dozens of requests, so no page waits for it: it's read
+  after the response, at most every 30 minutes, claimed first so two pages
+  never read it at once, and all or nothing (no part-totals). A wallet past
+  500 addresses on a side is refused rather than half-read. Private,
+  multisig and test-network keys are named and refused.
 - **Ethereum and Solana are off until you set `ALCHEMY_API_KEY`** (free tier,
   Sensitive, in Vercel). ETH and SOL, plus a short list of well-known tokens
   named by CONTRACT or MINT (USDC, USDT, DAI, WBTC), never by symbol: scam
@@ -159,9 +174,10 @@ and no seed phrase or private key is ever asked for.
 - Priced from Coinbase's public USD rates. A wallet is read again once its
   last reading is 15 minutes old, on a visit that draws money; a page waits at
   most 4 seconds, and a wallet that can't be read keeps its last reading.
-- An address shows everything it has ever held, so it's **sealed** in its own
-  column (`profiles.sealed_wallets`), never sent to a household, and only the
-  address (never who it belongs to) goes to the balance service.
+- An address shows everything it has ever held, and an extended public key
+  every address in a wallet, so both are **sealed** in their own column
+  (`profiles.sealed_wallets`), never sent to a household, and only an
+  address (never the key, never who it belongs to) goes to the balance service.
 
 ## Accounts (Supabase)
 

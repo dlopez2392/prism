@@ -28,7 +28,7 @@ import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { walletMoney, walletsInstitution, type Wallet } from "@/lib/crypto/wallets";
-import { readWallets, type Fresh } from "./wallets";
+import { readWallets, refreshWholeWallets, type Fresh } from "./wallets";
 import { refreshDueHomeValues } from "./home-values";
 import { householdData, narrowTo, type MemberMoney } from "@/lib/finance/household";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
@@ -157,8 +157,12 @@ export type Sources = {
 /** Where a bank's sync starts from, and where a newer one goes — `save` is null when nothing may be written. */
 type PlaidSync = { stored: Map<string, StoredSync>; save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null };
 
-/** Wallets as last read, and where fresher readings go — `save` is null when nothing may be written. */
-type WalletSource = { list: Wallet[]; save: ((fresh: Fresh) => void) | null };
+/**
+ * Wallets as last read, where fresher readings go, and who reads a whole
+ * wallet after the response — `save` and `scan` are null when nothing may be
+ * written (a device, a connected app), and whole wallets then show their last reading.
+ */
+type WalletSource = { list: Wallet[]; save: ((fresh: Fresh) => void) | null; scan: ((wallets: Wallet[]) => void) | null };
 
 type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets">;
 
@@ -220,6 +224,8 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
                 ),
               )
           : null,
+        // Whole wallets: read after the response, never while the page waits.
+        scan: key ? (wallets) => after(() => refreshWholeWallets(account, wallets, key)) : null,
       },
       imports: a.imports,
       lockedImports: a.lockedImports,
@@ -255,7 +261,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     categories: NO_RULES,
     manual: [],
     homeValues: [],
-    wallets: { list: [], save: null },
+    wallets: { list: [], save: null, scan: null },
     imports: [],
     lockedImports: [],
     inHousehold: false,
@@ -314,6 +320,7 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
     readWallets(src.wallets.list),
   ]);
   if (read.fresh.size) src.wallets.save?.(read.fresh);
+  if (read.later.length) src.wallets.scan?.(read.later);
   const none = { banks: src.items.length === 0 && !src.coinbase, manual: src.manual.length === 0, imports: src.imports.length === 0, wallets: read.wallets.length === 0 };
   const money = crypto ? withCoinbase(banks, crypto) : banks;
   const owned = withManual(money, src.manual, today, none.banks && none.imports && none.wallets);
@@ -556,7 +563,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     manual: a.manual,
     imports: a.imports,
     // Read again in memory when stale; a connected app never saves (and the database wouldn't let it).
-    wallets: { list: a.wallets, save: null },
+    wallets: { list: a.wallets, save: null, scan: null },
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
   };
   const base = greeted((await moneyFor(src, today, "Coinbase balances update the next time you open Prism.")).money, a.firstName, isLive(src));
