@@ -22,6 +22,7 @@ vi.mock("./account-store", () => ({
     manual,
     imports: [],
     lockedImports: [],
+    wallets: [],
     items: [],
     plaidSync: new Map(),
     coinbase: null,

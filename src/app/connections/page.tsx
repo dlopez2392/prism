@@ -7,10 +7,13 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Banknote, FileUp, Gauge, House, KeyRound, Landmark, Lock, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
+import { Banknote, Wallet as WalletIcon, FileUp, Gauge, House, KeyRound, Landmark, Lock, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
 import { DisconnectButton } from "@/components/disconnect-button";
 import { RemoveImport } from "@/components/remove-import";
+import { AddWallet, RemoveWallet } from "@/components/wallets";
+import { chainEnabled } from "@/lib/crypto/balances";
+import { assetAmountText, CHAINS, MAX_WALLETS, readAgo } from "@/lib/crypto/wallets";
 import { ShareAccounts, type ShareableAccount } from "@/components/household";
 import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill, StatusPill, type Status } from "@/components/ui";
 import { money0, monthYear, shortDate } from "@/lib/finance/format";
@@ -37,6 +40,12 @@ const HEALTH: Record<Institution["health"], { status: Status; label: string }> =
 
 /** How a connection is doing, in words: only the person can fix a bank that wants them to sign in again, so it says so. */
 const health = (inst: Institution) => (inst.signInAgain ? { status: "warn" as const, label: "Needs you to sign in" } : HEALTH[inst.health]);
+
+/** The wallets entry while only Bitcoin can be read (no Alchemy key in this deployment). */
+const BITCOIN_WALLETS_ONLY = {
+  adds: "Bitcoin in your net worth, by public address. Ethereum and Solana are coming soon.",
+  how: "Add a wallet's public address: Prism reads what it holds through mempool.space and can never move it. Nothing to sign, and no seed phrase, ever.",
+};
 
 const INTEGRATION: Record<IntegrationStatus, { status: Status; label: string }> = {
   live: { status: "good", label: "Live" },
@@ -90,7 +99,13 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               ? "Its total value, as of your last visit. Nobody else's visit reaches your Coinbase."
               : `${institutionName.get(a.institutionId) ?? ""}${a.mask ? ` ·· ${a.mask}` : ""}`,
           itemId: a.source === "plaid" ? a.institutionId : null,
-          shareable: true,
+          // Imported history and wallets stay the person's own: a switch that did nothing would mislead.
+          shareable: a.source !== "import" && a.source !== "wallet",
+          ...(a.source === "import"
+            ? { why: "History you import stays yours alone." }
+            : a.source === "wallet"
+              ? { why: "Wallets stay yours alone: an address shows everything it has ever held." }
+              : {}),
         }));
   // Shared, but Coinbase couldn't be reached just now: still listed, so it can always be unshared.
   if (shares?.includes("coinbase") && !shareable.some((a) => a.id === "coinbase")) {
@@ -103,11 +118,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const cbReady = coinbaseReady();
   const cbLinked = data.institutions.some((i) => i.source === "coinbase");
   // Imported history is listed on its own card below, where it can be removed.
-  const byInstitution = data.institutions.filter((inst) => inst.source !== "import").map((inst) => {
+  // Imported history and wallets have cards of their own below.
+  const byInstitution = data.institutions.filter((inst) => inst.source !== "import" && inst.source !== "wallet").map((inst) => {
     const accounts = data.accounts.filter((a) => a.institutionId === inst.id);
     return { inst, accounts, total: accounts.reduce((s, a) => s + a.balance, 0) };
   });
   const attention = data.institutions.filter((i) => i.health === "needs_attention").length;
+  // Ethereum and Solana need the operator's Alchemy key; Bitcoin needs nothing.
+  const walletChains = { bitcoin: chainEnabled("bitcoin"), ethereum: chainEnabled("ethereum"), solana: chainEnabled("solana") };
 
   return (
     <div className="space-y-5">
@@ -253,6 +271,50 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         </section>
       ) : null}
 
+      {data.account ? (
+        <section id="wallets" className="scroll-mt-6">
+          <Card className="p-5 sm:p-6">
+            <CardHeader
+              title="Crypto wallets"
+              subtitle="Wallets you hold yourself, by public address. Prism can see what they hold and can never move it, and they stay yours alone."
+              action={<AddWallet enabled={walletChains} full={data.wallets.length >= MAX_WALLETS} />}
+            />
+            {data.wallets.length ? (
+              <ul className="mt-3 divide-y divide-[var(--line)]">
+                {data.wallets.map((w) => {
+                  const balance = data.accounts.find((a) => a.id === `wallet-${w.id}`)?.balance ?? 0;
+                  const held = (w.reading?.assets ?? []).filter((a) => a.units !== "0");
+                  return (
+                    <li key={w.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">
+                      <div className="grid size-10 shrink-0 place-items-center rounded-ctl bg-surface-2 text-ink-2">
+                        <WalletIcon aria-hidden className="size-4" />
+                      </div>
+                      <div className="min-w-48 flex-1">
+                        <div className="text-sm font-bold text-ink-1 [overflow-wrap:anywhere]">{w.name}</div>
+                        <div className="text-xs text-ink-3">
+                          {CHAINS[w.chain].label} ·· {w.address.slice(-4)} · {w.reading ? `read ${readAgo(w.reading.at)}` : "not read yet, tried again on your next visit"}
+                        </div>
+                        {held.length ? <div className="num text-xs text-ink-2">{held.map(assetAmountText).join(" · ")}</div> : null}
+                      </div>
+                      <div className="ml-auto flex items-center gap-4">
+                        <div className="num text-sm font-bold text-ink-1">{money0(balance)}</div>
+                        <RemoveWallet id={w.id} name={w.name} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <EmptyState
+                icon={WalletIcon}
+                title="Add a wallet you hold yourself"
+                body={`Paste a ${walletChains.ethereum ? "Bitcoin, Ethereum or Solana" : "Bitcoin"} wallet's public address, and what it holds counts in your net worth. Nothing to sign, and Prism can never move it.`}
+              />
+            )}
+          </Card>
+        </section>
+      ) : null}
+
       {data.inHousehold ? (
         <section id="share" className="scroll-mt-6">
           <Card className="p-5 sm:p-6">
@@ -293,6 +355,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                   {g.items.map((it) => {
                     // Coinbase is live wherever this deployment has its keys; due dates wherever reading them is switched on.
                     const status: IntegrationStatus = (it.id === "coinbase" && cbReady) || (it.id === "due-dates" && liabilitiesEnabled()) || (it.id === "home" && homeValuesEnabled()) ? "live" : it.status;
+                    // Wallets are live for Bitcoin everywhere; Ethereum and Solana only where Alchemy is switched on, and the copy says so.
+                    const { adds, how } = it.id === "wallets" && !walletChains.ethereum ? BITCOIN_WALLETS_ONLY : it;
                     return (
                       <li key={it.id}>
                         <div className="flex items-start justify-between gap-3">
@@ -301,8 +365,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                             {INTEGRATION[status].label}
                           </StatusPill>
                         </div>
-                        <p className="mt-1 text-[13px] text-ink-2">{it.adds}</p>
-                        <p className="mt-1 text-xs text-ink-3">{it.how}</p>
+                        <p className="mt-1 text-[13px] text-ink-2">{adds}</p>
+                        <p className="mt-1 text-xs text-ink-3">{how}</p>
                         {it.id === "csv" && data.accountsEnabled ? (
                           <Link
                             href={signInFirst ? "/sign-in?next=%2Fconnections%2Fimport" : "/connections/import"}

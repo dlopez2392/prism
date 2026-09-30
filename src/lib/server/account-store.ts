@@ -13,6 +13,7 @@ import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/li
 import { assembleImports, type ImportedHistory, type LockedImport } from "@/lib/finance/import";
 import { storedHomeValues, validHomeValues, type HomeValuation } from "@/lib/finance/home-value";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
+import { storedWallets, validWallets, type Reading, type Wallet } from "@/lib/crypto/wallets";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
 import type { Budget } from "@/lib/finance/types";
 import type { Account } from "@/lib/supabase/server";
@@ -29,6 +30,7 @@ type ProfileRow = {
   sealed_category_rules: string | null;
   sealed_manual_items: string | null;
   sealed_home_values: string | null;
+  sealed_wallets: string | null;
   updated_at: string;
 };
 type PlaidRow = {
@@ -58,6 +60,8 @@ export type AccountSources = {
   manual: ManualItem[];
   /** Homes whose value RentCast keeps up to date: their addresses, never shared with a household. */
   homeValues: HomeValuation[];
+  /** Crypto wallets added by public address, with their last readings; never shared with a household. */
+  wallets: Wallet[];
   /** History they imported from a file, finished imports only — empty unless asked for. */
   imports: ImportedHistory[];
   /** Imports no key in the ring opens, so they can be removed; none when there's no key at all. */
@@ -98,7 +102,7 @@ function openCoinbase(row: CoinbaseRow | null, key: VaultKey | null): CoinbaseRe
 export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false, withImports = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
   const [profile, plaid, coinbase, feed, household, coinbaseShare, imported] = await Promise.all([
-    db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
+    db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
     db
       .from("plaid_items")
       .select(withSync ? "item_id, sealed_token, institution_id, institution_name, linked_at, sealed_sync, sync_version, synced_at, changed_at" : "item_id, sealed_token, institution_id, institution_name, linked_at")
@@ -138,7 +142,8 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const rawRules = key && profile.data?.sealed_category_rules ? openPacked(profile.data.sealed_category_rules, key) : null;
   const rawManual = key && profile.data?.sealed_manual_items ? openPacked(profile.data.sealed_manual_items, key) : null;
   const rawHomes = key && profile.data?.sealed_home_values ? openPacked(profile.data.sealed_home_values, key) : null;
-  if (profile.data) stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual, sealed_home_values: rawHomes });
+  const rawWallets = key && profile.data?.sealed_wallets ? openPacked(profile.data.sealed_wallets, key) : null;
+  if (profile.data) stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual, sealed_home_values: rawHomes, sealed_wallets: rawWallets });
   // A part that won't open under any key in the ring counts as missing, and its import as unfinished.
   const parts = (imported.data ?? []).map((r) => {
     const opened = key ? openPacked(r.sealed, key) : null;
@@ -155,6 +160,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     categories: rawRules === null ? NO_RULES : validCategoryRules(rawRules),
     manual: rawManual === null ? [] : validManualItems(rawManual),
     homeValues: rawHomes === null ? [] : validHomeValues(rawHomes),
+    wallets: rawWallets === null ? [] : validWallets(rawWallets),
     imports,
     // Without a key nothing opens, so none is known to be locked for good: none is offered for removal.
     lockedImports: key ? locked : [],
@@ -220,10 +226,10 @@ function staleSeals(account: Account, key: VaultKey | null) {
      * too big to send as a filter. One write, because a second guarded by
      * the same updated_at would always find it moved by the first.
      */
-    profile(row: ProfileRow, opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values">) {
+    profile(row: ProfileRow, opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values" | "sealed_wallets">) {
       const k = key!;
       const patch: Record<string, string> = {};
-      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values"] as const) {
+      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets"] as const) {
         if (opened[column] !== null && due(row[column])) patch[column] = sealPacked(opened[column], k);
       }
       if (Object.keys(patch).length === 0) return;
@@ -469,3 +475,42 @@ export async function saveFeedSnapshot(account: Account, snapshot: unknown, key:
 export async function removeAccountFeed(account: Account): Promise<void> {
   await account.supabase.from("calendar_feeds").delete().eq("user_id", account.userId);
 }
+
+/** Read strictly before a change, like the items: a failed read is an error, never "no wallets" to write over. */
+export async function loadAccountWallets(account: Account, key: VaultKey): Promise<Wallet[]> {
+  const { data, error } = await account.supabase.from("profiles").select("sealed_wallets").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_wallets">>();
+  if (error) throw new Error("Couldn't read your wallets.");
+  return data?.sealed_wallets ? validWallets(openPacked(data.sealed_wallets, key)) : [];
+}
+
+/** Sealed: an address shows everything it has ever held. Null when there are none. */
+export function saveAccountWallets(account: Account, wallets: Wallet[], key: VaultKey) {
+  return upsertProfile(account, { sealed_wallets: wallets.length ? sealPacked(storedWallets(wallets), key) : null });
+}
+
+/**
+ * New readings, kept only for wallets still there at the same address, and
+ * written only over the profile as it was read: a wallet added or removed
+ * meanwhile is never undone for a cached balance. True when written.
+ */
+export async function saveWalletReadings(account: Account, readings: Map<string, { address: string; reading: Reading }>, key: VaultKey): Promise<boolean> {
+  const db = account.supabase;
+  const { data, error } = await db.from("profiles").select("sealed_wallets, updated_at").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_wallets" | "updated_at">>();
+  if (error || !data?.sealed_wallets) return false;
+  const wallets = validWallets(openPacked(data.sealed_wallets, key));
+  let changed = false;
+  const next = wallets.map((w) => {
+    const r = readings.get(w.id);
+    if (!r || r.address !== w.address) return w;
+    changed = true;
+    return { ...w, reading: r.reading };
+  });
+  if (!changed) return false;
+  const { error: failed, count } = await db
+    .from("profiles")
+    .update({ sealed_wallets: sealPacked(storedWallets(next), key) }, { count: "exact" })
+    .eq("user_id", account.userId)
+    .eq("updated_at", data.updated_at);
+  return !failed && count === 1;
+}
+

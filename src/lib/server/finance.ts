@@ -27,6 +27,8 @@ import { manualAccount, manualInstitution, validManualItems, type ManualItem } f
 import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
+import { walletMoney, walletsInstitution, type Wallet } from "@/lib/crypto/wallets";
+import { readWallets, type Fresh } from "./wallets";
 import { refreshDueHomeValues } from "./home-values";
 import { householdData, narrowTo, type MemberMoney } from "@/lib/finance/household";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
@@ -34,7 +36,7 @@ import { coinbaseNeedsSignIn, mapCoinbase, sharedCoinbase, validCoinbaseValue } 
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
 import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
-import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveAccountTimeZone, saveCoinbaseValue, saveFeedSnapshot, type AccountSources } from "./account-store";
+import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveWalletReadings, saveAccountTimeZone, saveCoinbaseValue, saveFeedSnapshot, type AccountSources } from "./account-store";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { loadHouseholdPlan, loadShares, loadSharedMoney, type HouseholdPlan, type SharedMoneyRow } from "./household-store";
 import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
@@ -57,6 +59,8 @@ export type Loaded = FinanceData & {
   manual: ManualItem[];
   /** Their homes RentCast keeps up to date: the address and last range, for the editor. Never the household's. */
   homeValues: HomeValuation[];
+  /** Their crypto wallets, as read on this visit, for Connections. Never the household's. */
+  wallets: Wallet[];
   /** The history they imported, for Connections: what each import is, never its rows. */
   imports: ImportSummary[];
   /** Imports that won't open any more (a retired vault key), listed on Connections so they can be removed. */
@@ -130,6 +134,8 @@ export type Sources = {
   manual: ManualItem[];
   /** Where their homes are, for RentCast. A device keeps none. */
   homeValues: HomeValuation[];
+  /** Their wallets, and where new readings go (never for a connected app). A device keeps none. */
+  wallets: WalletSource;
   /** History they imported from a file. A device keeps none. */
   imports: ImportedHistory[];
   /** Imports that won't open under any key this deployment has. A device keeps none. */
@@ -151,7 +157,10 @@ export type Sources = {
 /** Where a bank's sync starts from, and where a newer one goes — `save` is null when nothing may be written. */
 type PlaidSync = { stored: Map<string, StoredSync>; save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null };
 
-type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports">;
+/** Wallets as last read, and where fresher readings go — `save` is null when nothing may be written. */
+type WalletSource = { list: Wallet[]; save: ((fresh: Fresh) => void) | null };
+
+type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets">;
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -199,6 +208,19 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       categories: a.categories,
       manual: a.manual,
       homeValues: a.homeValues,
+      wallets: {
+        list: a.wallets,
+        // After the response: this visit already shows the new reading; the kept one spares the next visit a wait.
+        save: key
+          ? (fresh) =>
+              after(() =>
+                saveWalletReadings(account, fresh, key).catch((e: unknown) =>
+                  // No address or balance in the message: only that a reading wasn't kept.
+                  console.error("Prism: a wallet's reading wasn't kept:", e instanceof Error ? e.name : "unknown error"),
+                ),
+              )
+          : null,
+      },
       imports: a.imports,
       lockedImports: a.lockedImports,
       inHousehold: a.inHousehold,
@@ -233,6 +255,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     categories: NO_RULES,
     manual: [],
     homeValues: [],
+    wallets: { list: [], save: null },
     imports: [],
     lockedImports: [],
     inHousehold: false,
@@ -249,7 +272,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
 const getSources = cache(() => readSources({ withSync: true }));
 
 /** Anything of the person's own — a bank, Coinbase, or something they added — replaces the example household. */
-const isLive = (s: Money) => s.items.length > 0 || s.coinbase !== null || s.manual.length > 0 || s.imports.length > 0;
+const isLive = (s: Money) => s.items.length > 0 || s.coinbase !== null || s.manual.length > 0 || s.imports.length > 0 || s.wallets.list.length > 0;
 
 /**
  * The goals the data source provides before any edit — the demo household's,
@@ -275,23 +298,40 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "homeValues" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "homeValues" | "wallets" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
  * made-up money are never shown together, so linking anything ends the
  * demo), else every bank and Coinbase, fetched in parallel.
  */
-async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Promise<Live> {
+async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Promise<{ money: Live; wallets: Wallet[] }> {
   const config = plaidConfig();
-  if (!isLive(src)) return { ...buildDemoData(today), notice: null, plaidReady: config !== null };
-  const [banks, crypto] = await Promise.all([
+  if (!isLive(src)) return { money: { ...buildDemoData(today), notice: null, plaidReady: config !== null }, wallets: [] };
+  const [banks, crypto, read] = await Promise.all([
     config && src.items.length ? loadPlaid(config, src.items, today, src.plaidSync, src.categories) : Promise.resolve(emptyLive(today, config !== null)),
     src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed)) : Promise.resolve(null),
+    readWallets(src.wallets.list),
   ]);
+  if (read.fresh.size) src.wallets.save?.(read.fresh);
+  const none = { banks: src.items.length === 0 && !src.coinbase, manual: src.manual.length === 0, imports: src.imports.length === 0, wallets: read.wallets.length === 0 };
   const money = crypto ? withCoinbase(banks, crypto) : banks;
-  const owned = withManual(money, src.manual, today, src.items.length === 0 && !src.coinbase && src.imports.length === 0);
-  return withImports(owned, src.imports, src.categories, src.items.length === 0 && !src.coinbase && src.manual.length === 0);
+  const owned = withManual(money, src.manual, today, none.banks && none.imports && none.wallets);
+  const imported = withImports(owned, src.imports, src.categories, none.banks && none.manual && none.wallets);
+  return { money: withWallets(imported, read.wallets, none.banks && none.manual && none.imports), wallets: read.wallets };
+}
+
+/** Wallets added by address, as accounts under "Your wallets", each with a holding per asset. */
+function withWallets(base: Live, wallets: Wallet[], only: boolean): Live {
+  if (wallets.length === 0) return base;
+  const money = wallets.map(walletMoney);
+  return {
+    ...base,
+    source: only ? "wallet" : base.source,
+    institutions: [...base.institutions, walletsInstitution(wallets)],
+    accounts: [...base.accounts, ...money.map((m) => m.account)],
+    holdings: [...base.holdings, ...money.flatMap((m) => m.holdings)],
+  };
 }
 
 /**
@@ -300,8 +340,14 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
  * other members see only the bank's own copy of it).
  */
 function privateToMe(mine: Live): Live {
-  if (!mine.transactions.some((t) => t.id.startsWith("imp-"))) return mine;
-  return { ...mine, transactions: mine.transactions.filter((t) => !t.id.startsWith("imp-")), accounts: mine.accounts.filter((a) => a.source !== "import") };
+  const wallet = (id: string) => id.startsWith("wallet-");
+  return {
+    ...mine,
+    transactions: mine.transactions.filter((t) => !t.id.startsWith("imp-")),
+    accounts: mine.accounts.filter((a) => a.source !== "import" && a.source !== "wallet"),
+    institutions: mine.institutions.filter((i) => i.source !== "import" && i.source !== "wallet"),
+    holdings: mine.holdings.filter((h) => !wallet(h.accountId)),
+  };
 }
 
 /**
@@ -379,7 +425,8 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
   const src = await getSources();
   const planEdited = { budgets: src.plan.budgets !== null, goals: src.plan.goals !== null };
 
-  let base = await moneyFor(src, today);
+  const own = await moneyFor(src, today);
+  let base = own.money;
   if (src.account) {
     if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
     base = greeted(base, src.firstName, isLive(src));
@@ -396,6 +443,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     carryover: carryoverOf(jar, src.account !== null),
     manual: src.manual,
     homeValues: src.homeValues,
+    wallets: own.wallets,
     imports: src.imports.map(summarize),
     lockedImports: src.lockedImports,
     view: "me",
@@ -507,9 +555,11 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     categories: a.categories,
     manual: a.manual,
     imports: a.imports,
+    // Read again in memory when stale; a connected app never saves (and the database wouldn't let it).
+    wallets: { list: a.wallets, save: null },
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
   };
-  const base = greeted(await moneyFor(src, today, "Coinbase balances update the next time you open Prism."), a.firstName, isLive(src));
+  const base = greeted((await moneyFor(src, today, "Coinbase balances update the next time you open Prism.")).money, a.firstName, isLive(src));
   const planned = applyPlan(base, a.plan);
   return {
     source: planned.source,

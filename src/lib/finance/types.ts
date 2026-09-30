@@ -40,7 +40,7 @@ export type AccountKind =
   | "loan"
   | "property";
 
-export type DataSource = "demo" | "plaid" | "coinbase" | "manual" | "import";
+export type DataSource = "demo" | "plaid" | "coinbase" | "manual" | "import" | "wallet";
 
 export type Institution = {
   id: string;

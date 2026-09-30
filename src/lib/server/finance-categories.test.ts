@@ -36,6 +36,7 @@ vi.mock("./account-store", () => ({
     manual: [],
     imports: [],
     lockedImports: [],
+    wallets: [],
     items: [{ itemId: "item-1", accessToken: "access-sandbox-1", institutionId: null, institutionName: "First Bank", linkedAt: "2026-09-01" }],
     plaidSync: new Map([
       [
