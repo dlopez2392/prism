@@ -13,7 +13,7 @@ import { DisconnectButton } from "@/components/disconnect-button";
 import { RemoveImport } from "@/components/remove-import";
 import { ShareAccounts, type ShareableAccount } from "@/components/household";
 import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill, StatusPill, type Status } from "@/components/ui";
-import { money0, monthYear } from "@/lib/finance/format";
+import { money0, monthYear, shortDate } from "@/lib/finance/format";
 import { coinbaseConfig } from "@/lib/coinbase/client";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/finance/integrations";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
@@ -196,7 +196,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               title="Imported history"
               subtitle="Transactions from Mint, Monarch or a spreadsheet. Kept encrypted in your account, never shared with your household."
               action={
-                data.imports.length ? (
+                data.imports.length || data.lockedImports.length ? (
                   <ButtonLink href="/connections/import">
                     <FileUp aria-hidden className="size-4" />
                     Import a file
@@ -204,7 +204,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 ) : undefined
               }
             />
-            {data.imports.length ? (
+            {data.imports.length || data.lockedImports.length ? (
               <ul className="mt-3 divide-y divide-[var(--line)]">
                 {data.imports.map((imp) => {
                   const into = imp.attachTo ? data.accounts.find((a) => a.id === imp.attachTo) : undefined;
@@ -224,6 +224,21 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                     </li>
                   );
                 })}
+                {data.lockedImports.map((imp) => (
+                  <li key={imp.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-ctl bg-surface-2 text-ink-2">
+                      <Lock aria-hidden className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-ink-1">An import Prism can&apos;t open</div>
+                      <div className="text-xs text-ink-3">
+                        Imported {shortDate(imp.importedAt.slice(0, 10))}, {imp.importedAt.slice(0, 4)} · It was saved with an encryption key Prism no longer has, so
+                        none of it can be shown. Remove it to free its place.
+                      </div>
+                    </div>
+                    <RemoveImport id={imp.id} name={null} rows={null} />
+                  </li>
+                ))}
               </ul>
             ) : (
               <EmptyState
