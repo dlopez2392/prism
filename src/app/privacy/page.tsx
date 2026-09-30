@@ -89,6 +89,10 @@ export default function PrivacyPage() {
               with who changed them last.
             </li>
             <li>Things you add yourself, such as your home, a car or a loan, and what you say they&apos;re worth, stored encrypted.</li>
+            <li>
+              History you import from a file, such as a Mint or Monarch export: the transactions you choose to import (each one&apos;s date, description,
+              amount and category), stored encrypted in your account. The file itself is read on your device and never sent to {BRAND.product}.
+            </li>
             <li>Categories you fix, such as &ldquo;everything at this shop is groceries&rdquo;, so Prism files your purchases where you put them. They name the shops, so they&apos;re stored encrypted, like your transactions.</li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
             <li>Which AI apps you&apos;ve allowed to read your money, if any.</li>
@@ -143,7 +147,7 @@ export default function PrivacyPage() {
               can stop sharing an account, or leave the household, at any time, and it takes effect at once. If you share Coinbase, they see only
               its total value as of your last visit, and {BRAND.product} keeps that one number, sealed, only while you share it. The household&apos;s
               budgets and goals belong to the household: everyone in it sees them and can change them, and they stay with the household if you
-              leave.
+              leave. History you import is never shared with them, even for an account you share.
             </li>
             <li>
               <span className="font-semibold text-ink-1">Your calendar app</span>, if you subscribe to the bills feed. It reads your upcoming bills and paydays,
@@ -174,7 +178,8 @@ export default function PrivacyPage() {
         <Section id="keep" title="How long we keep it">
           <Bullets>
             <li>While you have an account, we keep your data so {BRAND.product} can show it to you.</li>
-            <li>Transactions older than about two years drop out of {BRAND.product}&apos;s copy.</li>
+            <li>Transactions from your bank older than about two years drop out of {BRAND.product}&apos;s copy of them.</li>
+            <li>History you import stays until you remove it on Connections, or delete your account.</li>
             <li>
               When you delete your account, we disconnect every bank and Coinbase link first, then erase your account and everything in it. Encrypted database
               backups roll off shortly after.

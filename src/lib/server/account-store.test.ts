@@ -26,9 +26,16 @@ function fakeDb(tables: Record<string, Row[]>) {
       eq: (k: string, v: unknown) => ((filters[k] = v), builder),
       limit: () => builder,
       update: (v: Row) => ((op = "update"), (values = v), builder),
+      delete: () => ((op = "delete"), builder),
       returns: () => builder,
       maybeSingle: async () => ({ data: match()[0] ?? null, error: null }),
       then: (resolve: (x: unknown) => void) => {
+        if (op === "delete") {
+          const hit = match();
+          tables[table] = (tables[table] ?? []).filter((r) => !hit.includes(r));
+          writes.push({ table, op, filters: { ...filters } });
+          return resolve({ data: null, error: null, count: hit.length });
+        }
         if (op === "update") {
           const hit = match();
           for (const r of hit) Object.assign(r, values);
@@ -398,5 +405,66 @@ describe("category fixes in the account", () => {
     await expect(loadAccountCategoryRules(account(broken), key)).rejects.toThrow();
     const { db } = fakeDb({ profiles: [{ user_id: "u1", sealed_category_rules: sealPacked(fixes, key) }] });
     expect(await loadAccountCategoryRules(account(db), key)).toEqual(fixes);
+  });
+});
+
+describe("history a person imported", () => {
+  const k1 = randomBytes(32);
+  const k2 = randomBytes(32);
+  const b64 = (k: Buffer) => k.toString("base64");
+  const before = vaultKey({ PRISM_VAULT_KEY: b64(k1) })!;
+  const during = vaultKey({ PRISM_VAULT_KEY: b64(k1), PRISM_VAULT_KEY_2: b64(k2) })!;
+  const after = vaultKey({ PRISM_VAULT_KEY_2: b64(k2) })!;
+  const row = { date: "2019-03-04", amount: -1250, merchant: "Corner Cafe", category: "food" };
+  const meta = { name: "Old checking", kind: "checking", attachTo: null, source: "csv", parts: 2 };
+  const LONG_AGO = "2026-01-01T00:00:00.000Z";
+  const FINISHED = "11111111-1111-4111-8111-111111111111";
+  const LEFT = "22222222-2222-4222-8222-222222222222";
+
+  /** A finished import of two parts, and one whose tab closed after its first batch, long ago. */
+  const stored = (k: typeof before) => ({
+    profiles: [],
+    plaid_items: [],
+    coinbase_links: [],
+    calendar_feeds: [],
+    imported_history: [
+      { user_id: "u1", import_id: FINISHED, part: 1, sealed: sealPacked({ v: 1, rows: [row] }, k), created_at: LONG_AGO },
+      { user_id: "u1", import_id: FINISHED, part: 0, sealed: sealPacked({ v: 1, meta, rows: [row] }, k), created_at: LONG_AGO },
+      { user_id: "u1", import_id: LEFT, part: 1, sealed: sealPacked({ v: 1, rows: [row] }, k), created_at: LONG_AGO },
+      // Someone else's rows, under the same import id: never theirs to remove.
+      { user_id: "u2", import_id: LEFT, part: 1, sealed: sealPacked({ v: 1, rows: [row] }, k), created_at: LONG_AGO },
+    ],
+  });
+  const ids = (rows: Row[]) => rows.map((r) => `${r.user_id}:${r.import_id}:${r.part}`);
+
+  it("shows a finished import, and removes only the person's own import left unfinished for over a day", async () => {
+    const { db, tables, writes } = fakeDb(stored(before));
+    const a = await loadAccount(account(db), before, { withImports: true });
+    expect(a.imports.map((i) => [i.id, i.rows.length])).toEqual([[FINISHED, 2]]);
+    await a.reseal!();
+    expect(writes).toEqual([{ table: "imported_history", op: "delete", filters: { user_id: "u1", import_id: LEFT } }]);
+    expect(ids(tables.imported_history!)).toEqual([`u1:${FINISHED}:1`, `u1:${FINISHED}:0`, `u2:${LEFT}:1`]);
+  });
+
+  it("removes nothing it can't open: no key at all, or a key that isn't this deployment's", async () => {
+    const stranger = vaultKey({ PRISM_VAULT_KEY: b64(randomBytes(32)) })!;
+    for (const key of [null, stranger]) {
+      const { db, writes } = fakeDb(stored(before));
+      const a = await loadAccount(account(db), key, { withImports: true });
+      expect(a.imports).toEqual([]);
+      expect(a.reseal).toBeNull();
+      expect(writes).toEqual([]);
+    }
+  });
+
+  it("moves to a new vault key part by part, like everything else sealed", async () => {
+    const { db, tables } = fakeDb(stored(before));
+    const a = await loadAccount(account(db), during, { withImports: true });
+    await a.reseal!();
+    const mine = tables.imported_history!.filter((r) => r.user_id === "u1");
+    expect(mine.map((r) => needsReseal(r.sealed as string, during))).toEqual([false, false]);
+    const later = await loadAccount(account(db), after, { withImports: true });
+    expect(later.imports.map((i) => [i.id, i.rows.length])).toEqual([[FINISHED, 2]]);
+    expect(later.reseal).toBeNull();
   });
 });

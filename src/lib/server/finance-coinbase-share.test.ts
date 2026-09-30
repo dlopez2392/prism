@@ -34,6 +34,7 @@ vi.mock("./account-store", () => ({
     plan: { budgets: null, goals: null },
     categories: { v: 1, merchants: {}, transactions: {} },
     manual: [],
+    imports: [],
     inHousehold: true,
     coinbaseShared: shared.current,
     items: [],

@@ -141,8 +141,8 @@ export const INTEGRATIONS: IntegrationGroup[] = [
         id: "csv",
         name: "Import history from Mint, Monarch or a spreadsheet",
         adds: "Years of history on day one.",
-        how: "CSV import, parsed in your browser.",
-        status: "planned",
+        how: "Choose the CSV file, match its columns and say which account each part belongs to. The file is read in your browser and never uploaded.",
+        status: "live",
       },
       {
         id: "mcp",
