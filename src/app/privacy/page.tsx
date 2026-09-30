@@ -58,8 +58,9 @@ export default function PrivacyPage() {
           <Bullets>
             <li>
               Banks, cards, loans and investments, through Plaid: account names, the last four digits of account numbers, balances, transactions (merchant, amount,
-              date and category), investment holdings and loan details. You sign in to your bank through Plaid; {BRAND.product} never sees your bank username or
-              password.
+              date and category) and investment holdings. You sign in to your bank through Plaid; {BRAND.product} never sees your bank username or password.
+              Plaid also asks your permission for loan details, such as a card&apos;s due date and minimum payment, so a future feature won&apos;t need you to
+              connect again. {BRAND.product} doesn&apos;t read them yet, and this page will say so before it does.
             </li>
             <li>Coinbase, if you connect it: your crypto balances, read-only.</li>
             <li>

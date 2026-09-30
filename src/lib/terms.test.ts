@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { COINBASE_SCOPES } from "@/lib/coinbase/client";
-import { LINK_COUNTRIES, LINK_OPTIONAL_PRODUCTS, LINK_PRODUCTS } from "@/lib/plaid/client";
+import { LINK_CONSENTED_PRODUCTS, LINK_COUNTRIES, LINK_OPTIONAL_PRODUCTS, LINK_PRODUCTS } from "@/lib/plaid/client";
 import { MINIMUM_AGE, READ_ONLY_PLAID_PRODUCTS, TERMS_CONTACT, TERMS_UPDATED } from "./terms";
 
 const SRC = path.resolve(import.meta.dirname, "..");
@@ -15,7 +15,7 @@ const read = (file: string) => readFileSync(path.join(SRC, file), "utf8");
 
 describe("the Terms of Service", () => {
   it("promise Prism can never move money, so every bank permission it asks for only reads", () => {
-    const asked: string[] = [...LINK_PRODUCTS, ...LINK_OPTIONAL_PRODUCTS];
+    const asked: string[] = [...LINK_PRODUCTS, ...LINK_OPTIONAL_PRODUCTS, ...LINK_CONSENTED_PRODUCTS];
     expect(asked.filter((p) => !(READ_ONLY_PLAID_PRODUCTS as readonly string[]).includes(p))).toEqual([]);
     // The ones that could move money or reveal account numbers are never on the list.
     for (const p of ["transfer", "payment_initiation", "auth", "signal", "identity"]) expect(READ_ONLY_PLAID_PRODUCTS).not.toContain(p);

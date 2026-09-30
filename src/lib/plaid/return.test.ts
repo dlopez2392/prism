@@ -65,6 +65,16 @@ describe("the Link token request", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  it("asks for what Prism reads, and only consent for what it doesn't read yet", async () => {
+    await createLinkToken(config, "u1", {}, {});
+    // Transactions is essential; investments when the bank has them; liabilities is consent
+    // only, so nothing is fetched or billed for it until a feature uses it.
+    expect(sent[0]).toMatchObject({ products: ["transactions"], optional_products: ["investments"], additional_consented_products: ["liabilities"] });
+    // Plaid requires the lists not to overlap.
+    const all = [...(sent[0]!.products as string[]), ...(sent[0]!.optional_products as string[]), ...(sent[0]!.additional_consented_products as string[])];
+    expect(new Set(all).size).toBe(all.length);
+  });
+
   it("carries the return address only when there is one", async () => {
     await createLinkToken(config, "u1", { redirectUri: RETURN }, {});
     await createLinkToken(config, "u1", {}, { PLAID_REDIRECT_URI: RETURN });
