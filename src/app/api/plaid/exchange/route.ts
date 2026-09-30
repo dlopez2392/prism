@@ -6,7 +6,7 @@
 
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { exchangePublicToken, getAccounts, getInstitutionName, plaidConfig, PlaidError } from "@/lib/plaid/client";
+import { exchangePublicToken, getAccounts, getInstitutionName, plaidConfig, plaidFailure } from "@/lib/plaid/client";
 import { clearedReturnCookie, RETURN_COOKIE } from "@/lib/plaid/return";
 import { addAccountPlaidItem, loadAccount } from "@/lib/server/account-store";
 import { linkingRefusal } from "@/lib/linking";
@@ -63,7 +63,6 @@ export async function POST(req: Request) {
     if (jar.has(RETURN_COOKIE)) jar.set(RETURN_COOKIE, "", clearedReturnCookie());
     return NextResponse.json({ ok: true, institutionName });
   } catch (e) {
-    const message = e instanceof PlaidError ? (e.displayMessage ?? e.code) : "Plaid is unreachable right now.";
-    return NextResponse.json({ error: "plaid_error", message }, { status: 502 });
+    return NextResponse.json({ error: "plaid_error", message: plaidFailure(e, "Linking a bank could not finish", "Plaid couldn't finish connecting your bank.") }, { status: 502 });
   }
 }
