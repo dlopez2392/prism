@@ -49,6 +49,20 @@ export class PlaidError extends Error {
   }
 }
 
+/**
+ * A failed call to Plaid, told twice: the logs get Plaid's own reason (its
+ * error code and message — never a token or a secret), and the person gets
+ * plain words, with the code only as a reference to quote.
+ */
+export function plaidFailure(e: unknown, step: string, sorry: string): string {
+  if (e instanceof PlaidError) {
+    console.error(`${step}: ${e.message}`);
+    return e.displayMessage ?? `${sorry} Try again in a minute. (Plaid code: ${e.code})`;
+  }
+  console.error(`${step}: ${e instanceof Error ? e.message : String(e)}`);
+  return "Plaid is unreachable right now. Try again in a minute.";
+}
+
 export async function plaidRequest<T>(
   config: PlaidConfig,
   path: string,

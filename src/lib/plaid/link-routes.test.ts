@@ -126,6 +126,21 @@ describe("a bank that signs people in on its own website", () => {
     expect(sentToPlaid()).toHaveLength(1);
   });
 
+  it("logs why Plaid refused, and tells the person in plain words", async () => {
+    // What production's Link said before its customization had a use case.
+    plaid.mockImplementationOnce(async () =>
+      Response.json({ error_code: "INVALID_LINK_CUSTOMIZATION", error_message: "link customization is missing a use case", display_message: null }, { status: 400 }),
+    );
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await post(linkToken, "/api/plaid/link-token", {});
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "plaid_error", message: "Plaid couldn't start the connection. Try again in a minute. (Plaid code: INVALID_LINK_CUSTOMIZATION)" });
+    expect(errors).toHaveBeenCalledWith(expect.stringMatching(/^Plaid Link could not start: .*INVALID_LINK_CUSTOMIZATION link customization is missing a use case$/));
+    // Plaid's own words for the person win when it sends them.
+    plaid.mockImplementationOnce(async () => Response.json({ error_code: "INSTITUTION_DOWN", display_message: "This bank is down for maintenance." }, { status: 400 }));
+    expect(await (await post(linkToken, "/api/plaid/link-token", {})).json()).toMatchObject({ message: "This bank is down for maintenance." });
+  });
+
   it("is forgotten, the __Host- way, when a bank is linked to a signed-in account", async () => {
     vi.stubEnv("PLAID_REDIRECT_URI", `${SITE}/connections/return`);
     signedIn.current = { userId: "u1", email: "a@x.test" };

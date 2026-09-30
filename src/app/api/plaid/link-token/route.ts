@@ -11,7 +11,7 @@
 
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createLinkToken, plaidConfig, PlaidError, redirectUriFor } from "@/lib/plaid/client";
+import { createLinkToken, plaidConfig, PlaidError, plaidFailure, redirectUriFor } from "@/lib/plaid/client";
 import { clearedReturnCookie, packReturn, RETURN_COOKIE, returnCookieOptions, returnPath } from "@/lib/plaid/return";
 import { linkingRefusal } from "@/lib/linking";
 import { requestOrigin } from "@/lib/server/origin";
@@ -68,7 +68,6 @@ export async function POST(req: Request) {
     else if (jar.has(RETURN_COOKIE)) jar.set(RETURN_COOKIE, "", clearedReturnCookie());
     return NextResponse.json({ linkToken, env: config.env });
   } catch (e) {
-    const message = e instanceof PlaidError ? (e.displayMessage ?? e.code) : "Plaid is unreachable right now.";
-    return NextResponse.json({ error: "plaid_error", message }, { status: 502 });
+    return NextResponse.json({ error: "plaid_error", message: plaidFailure(e, "Plaid Link could not start", "Plaid couldn't start the connection.") }, { status: 502 });
   }
 }
