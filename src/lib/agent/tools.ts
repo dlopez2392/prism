@@ -329,6 +329,45 @@ export function goals(data: AgentData) {
   };
 }
 
+// — get_income ————————————————————————————————————————————————
+
+export function income(data: AgentData) {
+  const s = analyze(data).income;
+  const accounts = byId(data);
+  const txById = new Map(data.transactions.map((t) => [t.id, t]));
+  return {
+    ...frame(data),
+    paychecks: s.paychecks.map((p) => ({
+      payer: p.payer,
+      kind: p.kind,
+      how_often: p.when,
+      take_home: usd(p.takeHome),
+      ...(p.variable ? { amount_varies: true } : {}),
+      yearly_take_home: usd(p.yearly),
+      last_paid: p.lastDate,
+      // Moved to the business day before when banks are closed that day.
+      next_payday: p.next,
+      account: accountLabel(accounts.get(p.accountId)),
+      ...(p.change ? { pay_changed: { from: usd(p.change.from), to: usd(p.change.to), on: p.change.date } } : {}),
+      // The latest deposits it was found from.
+      based_on: p.transactionIds
+        .map((id) => txById.get(id))
+        .filter((t): t is Transaction => Boolean(t))
+        .sort(newestFirst)
+        .slice(0, 3)
+        .map((t) => citeable(t, accounts)),
+    })),
+    // A year of paydays, and that year spread evenly over twelve months (a month itself holds two or three biweekly ones).
+    paychecks_per_year: usd(s.paychecks.reduce((sum, p) => sum + p.yearly, 0)),
+    paychecks_per_month: usd(s.steadyMonthly),
+    next_payday: s.next ? { date: s.next.date, amount: usd(s.next.amount), payer: s.next.payer } : null,
+    // Everything that came in, pay included, as a monthly average over these full months.
+    averaged_over_months: s.months,
+    monthly_average_by_kind: s.byKind.map((k) => ({ kind: k.kind, label: k.label, monthly: usd(k.monthly) })),
+    monthly_average_total: usd(s.monthly),
+  };
+}
+
 // — upcoming_bills —————————————————————————————————————————————
 
 export function upcomingBills(data: AgentData, args: { days?: number }) {

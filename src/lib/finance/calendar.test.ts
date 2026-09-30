@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billEvents, buildCalendar, dueReminders, escapeText, firstUpcoming, foldLine, parseReminder, remindable, rruleFor, stableHash, validDue, type CalendarOptions } from "./calendar";
+import { billEvents, buildCalendar, dueReminders, escapeText, firstUpcoming, foldLine, parseReminder, remindable, rruleFor, seriesFor, stableHash, validDue, type CalendarOptions } from "./calendar";
 import { buildDemoData } from "./demo";
 import { detectRecurring, type RecurringStream } from "./recurring";
 
@@ -53,6 +53,38 @@ describe("rruleFor", () => {
     expect(rruleFor(stream({ lastDate: "2026-08-31" }))).toBe("FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1;COUNT=12");
     expect(rruleFor(stream({ lastDate: "2026-09-29" }))).toBe("FREQ=MONTHLY;BYMONTHDAY=28,29;BYSETPOS=-1;COUNT=12");
     expect(rruleFor(stream({ lastDate: "2026-09-28" }))).toBe("FREQ=MONTHLY;BYMONTHDAY=28;COUNT=12");
+  });
+});
+
+describe("paydays that follow a rule", () => {
+  const pay = (over: Partial<RecurringStream>) => stream({ id: "chk|acme|in", merchant: "Acme payroll", category: "income", kind: "income", amount: 250_000, ...over });
+
+  it("repeats on the payday's own weekday, or its weekday of the month", () => {
+    expect(rruleFor(pay({ cadence: "biweekly", schedule: { kind: "weekday", weekday: 5 } }))).toBe("FREQ=WEEKLY;INTERVAL=2;BYDAY=FR;COUNT=26");
+    expect(rruleFor(pay({ cadence: "monthly", schedule: { kind: "nthWeekday", weekday: 3, nth: 2 } }))).toBe("FREQ=MONTHLY;BYDAY=2WE;COUNT=12");
+    expect(rruleFor(pay({ cadence: "monthly", schedule: { kind: "nthWeekday", weekday: 5, nth: -1 } }))).toBe("FREQ=MONTHLY;BYDAY=-1FR;COUNT=12");
+  });
+
+  it("makes pay twice a month two series, each on the last weekday on or before its day", () => {
+    const s = pay({ cadence: "semimonthly", lastDate: "2026-09-15", nextDate: "2026-09-30", schedule: { kind: "monthDays", days: [15, 31] } });
+    expect(seriesFor(s, TODAY)).toEqual([
+      { key: "chk|acme|in|15", start: "2026-10-15", rrule: "FREQ=MONTHLY;BYMONTHDAY=11,12,13,14,15;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;COUNT=12" },
+      { key: "chk|acme|in|31", start: "2026-09-30", rrule: "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;COUNT=12" },
+    ]);
+    const events = billEvents(options({ streams: [s] }));
+    expect(events.map((e) => [e.start, e.category])).toEqual([
+      ["2026-09-30", "Paydays"],
+      ["2026-10-15", "Paydays"],
+    ]);
+    expect(new Set(events.map((e) => e.uid)).size).toBe(2);
+    expect(events[0]!.description).toContain("twice a month");
+  });
+
+  it("starts a series on a date the series itself names: a weekend moves, a holiday it can't know doesn't", () => {
+    // Every other Friday from Dec 18: Jan 1 2027 is a holiday, paid Dec 31, but a calendar rule can only say Friday.
+    expect(firstUpcoming(pay({ cadence: "biweekly", lastDate: "2026-12-18", schedule: { kind: "weekday", weekday: 5 } }), "2026-12-20")).toBe("2027-01-01");
+    // The 31st in October is a Saturday: the series says Friday the 30th, and so does its start.
+    expect(firstUpcoming(pay({ lastDate: "2026-09-30", schedule: { kind: "monthDays", days: [31] } }), "2026-10-01")).toBe("2026-10-30");
   });
 });
 

@@ -11,9 +11,9 @@
 // at 9 AM relative to that day. UIDs are a stable hash of the stream, so a
 // fresh download updates the same series instead of duplicating it.
 
-import { addDays, dayOfMonth } from "./dates";
+import { addDays, dayOfMonth, dayOfWeek } from "./dates";
 import { money, money0, shortDate } from "./format";
-import { detectRecurring, nthAfter, type Cadence, type RecurringStream } from "./recurring";
+import { detectRecurring, upcoming, type Cadence, type RecurringStream } from "./recurring";
 import type { Account, Cents, ISODate, Transaction } from "./types";
 
 export type Reminder = "none" | "same_day" | "day_before" | "three_days";
@@ -37,8 +37,12 @@ export function parseReminder(x: string | null | undefined): Reminder {
 }
 
 /** A year of each series: long enough to be useful, short enough not to outlive a cancelled bill by much. */
-const OCCURRENCES: Record<Cadence, number> = { weekly: 52, biweekly: 26, monthly: 12 };
-const EVERY: Record<Cadence, string> = { weekly: "every week", biweekly: "every two weeks", monthly: "every month" };
+const OCCURRENCES: Record<Cadence, number> = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12 };
+const EVERY: Record<Cadence, string> = { weekly: "every week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "every month" };
+const BYDAY = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+const WEEKDAYS = "MO,TU,WE,TH,FR";
+/** A calendar series can move a date off a weekend, but has no way to know a bank holiday. */
+const weekday = (d: ISODate) => dayOfWeek(d) !== 0 && dayOfWeek(d) !== 6;
 
 /**
  * A card's or a loan's next payment, as its lender states it (Plaid
@@ -100,13 +104,39 @@ export type BillEvent = {
   category: "Bills" | "Subscriptions" | "Transfers" | "Paydays";
 };
 
-/** The first occurrence after the last real charge that is today or later. */
-export function firstUpcoming(stream: RecurringStream, today: ISODate): ISODate {
-  for (let k = 1; k < 800; k++) {
-    const d = nthAfter(stream.lastDate, stream.cadence, k);
+/** The first occurrence after the last real charge that is today or later, as the series itself would date it. */
+export function firstUpcoming(stream: Pick<RecurringStream, "lastDate" | "cadence" | "schedule" | "nextDate">, today: ISODate): ISODate {
+  let k = 0;
+  for (const d of upcoming(stream, weekday)) {
     if (d >= today) return d;
+    if (++k >= 800) break;
   }
   return stream.nextDate;
+}
+
+/**
+ * The repeating series a stream becomes. One, except pay that comes twice a
+ * month: a calendar rule can't alternate between two days, so each payday of
+ * the month is its own series.
+ */
+export function seriesFor(stream: RecurringStream, today: ISODate): { key: string; start: ISODate; rrule: string }[] {
+  const sch = stream.schedule;
+  if (sch?.kind === "monthDays" && sch.days.length > 1) {
+    return sch.days.map((day) => {
+      const one = { ...stream, cadence: "monthly" as const, schedule: { kind: "monthDays" as const, days: [day] } };
+      return { key: `${stream.id}|${day}`, start: firstUpcoming(one, today), rrule: rruleFor(one) };
+    });
+  }
+  return [{ key: stream.id, start: firstUpcoming(stream, today), rrule: rruleFor(stream) }];
+}
+
+/** A pay rule's day of the month: that day, or the last weekday before it when it falls on a weekend. */
+function monthDayRule(day: number, count: string): string {
+  if (day >= 31) return `FREQ=MONTHLY;BYDAY=${WEEKDAYS};BYSETPOS=-1;${count}`;
+  // The 1st or 2nd can move back into the month before, which a monthly rule can't reach: kept as is.
+  if (day <= 2) return `FREQ=MONTHLY;BYMONTHDAY=${day};${count}`;
+  const days = Array.from({ length: Math.min(5, day) }, (_, i) => day - Math.min(5, day) + 1 + i).join(",");
+  return `FREQ=MONTHLY;BYMONTHDAY=${days};BYDAY=${WEEKDAYS};BYSETPOS=-1;${count}`;
 }
 
 /**
@@ -115,8 +145,12 @@ export function firstUpcoming(stream: RecurringStream, today: ISODate): ISODate 
  * (BYSETPOS=-1) — the same month-end clamping the forecast uses, instead of
  * RFC 5545's default of silently skipping short months.
  */
-export function rruleFor(stream: RecurringStream): string {
+export function rruleFor(stream: Pick<RecurringStream, "lastDate" | "cadence" | "schedule">): string {
   const count = `COUNT=${OCCURRENCES[stream.cadence]}`;
+  const sch = stream.schedule;
+  if (sch?.kind === "weekday") return `FREQ=WEEKLY;${stream.cadence === "biweekly" ? "INTERVAL=2;" : ""}BYDAY=${BYDAY[sch.weekday]};${count}`;
+  if (sch?.kind === "nthWeekday") return `FREQ=MONTHLY;BYDAY=${sch.nth}${BYDAY[sch.weekday]};COUNT=12`;
+  if (sch?.kind === "monthDays" && sch.days.length === 1) return monthDayRule(sch.days[0]!, "COUNT=12");
   if (stream.cadence === "weekly") return `FREQ=WEEKLY;${count}`;
   if (stream.cadence === "biweekly") return `FREQ=WEEKLY;INTERVAL=2;${count}`;
   const day = dayOfMonth(stream.lastDate);
@@ -177,14 +211,16 @@ export function billEvents(opts: CalendarOptions): BillEvent[] {
     }
     lines.push("", `See what's coming up: ${opts.origin}/future`);
 
-    events.push({
-      uid: `${stableHash(s.id)}@prism.bis`,
-      start: firstUpcoming(s, opts.today),
-      rrule: rruleFor(s),
-      title: opts.amountsInTitles ? `${title} · ${amount}` : title,
-      description: lines.join("\n"),
-      category: payday ? "Paydays" : s.kind === "subscription" ? "Subscriptions" : s.kind === "transfer" ? "Transfers" : "Bills",
-    });
+    for (const series of seriesFor(s, opts.today)) {
+      events.push({
+        uid: `${stableHash(series.key)}@prism.bis`,
+        start: series.start,
+        rrule: series.rrule,
+        title: opts.amountsInTitles ? `${title} · ${amount}` : title,
+        description: lines.join("\n"),
+        category: payday ? "Paydays" : s.kind === "subscription" ? "Subscriptions" : s.kind === "transfer" ? "Transfers" : "Bills",
+      });
+    }
   }
   for (const d of opts.dues ?? []) {
     if (d.due < opts.today) continue;

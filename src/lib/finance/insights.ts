@@ -14,7 +14,7 @@ import type { BudgetStatus } from "./budgets";
 import { daysLeftInMonth } from "./budgets";
 import { addDays, monthKey, startOfMonth } from "./dates";
 import { money, money0, monthLong, percent } from "./format";
-import { monthlyCost, type RecurringStream } from "./recurring";
+import { monthlyCost, perYear, type RecurringStream } from "./recurring";
 import type { ISODate, Transaction } from "./types";
 
 export type InsightTone = "heads_up" | "win" | "idea";
@@ -82,12 +82,12 @@ export function generateInsights(input: {
         id: `raise-${s.id}`,
         tone: "win",
         title: `Your paycheck went up ${percent(pct, 1)}`,
-        detail: `${money(to - from)} more every payday — about ${money0(((to - from) * 26))} a year. Nice.`,
+        detail: `${money(to - from)} more every payday — about ${money0((to - from) * perYear(s.cadence))} a year. Nice.`,
         evidence: s.transactionIds.slice(-4),
         evidenceLabel: "Your last four paychecks",
       });
     } else if (s.amount < 0 && Math.abs(to) > Math.abs(from)) {
-      const yearly = (Math.abs(to) - Math.abs(from)) * 12;
+      const yearly = (Math.abs(to) - Math.abs(from)) * perYear(s.cadence);
       out.push({
         id: `price-${s.id}`,
         tone: "heads_up",

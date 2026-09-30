@@ -7,10 +7,24 @@
 // the amount may be fixed (a subscription) or variable (the electric bill, the
 // card payment), and the difference matters to the forecast's error band.
 
-import { addDays, addMonths, daysBetween } from "./dates";
+import { addDays, addMonths, dayOfMonth, dayOfWeek, daysBetween, daysInMonth, isBusinessDay } from "./dates";
 import type { Cents, CategoryId, ISODate, Transaction } from "./types";
 
-export type Cadence = "weekly" | "biweekly" | "monthly";
+export type Cadence = "weekly" | "biweekly" | "semimonthly" | "monthly";
+
+/**
+ * When pay actually lands. Employers pay by a rule — every other Friday, the
+ * 15th and the last day of the month, the second Wednesday — and move a
+ * payday that falls on a weekend or a bank holiday to the business day
+ * before. Only income streams carry one; a stream without one simply repeats
+ * from its last date.
+ */
+export type PaySchedule =
+  | { kind: "weekday"; weekday: number }
+  /** Days of the month, 1–31: 31 (or any day a month doesn't have) is its last day. One day monthly, two twice a month. */
+  | { kind: "monthDays"; days: number[] }
+  /** The nth weekday of each month (Social Security's second Wednesday); nth -1 is the last. */
+  | { kind: "nthWeekday"; weekday: number; nth: number };
 
 export type StreamKind = "income" | "subscription" | "bill" | "transfer";
 
@@ -31,6 +45,8 @@ export type RecurringStream = {
   /** Set when the latest fixed charge differs from the one before it. */
   priceChange: { from: Cents; to: Cents; date: ISODate } | null;
   transactionIds: string[];
+  /** Income only: the rule its dates follow, so the next payday is exact. */
+  schedule?: PaySchedule;
   /**
    * When this stream pays a card or a loan whose lender states its next
    * payment (debts.ts, withLenderTerms): that payment, instead of an
@@ -45,6 +61,8 @@ const CADENCES: { cadence: Cadence; days: number; tolerance: number }[] = [
   { cadence: "biweekly", days: 14, tolerance: 2 },
   { cadence: "monthly", days: 30.4, tolerance: 4 },
 ];
+/** Twice a month is found from the days pay lands on, not the gaps between them; this only says when it stopped. */
+const SEMIMONTHLY = { days: 15.2, tolerance: 3 };
 
 /** Where a fixed, modest charge reads as a subscription rather than a bill. */
 const SUBSCRIPTION_CATEGORIES: CategoryId[] = ["fun", "health", "shopping"];
@@ -85,18 +103,20 @@ export function detectRecurring(txns: Transaction[], today: ISODate): RecurringS
     const gaps = list.slice(1).map((t, i) => daysBetween(list[i]!.date, t.date));
     const typical = median(gaps);
     const match = CADENCES.find((c) => Math.abs(typical - c.days) <= c.tolerance);
-    if (!match) continue;
-    const steady = gaps.filter((g) => Math.abs(g - match.days) <= match.tolerance + 1).length;
-    if (steady / gaps.length < 0.75) continue;
-
+    const steady = match ? gaps.filter((g) => Math.abs(g - match.days) <= match.tolerance + 1).length / gaps.length >= 0.75 : false;
     const last = list.at(-1)!;
+    // Pay follows a rule, and the rule is what makes the next payday exact.
+    const pay = last.category === "income" && last.amount > 0 ? paySchedule(list.map((t) => t.date), steady ? match!.cadence : null, typical) : null;
+    const cadence = pay?.cadence ?? (steady ? match!.cadence : null);
+    if (!cadence) continue;
+
     // A stream that stopped is not recurring any more: allow one missed cycle.
-    if (daysBetween(last.date, today) > match.days * 1.6 + match.tolerance) continue;
+    const period = cadence === "semimonthly" ? SEMIMONTHLY : CADENCES.find((c) => c.cadence === cadence)!;
+    if (daysBetween(last.date, today) > period.days * 1.6 + period.tolerance) continue;
 
     const { variable, priceChange } = amountPattern(list, today);
-
-    const nextDate = nthAfter(last.date, match.cadence, 1);
     const amount = variable ? Math.round(median(list.slice(-3).map((t) => t.amount))) : last.amount;
+    const shape = { lastDate: last.date, cadence, ...(pay?.schedule ? { schedule: pay.schedule } : {}) };
 
     streams.push({
       id: key,
@@ -104,14 +124,15 @@ export function detectRecurring(txns: Transaction[], today: ISODate): RecurringS
       accountId: last.accountId,
       category: last.category,
       kind: kindOf(last, variable),
-      cadence: match.cadence,
+      cadence,
       amount,
       variable,
       lastDate: last.date,
-      nextDate,
+      nextDate: nthOccurrence(shape, 1),
       occurrences: list.length,
       priceChange,
       transactionIds: list.map((t) => t.id),
+      ...(pay?.schedule ? { schedule: pay.schedule } : {}),
     });
   }
   return streams.sort((a, b) => (a.nextDate < b.nextDate ? -1 : a.nextDate > b.nextDate ? 1 : 0));
@@ -165,13 +186,11 @@ function kindOf(t: Transaction, variable: boolean): StreamKind {
 }
 
 /** Every occurrence of `stream` from `from` through `to`, inclusive. */
-export function occurrences(stream: RecurringStream, from: ISODate, to: ISODate): ISODate[] {
+export function occurrences(stream: Pick<RecurringStream, "lastDate" | "cadence" | "schedule" | "nextDate">, from: ISODate, to: ISODate): ISODate[] {
   const out: ISODate[] = [];
-  // Counted from the last REAL charge so month-end clamping never drifts
-  // (Jan 31 → Feb 28 → Mar 31, not Mar 28).
-  for (let k = 1; k < 400; k++) {
-    const d = nthAfter(stream.lastDate, stream.cadence, k);
-    if (d > to) break;
+  let k = 0;
+  for (const d of upcoming(stream)) {
+    if (d > to || ++k >= 400) break;
     if (d >= from) out.push(d);
   }
   // A charge that is overdue (expected before `from`, not yet seen) is still
@@ -185,11 +204,134 @@ export function nthAfter(date: ISODate, cadence: Cadence, n: number): ISODate {
 }
 
 export function cadenceDays(c: Cadence): number {
-  return c === "weekly" ? 7 : c === "biweekly" ? 14 : 30;
+  return c === "weekly" ? 7 : c === "biweekly" ? 14 : c === "semimonthly" ? 15 : 30;
+}
+
+/** How many times a year a stream comes round. */
+export function perYear(c: Cadence): number {
+  return c === "weekly" ? 52 : c === "biweekly" ? 26 : c === "semimonthly" ? 24 : 12;
 }
 
 /** Monthly cost of a stream, for "subscriptions cost you $X a year". */
 export function monthlyCost(stream: RecurringStream): Cents {
-  const perMonth = stream.cadence === "weekly" ? 52 / 12 : stream.cadence === "biweekly" ? 26 / 12 : 1;
-  return Math.round(Math.abs(stream.amount) * perMonth);
+  return Math.round((Math.abs(stream.amount) * perYear(stream.cadence)) / 12);
+}
+
+type Shape = Pick<RecurringStream, "lastDate" | "cadence" | "schedule">;
+
+/**
+ * The stream's dates after its last real one, in order. Without a schedule,
+ * counted from the last REAL charge so month-end clamping never drifts (Jan 31
+ * → Feb 28 → Mar 31, not Mar 28). With one, each is the rule's next date,
+ * moved to the day before when banks are closed (`open`: bank holidays
+ * included, unless a calendar that can't express them asks for weekdays only).
+ */
+export function* upcoming(s: Shape, open: (d: ISODate) => boolean = isBusinessDay): Generator<ISODate> {
+  const back = (d: ISODate) => {
+    while (!open(d)) d = addDays(d, -1);
+    return d;
+  };
+  const sch = s.schedule;
+  if (!sch) {
+    for (let k = 1; ; k++) yield nthAfter(s.lastDate, s.cadence, k);
+  }
+  if (sch.kind === "weekday") {
+    const step = s.cadence === "weekly" ? 7 : 14;
+    const nominal = nominalOf(s.lastDate, (d) => dayOfWeek(d) === sch.weekday);
+    for (let k = 1; ; k++) yield back(addDays(nominal, k * step));
+  }
+  let d = nominalOf(s.lastDate, (x) => onRule(x, sch));
+  for (;;) {
+    do d = addDays(d, 1);
+    while (!onRule(d, sch));
+    yield back(d);
+  }
+}
+
+/** The stream's nth date after its last real one (n ≥ 1). */
+export function nthOccurrence(s: Shape, n: number): ISODate {
+  let k = 0;
+  for (const d of upcoming(s)) if (++k === n) return d;
+  return s.lastDate;
+}
+
+/**
+ * The days a payment made on `date` could have been due: that day, and the
+ * run of days after it when banks were shut (paid Friday for a Saturday).
+ */
+export function dueCandidates(date: ISODate): ISODate[] {
+  const out = [date];
+  for (let d = addDays(date, 1); !isBusinessDay(d) && out.length < 5; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+/** The day `date`'s payment was due under a rule: the first candidate the rule names, else the date itself. */
+function nominalOf(date: ISODate, test: (d: ISODate) => boolean): ISODate {
+  return dueCandidates(date).find(test) ?? date;
+}
+
+/** A day the rule names. */
+function onRule(d: ISODate, sch: Exclude<PaySchedule, { kind: "weekday" }>): boolean {
+  const dom = dayOfMonth(d);
+  if (sch.kind === "monthDays") return sch.days.some((x) => Math.min(x, daysInMonth(d)) === dom);
+  return dayOfWeek(d) === sch.weekday && (sch.nth === -1 ? dom + 7 > daysInMonth(d) : Math.ceil(dom / 7) === sch.nth);
+}
+
+/** A day of the month as a rule names it: the last day is 31, whatever the month. */
+const ruleDay = (d: ISODate) => (dayOfMonth(d) === daysInMonth(d) ? 31 : dayOfMonth(d));
+
+/**
+ * The rule deposits follow, when they follow one. Every payday must fit it
+ * (bar one in ten, for an off-cycle bonus from the same payer); a rule that
+ * fits only some is no rule.
+ */
+export function paySchedule(dates: ISODate[], gapCadence: Cadence | null, typicalGap: number): { cadence: Cadence; schedule: PaySchedule } | null {
+  // Payroll never lands when banks are shut; a payer that has (interest posted on a Saturday) keeps no such rule.
+  if (dates.some((d) => !isBusinessDay(d))) return null;
+  const fits = (hits: number) => hits >= dates.length - Math.floor(dates.length / 10);
+  const candidates = dates.map(dueCandidates);
+
+  // Every week or every other week: the same weekday, give or take a holiday.
+  if (gapCadence === "weekly" || gapCadence === "biweekly") {
+    for (let w = 1; w <= 5; w++) {
+      if (fits(candidates.filter((c) => c.some((d) => dayOfWeek(d) === w)).length)) return { cadence: gapCadence, schedule: { kind: "weekday", weekday: w } };
+    }
+  }
+
+  // Twice a month: two days of the month about a fortnight apart, taken in turn.
+  if (dates.length >= 4 && typicalGap >= 12 && typicalGap <= 18) {
+    const days = candidates.map((c) => new Set(c.map(ruleDay)));
+    const all = [...new Set(days.flatMap((d) => [...d]))].sort((a, b) => a - b);
+    let best: { pair: [number, number]; hits: number } | null = null;
+    for (const a of all) {
+      for (const b of all) {
+        const span = Math.min(b, 30) - a;
+        if (b <= a || span < 13 || span > 17) continue;
+        const onA = days.filter((d) => d.has(a)).length;
+        const onB = days.filter((d) => d.has(b) && !d.has(a)).length;
+        if (Math.abs(onA - onB) > 1 + Math.floor(dates.length / 10)) continue;
+        if (!best || onA + onB > best.hits || (onA + onB === best.hits && b === 31)) best = { pair: [a, b], hits: onA + onB };
+      }
+    }
+    if (best && fits(best.hits)) return { cadence: "semimonthly", schedule: { kind: "monthDays", days: best.pair } };
+  }
+
+  if (gapCadence === "monthly") {
+    // The nth weekday of the month (benefits, some pensions).
+    const last = dates.at(-1)!;
+    const weekday = dayOfWeek(last);
+    const nth = dayOfMonth(last) + 7 > daysInMonth(last) ? -1 : Math.ceil(dayOfMonth(last) / 7);
+    const nthFits = dates.filter((d) => dayOfWeek(d) === weekday && (nth === -1 ? dayOfMonth(d) + 7 > daysInMonth(d) : Math.ceil(dayOfMonth(d) / 7) === nth)).length;
+    // A date that lands on the same weekday every month is rare for a day-of-month rule: at least three to say so.
+    if (dates.length >= 3 && fits(nthFits) && new Set(dates.map(dayOfMonth)).size > 1) return { cadence: "monthly", schedule: { kind: "nthWeekday", weekday, nth } };
+    // One day of the month.
+    const days = candidates.map((c) => new Set(c.map(ruleDay)));
+    const counts = new Map<number, number>();
+    for (const d of days) for (const x of d) counts.set(x, (counts.get(x) ?? 0) + 1);
+    // The most dates, then the day paid on itself most often (the 15th, not the Sunday it moved from).
+    const exact = (x: number) => dates.filter((d) => ruleDay(d) === x).length;
+    const [day] = [...counts].sort((p, q) => q[1] - p[1] || exact(q[0]) - exact(p[0]) || p[0] - q[0])[0] ?? [];
+    if (day !== undefined && fits(counts.get(day)!)) return { cadence: "monthly", schedule: { kind: "monthDays", days: [day] } };
+  }
+  return null;
 }

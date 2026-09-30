@@ -37,6 +37,16 @@ describe("generateInsights", () => {
     expect(price!.title).toBe("Streamflix raised its price to $17.99");
     expect(price!.tone).toBe("heads_up");
     expect(price!.evidence).toEqual(charges.slice(-4).map((t) => t.id));
+    expect(price!.detail).toContain("$30 more a year");
+  });
+
+  it("counts a raise by how often pay actually comes: twice a month is 24 paydays, not 26", () => {
+    const dates = ["2026-05-15", "2026-05-29", "2026-06-15", "2026-06-30", "2026-07-15", "2026-07-31", "2026-08-14", "2026-08-31", "2026-09-15"];
+    const pays = dates.map((d, i) => ({ ...tx(d, i < 6 ? 250_000 : 260_000, "ACME CORP PAYROLL", "income"), id: `p${i}` }));
+    const [raise] = run(pays).filter((i) => i.id.startsWith("raise-"));
+    expect(raise!.title).toBe("Your paycheck went up 4.0%");
+    // $100 a payday × 24 paydays.
+    expect(raise!.detail).toBe("$100.00 more every payday — about $2,400 a year. Nice.");
   });
 
   it("leads with an over-budget category and shows its transactions", () => {

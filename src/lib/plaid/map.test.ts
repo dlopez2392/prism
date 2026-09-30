@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { plaidConfig, plaidRequest, PlaidError } from "./client";
 import { syncTransactions } from "./sync";
-import { accountKind, mapAccount, mapCategory, mapHoldings, mapTransaction, reconstructHistory, signedBalance, suggestedLimit } from "./map";
+import { accountKind, incomeKindOf, mapAccount, mapCategory, mapHoldings, mapTransaction, reconstructHistory, signedBalance, suggestedLimit } from "./map";
 import type { PlaidAccount, PlaidTransaction } from "./client";
 
 const acct = (over: Partial<PlaidAccount>): PlaidAccount => ({
@@ -36,6 +36,29 @@ describe("mapTransaction", () => {
   it("prefers the clean merchant name", () => {
     expect(mapTransaction(ptx({})).merchant).toBe("Bean There");
     expect(mapTransaction(ptx({ merchant_name: null })).merchant).toBe("SQ *COFFEE");
+  });
+});
+
+describe("what kind of income the bank says it is", () => {
+  const income = (detailed: string) => ({ primary: "INCOME", detailed });
+
+  it("reads both of Plaid's category versions, and only for income", () => {
+    expect(incomeKindOf(income("INCOME_WAGES"))).toBe("pay");
+    expect(incomeKindOf(income("INCOME_SALARY"))).toBe("pay");
+    expect(incomeKindOf(income("INCOME_INTEREST_EARNED"))).toBe("interest");
+    expect(incomeKindOf(income("INCOME_DIVIDENDS"))).toBe("dividends");
+    expect(incomeKindOf(income("INCOME_RETIREMENT_PENSION"))).toBe("retirement");
+    expect(incomeKindOf(income("INCOME_UNEMPLOYMENT"))).toBe("benefits");
+    expect(incomeKindOf(income("INCOME_TAX_REFUND"))).toBe("tax-refund");
+    expect(incomeKindOf(income("INCOME_SOMETHING_NEW"))).toBe("other");
+    expect(incomeKindOf({ primary: "TRANSFER_IN", detailed: "TRANSFER_IN_DEPOSIT" })).toBeUndefined();
+    expect(incomeKindOf(null)).toBeUndefined();
+  });
+
+  it("is kept on an income transaction, and on nothing else", () => {
+    const pay = mapTransaction(ptx({ amount: -2_450, name: "ACME PAYROLL", merchant_name: null, personal_finance_category: income("INCOME_WAGES") }));
+    expect(pay).toMatchObject({ category: "income", incomeKind: "pay", amount: 245_000 });
+    expect("incomeKind" in mapTransaction(ptx({}))).toBe(false);
   });
 });
 

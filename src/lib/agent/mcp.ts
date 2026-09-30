@@ -1,6 +1,6 @@
 // src/lib/agent/mcp.ts
 //
-// Prism as an MCP server: nine read-only tools over the person's money, for
+// Prism as an MCP server: ten read-only tools over the person's money, for
 // Claude, ChatGPT or any MCP client they connect. The data is loaded lazily,
 // once per request, by the loader the endpoint passes in — a tool list or a
 // handshake never touches a bank.
@@ -13,6 +13,7 @@ import {
   cashFlow,
   CATEGORY_IDS,
   goals,
+  income,
   listAccounts,
   netWorth,
   overview,
@@ -195,6 +196,17 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Upcoming bills and paydays", ...READ_ONLY },
     },
     runWith(upcomingBills),
+  );
+
+  server.registerTool(
+    "get_income",
+    {
+      title: "Income and paychecks",
+      description:
+        "Who pays the user and how often (every other Friday, the 15th and the last day of the month…), take-home pay per paycheck and a year of it, the next payday (moved to the business day before a weekend or bank holiday), any change in pay, and all income by kind (pay, interest, dividends, benefits…) as a monthly average over the last three full months. Found from the deposits themselves; each paycheck cites the deposits it rests on.",
+      annotations: { title: "Income and paychecks", ...READ_ONLY },
+    },
+    run(income),
   );
 
   server.registerTool(
