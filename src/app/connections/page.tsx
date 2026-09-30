@@ -7,7 +7,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Gauge, House, KeyRound, Landmark, Lock, Plus, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
+import { Gauge, House, KeyRound, Landmark, Lock, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
 import { DisconnectButton } from "@/components/disconnect-button";
 import { ShareAccounts, type ShareableAccount } from "@/components/household";
@@ -29,8 +29,11 @@ const ICONS: Record<string, LucideIcon> = { landmark: Landmark, "trending-up": T
 const HEALTH: Record<Institution["health"], { status: Status; label: string }> = {
   healthy: { status: "good", label: "Healthy" },
   syncing: { status: "syncing", label: "Syncing" },
-  needs_attention: { status: "warn", label: "Needs you to sign in" },
+  needs_attention: { status: "warn", label: "Can't be reached right now" },
 };
+
+/** How a connection is doing, in words: only the person can fix a bank that wants them to sign in again, so it says so. */
+const health = (inst: Institution) => (inst.signInAgain ? { status: "warn" as const, label: "Needs you to sign in" } : HEALTH[inst.health]);
 
 const INTEGRATION: Record<IntegrationStatus, { status: Status; label: string }> = {
   live: { status: "good", label: "Live" },
@@ -58,8 +61,10 @@ function coinbaseReady(): boolean {
   }
 }
 
-function synced(at: string | null, today: string): string {
-  if (!at) return "Updated by you";
+function synced(inst: Institution, today: string): string {
+  const at = inst.lastSyncedAt;
+  // Something added by hand is updated by its owner; a connection that has never synced says so.
+  if (!at) return inst.source === "manual" ? "Updated by you" : "Not updated yet";
   const day = at.slice(0, 10);
   const time = at.slice(11, 16);
   return day === today ? `Synced today at ${time} UTC` : `Last synced ${day}`;
@@ -147,19 +152,32 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-bold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{inst.name}</div>
                 <div className="text-xs text-ink-3 sm:truncate">
-                  {accounts.length} {accounts.length === 1 ? "account" : "accounts"} · {synced(inst.lastSyncedAt, data.today)}
+                  {accounts.length} {accounts.length === 1 ? "account" : "accounts"} · {synced(inst, data.today)}
                 </div>
               </div>
               <div className="num shrink-0 text-right text-sm font-bold text-ink-1 sm:w-28">{money0(total)}</div>
-              <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+              <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
                 {inst.source === "manual" ? (
                   // Nothing connects to it, so there's no health to report: it's edited where it's counted.
                   <Link href="/net-worth" className="text-xs font-semibold text-accent-ink hover:underline">
                     Edit on Net worth
                   </Link>
                 ) : (
-                  <StatusPill status={HEALTH[inst.health].status}>{HEALTH[inst.health].label}</StatusPill>
+                  <StatusPill status={health(inst).status} className="whitespace-nowrap">
+                    {health(inst).label}
+                  </StatusPill>
                 )}
+                {/* Signing in again keeps the same connection: its accounts, goals and household shares carry on. */}
+                {inst.source === "plaid" && inst.signInAgain ? <ConnectBank label="Sign in again" reconnect={inst.id} size="sm" /> : null}
+                {inst.source === "coinbase" && inst.signInAgain && cbReady ? (
+                  <a
+                    href="/api/coinbase/connect"
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-ctl border border-line-strong px-2.5 text-xs font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
+                  >
+                    <RotateCw aria-hidden className="size-3.5" strokeWidth={2.5} />
+                    Sign in again
+                  </a>
+                ) : null}
                 {inst.source === "plaid" ? <DisconnectButton itemId={inst.id} name={inst.name} /> : null}
                 {inst.source === "coinbase" ? <DisconnectButton itemId={inst.id} name={inst.name} endpoint="/api/coinbase/disconnect" /> : null}
               </div>

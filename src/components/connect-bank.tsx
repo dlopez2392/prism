@@ -14,10 +14,15 @@
 // With accounts on, a bank connects only to a signed-in account. Someone
 // signed out goes to sign in first (`signInFirst`, or the server's
 // `sign_in_required` if the page didn't know), then comes back here.
+//
+// With `reconnect` (a linked bank's id), the same button signs the person in
+// to THAT bank again — Plaid's update mode — when a changed password or an
+// expired consent has stopped it updating. The connection Prism already
+// holds carries on, so there's nothing to save afterwards, only a refresh.
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Landmark, Lock, Plus, X } from "lucide-react";
+import { Landmark, Lock, Plus, RotateCw, X } from "lucide-react";
 import clsx from "clsx";
 import { signInToConnect } from "@/lib/linking";
 import { loadLink, saveBank } from "@/lib/plaid/link";
@@ -30,6 +35,8 @@ export function ConnectBank({
   className,
   landOn,
   signInFirst = false,
+  reconnect,
+  size = "md",
 }: {
   /** "hero" is the white button that sits on the --gradient-prism card. */
   variant?: "primary" | "ghost" | "hero";
@@ -39,6 +46,10 @@ export function ConnectBank({
   landOn?: string;
   /** Nobody is signed in and accounts are on: go to sign-in, and come back here, instead of opening Link. */
   signInFirst?: boolean;
+  /** A linked bank's id: sign in to it again instead of connecting a new one. */
+  reconnect?: string;
+  /** "sm" sits in a row beside the row's other actions (Disconnect). */
+  size?: "md" | "sm";
 }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -55,7 +66,7 @@ export function ConnectBank({
       const res = await fetch("/api/plaid/link-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from }),
+        body: JSON.stringify(reconnect ? { from, itemId: reconnect } : { from }),
       });
       const json = (await res.json().catch(() => ({}))) as { linkToken?: string; error?: string; message?: string };
       if (res.status === 401 && json.error === "sign_in_required") {
@@ -72,6 +83,13 @@ export function ConnectBank({
       const handler = Plaid.create({
         token: json.linkToken,
         onSuccess: async (publicToken, metadata) => {
+          if (reconnect) {
+            handler.destroy();
+            setState({ kind: "done", message: `${metadata.institution?.name ?? "Your bank"} is reconnected. Bringing it up to date…` });
+            if (landOn) window.location.replace(landOn);
+            else router.refresh();
+            return;
+          }
           setState({ kind: "busy", label: `Securing ${metadata.institution?.name ?? "your bank"}…` });
           const saved = await saveBank(publicToken);
           if (!saved.ok && saved.signIn) {
@@ -89,7 +107,7 @@ export function ConnectBank({
           else router.refresh();
         },
         onExit: (err) => {
-          setState(err ? { kind: "error", message: err.display_message ?? "The connection was cancelled." } : { kind: "idle" });
+          setState(err ? { kind: "error", message: err.display_message ?? (reconnect ? "Your bank didn't finish signing you in. Try again in a minute." : "The connection was cancelled.") } : { kind: "idle" });
           handler.destroy();
         },
       });
@@ -108,13 +126,18 @@ export function ConnectBank({
         onClick={start}
         disabled={busy}
         className={clsx(
-          "inline-flex h-9 items-center gap-1.5 rounded-ctl px-3.5 text-sm font-semibold transition-colors duration-150 disabled:opacity-60",
+          "inline-flex items-center gap-1.5 whitespace-nowrap rounded-ctl font-semibold transition-colors duration-150 disabled:opacity-60",
+          size === "sm" ? "h-8 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
           variant === "primary" && "bg-button text-ink-on-accent hover:bg-button-hover",
           variant === "ghost" && "border border-line-strong text-ink-1 hover:bg-surface-3",
           variant === "hero" && "bg-[var(--on-hero)] text-[var(--button)] hover:opacity-90",
         )}
       >
-        <Plus aria-hidden className="size-4" strokeWidth={2.5} />
+        {reconnect ? (
+          <RotateCw aria-hidden className={size === "sm" ? "size-3.5" : "size-4"} strokeWidth={2.5} />
+        ) : (
+          <Plus aria-hidden className={size === "sm" ? "size-3.5" : "size-4"} strokeWidth={2.5} />
+        )}
         {busy ? state.label : label}
       </button>
       {state.kind === "error" || state.kind === "done" ? (

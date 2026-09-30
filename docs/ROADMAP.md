@@ -1,6 +1,6 @@
 # Prism roadmap
 
-Owner: Bespoke Intelligence Solutions. Last updated 2026-09-28 (accounts live on Supabase project `prism`, sign-in email through Resend, name asked after sign-in; MCP server built; bank sync keeps its place (roadmap item 2), live on Plaid's sandbox, with bank redirects for OAuth banks; Coinbase built; calendar reminders and on-device budgets and goals shipped 2026-09-27).
+Owner: Bespoke Intelligence Solutions. Last updated 2026-09-30 (**real banks live: Plaid production since 2026-09-30**, with "Sign in again" for a bank that stops updating; household views, household budgets and goals, goals that follow an account and a shared Coinbase value built 2026-09-29/30; accounts live on Supabase project `prism` since 2026-09-28; MCP server and Coinbase built).
 
 ## Committed integrations
 
@@ -56,13 +56,27 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    **Bank redirects (OAuth banks) built the same day:** `/connections/return`
    resumes Link with the same token after a bank's own sign-in, for phones and
    in-app browsers that block pop-ups; switched on by allow-listing that
-   address with Plaid and setting `PLAID_REDIRECT_URI`. Real banks wait on
-   Plaid's production approval and its OAuth-institution registration.
+   address with Plaid and setting `PLAID_REDIRECT_URI`.
+   **Live on real banks (2026-09-30):** Plaid approved production for
+   Transactions, Investments and Liabilities (Liabilities as consent only, so
+   nothing is fetched or billed until a feature uses it); `PLAID_ENV` and the
+   production secret were switched in Vercel, and the owner's own bank linked
+   and synced the same day. Production Link requires a Data Transparency
+   Messaging use case on the dashboard's `default` Link customization: it is
+   set to "Track and manage your finances" only, which must stay true to what
+   Prism does. **Sign in again built (2026-09-30):** a bank that wants its
+   owner to sign in again stays on screen as of its last sync and gets a
+   "Sign in again" button (Plaid's update mode), so the same connection
+   carries on and nothing is billed twice.
    Known limits: one connection in flight per browser (a second tab's attempt
    replaces the first), and a bank app that returns people to a DIFFERENT
-   browser finds nothing to resume and asks them to start again. Plaid's
-   answer is to keep the Link token server-side by person, which suits
-   signed-in accounts later.
+   browser finds nothing to resume and asks them to start again. Keeping the
+   Link token server-side by person would resume it, but only after the
+   person also signs in to Prism in that other browser, so it saves one bank
+   sign-in in a rare case: deferred until real use shows it happening. Also
+   deferred: warning a person BEFORE a bank's consent lapses (Plaid's
+   `PENDING_DISCONNECT` webhook, a week ahead), which needs the warning kept
+   on the bank's row; today the bank asks for the sign-in once it lapses.
 3. **Editable budgets and goals**, saved per person. **Built on the device
    (2026-09-27):** people set every budget line, add, edit and delete goals,
    and save a what-if amount; the plan lives in two validated cookies on this

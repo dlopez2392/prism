@@ -76,10 +76,21 @@ Wells Fargo, Capital One and most large banks; Plaid calls this OAuth):
   to a connected app — does the sync, as them. With no webhook, a copy older
   than 15 minutes is refreshed anyway.
 - **A save never goes backwards**: it lands only over the version it started
-  from. If Plaid is unreachable, the last copy is shown and the page says so;
-  a bank that needs the person to sign in again still says that. If Plaid
-  ever refuses the saved cursor (it only promises one for a year), the bank
-  starts over with a full read instead of staying stuck on the old copy.
+  from. If Plaid is unreachable, the last copy is shown and the page says so.
+  If Plaid ever refuses the saved cursor (it only promises one for a year),
+  the bank starts over with a full read instead of staying stuck on the old
+  copy.
+- **A bank that wants its owner to sign in again** (a changed password, an
+  expired consent) also stays on screen as of its last sync, marked "Needs
+  you to sign in", with a **Sign in again** button on Connections. That opens
+  Link in Plaid's update mode with the bank's own access token (looked up
+  from the person's own banks only, never sent to the browser): the SAME
+  connection carries on, so its accounts, goals that follow them and
+  household shares are untouched, nothing is exchanged afterwards, and Plaid
+  bills nothing new. A bank that sends the person to its own website comes
+  back through `/connections/return` as usual; the return cookie then names
+  the bank being signed in to again, so "Try again" means that bank, never a
+  second connection to it.
 - **Connected apps catch up but never save.** Plaid's cursor is safe to
   replay, so Claude gets what's new, in memory, and the stored copy is left
   for the person's own visits.

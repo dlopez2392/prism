@@ -65,9 +65,9 @@ export function mapCoinbase(wallets: CoinbaseAccount[], rates: Record<string, nu
   };
 }
 
-/** What a broken or expired link still shows: the institution, marked for a fresh sign-in. */
-export function coinbaseNeedsSignIn(): Institution {
-  return { id: COINBASE_ID, name: "Coinbase", health: "needs_attention", lastSyncedAt: null, source: "coinbase" };
+/** What a broken or expired link still shows: the institution, marked for attention, and for a fresh sign-in when that's the fix. */
+export function coinbaseNeedsSignIn(signInAgain = true): Institution {
+  return { id: COINBASE_ID, name: "Coinbase", health: "needs_attention", ...(signInAgain ? { signInAgain } : {}), lastSyncedAt: null, source: "coinbase" };
 }
 
 /**

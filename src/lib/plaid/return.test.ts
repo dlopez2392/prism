@@ -86,14 +86,22 @@ describe("the Link token request", () => {
 
 describe("what Prism remembers while the person is at their bank", () => {
   it("is the Link token and the page they started from", () => {
-    const packed = packReturn({ linkToken: "link-production-9f3c-11aa", back: "/budgets" });
-    expect(readReturn(packed)).toEqual({ linkToken: "link-production-9f3c-11aa", back: "/budgets" });
+    const packed = packReturn({ linkToken: "link-production-9f3c-11aa", back: "/budgets", reconnect: null });
+    expect(readReturn(packed)).toEqual({ linkToken: "link-production-9f3c-11aa", back: "/budgets", reconnect: null });
     // Opaque to a casual look, and cookie-safe as it stands.
     expect(packed).toMatch(/^[\w-]+$/);
   });
 
+  it("remembers which linked bank was being signed in to again, and nothing that isn't a bank id", () => {
+    const again = packReturn({ linkToken: "link-production-9f3c-11aa", back: "/", reconnect: "eVBnVMp7zdTJLkRNr33Rs6zr7KNJqBFL9DrE6" });
+    expect(readReturn(again)?.reconnect).toBe("eVBnVMp7zdTJLkRNr33Rs6zr7KNJqBFL9DrE6");
+    for (const u of [1, true, "", "a b", "<script>", "x".repeat(201)]) {
+      expect(readReturn(Buffer.from(JSON.stringify({ t: "link-sandbox-a", b: "/", u })).toString("base64url"))?.reconnect, String(u)).toBeNull();
+    }
+  });
+
   it("is nothing when the cookie isn't one of ours", () => {
-    const junk = [undefined, "", "%%%", Buffer.from("[]").toString("base64url"), packReturn({ linkToken: "public-sandbox-x", back: "/" }), "x".repeat(3000)];
+    const junk = [undefined, "", "%%%", Buffer.from("[]").toString("base64url"), packReturn({ linkToken: "public-sandbox-x", back: "/", reconnect: null }), "x".repeat(3000)];
     for (const raw of junk) expect(readReturn(raw)).toBeNull();
   });
 
@@ -115,10 +123,10 @@ describe("what Prism remembers while the person is at their bank", () => {
 });
 
 describe("what the return page shows", () => {
-  const saved = packReturn({ linkToken: "link-sandbox-abc", back: "/goals" });
+  const saved = packReturn({ linkToken: "link-sandbox-abc", back: "/goals", reconnect: null });
 
   it("reopens Link only when a bank sent the person here AND their Link token is waiting", () => {
-    expect(returnView("0f1e2d3c-state", saved)).toEqual({ kind: "resume", linkToken: "link-sandbox-abc", back: "/goals" });
+    expect(returnView("0f1e2d3c-state", saved)).toEqual({ kind: "resume", linkToken: "link-sandbox-abc", back: "/goals", reconnect: null });
   });
 
   it("says there's nothing left to finish when a bank sent them but nothing waits — already done, too slow, or another browser", () => {
