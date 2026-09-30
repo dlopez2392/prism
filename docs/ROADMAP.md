@@ -1,6 +1,6 @@
 # Prism roadmap
 
-Owner: Bespoke Intelligence Solutions. Last updated 2026-09-30 (**real banks live: Plaid production since 2026-09-30**, with "Sign in again" for a bank that stops updating; household views, household budgets and goals, goals that follow an account and a shared Coinbase value built 2026-09-29/30; accounts live on Supabase project `prism` since 2026-09-28; MCP server and Coinbase built).
+Owner: Bespoke Intelligence Solutions. Last updated 2026-09-30 (**real banks live: Plaid production since 2026-09-30**, with "Sign in again" for a bank that stops updating; history imported from Mint, Monarch or a spreadsheet; household views, household budgets and goals, goals that follow an account and a shared Coinbase value built 2026-09-29/30; accounts live on Supabase project `prism` since 2026-09-28; MCP server and Coinbase built).
 
 ## Committed integrations
 
@@ -116,3 +116,15 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    connection breaks.
 6. **The committed integrations above**, with the MCP server (#6) as soon as
    accounts exist, since it needs to know whose money it is reading.
+7. **Older history from another app.** **Built (2026-09-30):** a signed-in
+   person imports a CSV export from Mint, Monarch or any bank spreadsheet
+   (Connections → Import a file). The file is read in the browser and never
+   uploaded; the columns are recognised for Mint and Monarch and matched by
+   hand for anything else, with every skipped row listed by line and reason.
+   Only the mapped rows travel, 2,000 at a time; the server checks every row
+   again and stores them sealed, and the import shows only once every batch
+   has arrived (one left unfinished for a day is removed; one that won't open
+   is never removed). An import becomes the older history of a linked bank
+   account, adding only the days before that bank's own, or an account of its
+   own. Category fixes apply to it; connected apps can read it; a household
+   never sees it. Up to twenty imports a person, enforced by the database.

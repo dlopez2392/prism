@@ -22,6 +22,8 @@ const inHousehold = { current: true };
 const NO_PLAN = { budgets: null, goals: null, budgetsVersion: 0, goalsVersion: 0, budgetsChanged: null, goalsChanged: null };
 const plan = { current: NO_PLAN as unknown };
 const shared = { mine: new Map<string, string | null>([["joint", "item-me"]]), fails: false, samCoinbase: false as false | "good" | "bad" };
+/** History I imported: none unless a test adds some. */
+const mineImports = { current: [] as unknown[] };
 vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: "Dana",
@@ -29,6 +31,7 @@ vi.mock("./account-store", () => ({
     plan: { budgets: [{ category: "food", limit: 30_000 }], goals: null },
     categories: { v: 1, merchants: {}, transactions: {} },
     manual: [],
+    imports: mineImports.current,
     inHousehold: inHousehold.current,
     items: [{ itemId: "item-me", accessToken: "access-me", institutionId: null, institutionName: "Northwind Bank", linkedAt: "2026-09-01" }],
     plaidSync: new Map([["item-me", { state: copy([bank("joint", "Joint Checking", 500), bank("private", "My Savings", 9000)], [spend("m1", "joint", "Corner Café", 12), spend("m2", "private", "Secret Gift", 80)]), version: 1, syncedAt: new Date().toISOString(), changedAt: null }]]),
@@ -157,6 +160,29 @@ describe("the Household view", () => {
     const me = await getPersonalFinance();
     expect(me.budgets).toEqual([{ category: "food", limit: 30_000 }]);
     expect(me.householdPlan).toBeNull();
+  });
+
+  it("never shows the household history I imported, even the older history of an account I share", async () => {
+    const meta = (attachTo: string | null) => ({ name: attachTo ? "Joint (Mint)" : "Old card", kind: "credit", attachTo, source: "mint", parts: 1 });
+    mineImports.current = [
+      { id: "i-joint", meta: meta("joint"), rows: [{ date: "2019-05-01", amount: -4_200, merchant: "Old Diner", category: "food" }], importedAt: "2026-09-30T10:00:00Z" },
+      { id: "i-card", meta: meta(null), rows: [{ date: "2018-02-01", amount: -9_900, merchant: "Closed Card Shop", category: "shopping" }], importedAt: "2026-09-30T10:00:00Z" },
+    ];
+    const { getFinance } = await import("./finance");
+    // On Me, they're mine and they're there…
+    const me = await getFinance();
+    expect(me.transactions.map((t) => t.merchant)).toEqual(expect.arrayContaining(["Old Diner", "Closed Card Shop"]));
+    // …and in the Household view, where "joint" is shared, neither is.
+    jar.set("prism-view", "household");
+    vi.resetModules();
+    const household = await (await import("./finance")).getFinance();
+    expect(household.view).toBe("household");
+    expect(household.transactions.map((t) => t.merchant)).not.toEqual(expect.arrayContaining(["Old Diner"]));
+    expect(household.transactions.some((t) => t.id.startsWith("imp-") || t.merchant === "Closed Card Shop")).toBe(false);
+    expect(household.accounts.some((a) => a.source === "import")).toBe(false);
+    // The bank's own copy of the shared account is still there.
+    expect(household.transactions.map((t) => t.merchant)).toContain("Corner Café");
+    mineImports.current = [];
   });
 
   it("keeps the personal pages personal, whatever the switch says", async () => {

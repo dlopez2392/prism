@@ -163,6 +163,11 @@ How it's kept safe:
   at all through a connected app or before the second step. An invitation is
   a link whose secret the database keeps only as a sha256, usable once, for
   seven days, by the email it names. Leaving stops every share at once.
+- **Imported history never leaves the browser as a file.** A CSV from Mint,
+  Monarch or a bank is read on the page; only the rows the person mapped are
+  sent, in batches the server checks row by row and stores sealed
+  (`imported_history`). It's theirs alone: never shown to the household,
+  readable (never changeable) by a connected app.
 - **Moving device data into an account asks first**, so signing in on a shared
   computer can't sweep someone else's bank into your account.
 - **Delete account** revokes every bank at Plaid and Coinbase at Coinbase, then
@@ -282,6 +287,8 @@ select what, key_id, count(*) from (
   select 'category fixes', case when sealed_category_rules like 'z2.%' then substr(sealed_category_rules, 4, 8) else 'unnamed' end from profiles where sealed_category_rules is not null
   union all
   select 'added by hand', case when sealed_manual_items like 'z2.%' then substr(sealed_manual_items, 4, 8) else 'unnamed' end from profiles where sealed_manual_items is not null
+  union all
+  select 'imported history', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from imported_history
 ) seals group by what, key_id order by what, key_id;
 ```
 
@@ -299,7 +306,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
-| **Connections** | Per-institution health, how data is protected, an honest catalogue of every integration and its real access path, and, in a household, **Shared / Private** for each of the person's accounts (Coinbase included: the household sees its total value as of the owner's last visit) |
+| **Connections** | Per-institution health, how data is protected, an honest catalogue of every integration and its real access path, **Import history** from a Mint, Monarch or bank CSV (read in the browser, never uploaded), and, in a household, **Shared / Private** for each of the person's accounts (Coinbase included: the household sees its total value as of the owner's last visit) |
 | **Household** | Overview, Cash flow, Spending, Budgets, Future, Goals and Net worth over what every member shared, each account marked with whose it is; shared budgets and goals any member can change, showing who changed them last; invitations and members on the Account page, and a join page for the link |
 
 ## How it's built

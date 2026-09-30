@@ -417,6 +417,7 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealPacked({ v: 1, merchants: {}, transactions: {} }, ring(oldKey)),
       sealPacked([], ring(newKey)),
     ]);
+    await rows(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, gen_random_uuid(), 0, $2)`, [D, sealPacked({ v: 1, transactions: [] }, ring(oldKey))]);
     const after = await census();
     const delta = (what: string, id: string) => (after.get(`${what} ${id}`) ?? 0) - (before.get(`${what} ${id}`) ?? 0);
     expect([
@@ -429,7 +430,8 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       delta("calendar bills", n),
       delta("category fixes", o),
       delta("added by hand", n),
-    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
+      delta("imported history", o),
+    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
     for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
     await rows(`delete from auth.users where id = $1`, [D]);
   });
@@ -805,5 +807,69 @@ describe("a household's Coinbase", () => {
     } finally {
       await rows(`alter table public.shared_accounts enable trigger coinbase_unshared`);
     }
+  });
+});
+
+describe("history a person imports", () => {
+  const [I, J] = ["1a000000-0000-4000-8000-0000000000a1", "1a000000-0000-4000-8000-0000000000a2"];
+  const IMPORT = "5b000000-0000-4000-8000-0000000000b1";
+  const sealed = "z1." + "h".repeat(40);
+  const add = (who: string, importId: string, part: number, value = sealed, claims: Record<string, unknown> = {}) =>
+    as("authenticated", who, () => rows(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, $2, $3, $4) returning part`, [who, importId, part, value]), claims);
+
+  beforeAll(async () => {
+    await rows(`insert into auth.users (id, email) values ($1, 'i@x.test'), ($2, 'j@x.test')`, [I, J]);
+  });
+
+  it("is theirs alone, as ciphertext only, and a connected app can read it but never change it", async () => {
+    expect(await add(I, IMPORT, 1)).toEqual([{ part: 1 }]);
+    expect(await add(I, IMPORT, 0)).toEqual([{ part: 0 }]);
+    // Nothing short enough to be a shop's name in the clear, and no part past the last.
+    expect(await as("authenticated", I, () => refused(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, $2, 2, 'Whole Foods')`, [I, IMPORT]))).toBe(true);
+    expect(await as("authenticated", I, () => refused(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, $2, 60, $3)`, [I, IMPORT, sealed]))).toBe(true);
+    // Nobody else sees or touches it, or files history under another person's name.
+    await as("authenticated", J, async () => {
+      expect(await rows(`select * from public.imported_history where user_id = $1`, [I])).toEqual([]);
+      expect(await rows(`delete from public.imported_history where user_id = $1 returning part`, [I])).toEqual([]);
+      expect(await refused(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, gen_random_uuid(), 0, $2)`, [I, sealed])).toBe(true);
+    });
+    expect(await as("anon", null, () => refused(`select * from public.imported_history`))).toBe(true);
+    // Their connected app reads it, and changes nothing.
+    await as(
+      "authenticated",
+      I,
+      async () => {
+        expect((await rows(`select part from public.imported_history where user_id = $1 order by part`, [I])).map((r) => r.part)).toEqual([0, 1]);
+        expect(await refused(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, $2, 2, $3)`, [I, IMPORT, sealed])).toBe(true);
+        expect(await rows(`update public.imported_history set sealed = $2 where user_id = $1 returning part`, [I, sealed])).toEqual([]);
+        expect(await rows(`delete from public.imported_history where user_id = $1 returning part`, [I])).toEqual([]);
+      },
+      CONNECTED_APP,
+    );
+    // They remove it whole.
+    expect(await as("authenticated", I, () => rows(`delete from public.imported_history where import_id = $1 returning part`, [IMPORT]))).toHaveLength(2);
+  });
+
+  it("stops at twenty imports a person, while an import already begun can still grow", async () => {
+    for (let n = 0; n < 20; n++) await add(J, `5c000000-0000-4000-8000-${String(n).padStart(12, "0")}`, 0);
+    expect(await as("authenticated", J, () => refused(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, gen_random_uuid(), 0, $2)`, [J, sealed]))).toBe(true);
+    expect(await add(J, "5c000000-0000-4000-8000-000000000000", 1)).toEqual([{ part: 1 }]);
+    // Someone else's imports don't count against them.
+    expect(await add(I, IMPORT, 0)).toEqual([{ part: 0 }]);
+  });
+
+  it("waits behind the person's own second step, and goes with their account", async () => {
+    const [F, PASSED, EMAIL_ONLY] = ["4f000000-0000-4000-8000-0000000000c1", "4f000000-0000-4000-8000-0000000000c3", "4f000000-0000-4000-8000-0000000000c2"];
+    await rows(`insert into auth.mfa_factors (id, user_id, status) values ($1, $2, 'verified')`, [F, I]);
+    await rows(`insert into auth.sessions (id, user_id, aal, factor_id) values ($1, $3, 'aal2', $4), ($2, $3, 'aal1', null)`, [PASSED, EMAIL_ONLY, I, F]);
+    await as("authenticated", I, () => rows(`update public.profiles set totp_factor_id = $2 where user_id = $1`, [I, F]), { session_id: PASSED, aal: "aal2" });
+    const emailOnly = { session_id: EMAIL_ONLY, aal: "aal1" };
+    // The session that passed the second step still reads it.
+    expect((await as("authenticated", I, () => rows(`select part from public.imported_history`), { session_id: PASSED, aal: "aal2" })).length).toBeGreaterThan(0);
+    expect(await as("authenticated", I, () => rows(`select part from public.imported_history`), emailOnly)).toEqual([]);
+    expect(await add(I, IMPORT, 5, sealed, emailOnly).then(() => false, () => true)).toBe(true);
+    await rows(`update public.profiles set totp_factor_id = null where user_id = $1`, [I]);
+    await rows(`delete from auth.users where id in ($1, $2)`, [I, J]);
+    expect(await rows(`select count(*)::int as n from public.imported_history where user_id in ($1, $2)`, [I, J])).toEqual([{ n: 0 }]);
   });
 });

@@ -35,6 +35,7 @@ vi.mock("./account-store", () => ({
     plan: { budgets: null, goals: null },
     categories: { v: 1, merchants: {}, transactions: {} },
     manual: [],
+    imports: [],
     inHousehold: false,
     coinbaseShared: null,
     items: [{ itemId: "item-1", accessToken: "access-production-1", institutionId: null, institutionName: "First Bank", linkedAt: "2026-09-30" }],

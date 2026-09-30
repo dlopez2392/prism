@@ -16,7 +16,8 @@ import { buildDemoData } from "@/lib/finance/demo";
 import type { AgentData } from "@/lib/agent/tools";
 import { applyPlan, followAccounts, toGoal, type Plan } from "@/lib/finance/plan";
 import { feedSnapshot } from "@/lib/finance/calendar";
-import type { FinanceData, Goal, Holding, Institution, ISODate } from "@/lib/finance/types";
+import type { Cents, FinanceData, Goal, Holding, Institution, ISODate, Transaction } from "@/lib/finance/types";
+import { importAccountId, summarize, type ImportedHistory, type ImportSummary } from "@/lib/finance/import";
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
 import { needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
@@ -50,6 +51,8 @@ export type Loaded = FinanceData & {
   carryover: string[];
   /** What the signed-in person added by hand, as they entered it, for the editor on Net worth. */
   manual: ManualItem[];
+  /** The history they imported, for Connections: what each import is, never its rows. */
+  imports: ImportSummary[];
   /** Whose money this is: the person's own, or what their household shared. */
   view: "me" | "household";
   /** They're in a household, so the Me / Household switch applies. */
@@ -117,6 +120,8 @@ export type Sources = {
   categories: CategoryRules;
   /** What they own or owe that no bank reports, added by hand. A device keeps none. */
   manual: ManualItem[];
+  /** History they imported from a file. A device keeps none. */
+  imports: ImportedHistory[];
   /** They're in a household. A device never is. */
   inHousehold: boolean;
   /** They share Coinbase with their household: the value last copied for it, and when. A device never does. */
@@ -134,7 +139,7 @@ export type Sources = {
 /** Where a bank's sync starts from, and where a newer one goes — `save` is null when nothing may be written. */
 type PlaidSync = { stored: Map<string, StoredSync>; save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null };
 
-type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual">;
+type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports">;
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -157,7 +162,8 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
 
   if (account) {
     // Stored bank copies are loaded (and opened) only for what draws money — never for a plan edit.
-    const a = await loadAccount(account, key, { withSync });
+    // Imports are loaded even for a plan edit: without them, someone whose only money is imported would read as the demo.
+    const a = await loadAccount(account, key, { withSync, withImports: true });
     // Seals an older vault key made move to the current one, after the response (vault.ts, "Keyring").
     if (a.reseal) after(a.reseal);
     const record = a.coinbase;
@@ -167,6 +173,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       plan: a.plan,
       categories: a.categories,
       manual: a.manual,
+      imports: a.imports,
       inHousehold: a.inHousehold,
       coinbaseShared: a.coinbaseShared,
       items: plaid ? a.items : [],
@@ -198,6 +205,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     plan: readPlan(jar),
     categories: NO_RULES,
     manual: [],
+    imports: [],
     inHousehold: false,
     coinbaseShared: null,
     items: plaid ? vaultItems(jar) : [],
@@ -212,7 +220,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
 const getSources = cache(() => readSources({ withSync: true }));
 
 /** Anything of the person's own — a bank, Coinbase, or something they added — replaces the example household. */
-const isLive = (s: Money) => s.items.length > 0 || s.coinbase !== null || s.manual.length > 0;
+const isLive = (s: Money) => s.items.length > 0 || s.coinbase !== null || s.manual.length > 0 || s.imports.length > 0;
 
 /**
  * The goals the data source provides before any edit — the demo household's,
@@ -238,7 +246,7 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "view" | "inHousehold" | "householdPlan">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "imports" | "view" | "inHousehold" | "householdPlan">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
@@ -253,7 +261,50 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
     src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed)) : Promise.resolve(null),
   ]);
   const money = crypto ? withCoinbase(banks, crypto) : banks;
-  return withManual(money, src.manual, today, src.items.length === 0 && !src.coinbase);
+  const owned = withManual(money, src.manual, today, src.items.length === 0 && !src.coinbase && src.imports.length === 0);
+  return withImports(owned, src.imports, src.categories, src.items.length === 0 && !src.coinbase && src.manual.length === 0);
+}
+
+/**
+ * What the household never sees of mine, whatever I share: history I
+ * imported stays mine, even the older history of an account I share (the
+ * other members see only the bank's own copy of it).
+ */
+function privateToMe(mine: Live): Live {
+  if (!mine.transactions.some((t) => t.id.startsWith("imp-"))) return mine;
+  return { ...mine, transactions: mine.transactions.filter((t) => !t.id.startsWith("imp-")), accounts: mine.accounts.filter((a) => a.source !== "import") };
+}
+
+/**
+ * History imported from a file. Older history of a linked account joins that
+ * account, but only from before the bank's own earliest transaction, so no
+ * day is counted twice; the rest is an account of its own under "Imported"
+ * (a closed account, say), with no balance Prism can know. Transaction ids
+ * are the import's and the row's place in it, so a category fixed for one
+ * stays fixed. A linked account that's gone makes its history an account of
+ * its own again.
+ */
+function withImports(base: Live, imports: ImportedHistory[], rules: CategoryRules, only: boolean): Live {
+  if (imports.length === 0) return base;
+  const accounts = [...base.accounts];
+  const institutions = [...base.institutions];
+  const added: Transaction[] = [];
+  for (const imp of imports) {
+    const target = imp.meta.attachTo ? base.accounts.find((a) => a.id === imp.meta.attachTo && a.source === "plaid") : undefined;
+    const accountId = target ? target.id : importAccountId(imp.id);
+    let before: ISODate | null = null;
+    if (target) for (const t of base.transactions) if (t.accountId === target.id && (before === null || t.date < before)) before = t.date;
+    imp.rows.forEach((r, n) => {
+      if (before !== null && r.date >= before) return;
+      added.push({ id: `imp-${imp.id}-${n}`, accountId, date: r.date, amount: r.amount, merchant: r.merchant, category: r.category, pending: false });
+    });
+    if (!target) {
+      accounts.push({ id: accountId, institutionId: accountId, name: imp.meta.name, mask: null, kind: imp.meta.kind, balance: 0, history: new Array<Cents>(13).fill(0), source: "import" });
+      institutions.push({ id: accountId, name: imp.meta.name, health: "healthy", lastSyncedAt: null, source: "import" });
+    }
+  }
+  const transactions = [...base.transactions, ...recategorize(added, rules)].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return { ...base, source: only ? "import" : base.source, accounts, institutions, transactions };
 }
 
 /** What the person added by hand, as accounts under "Added by you". Only things added by hand? Then that's the household's source. */
@@ -315,6 +366,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     account: src.account ? { email: src.account.email, firstName: src.firstName, calendarFeed: src.feedUpdatedAt !== null } : null,
     carryover: carryoverOf(jar, src.account !== null),
     manual: src.manual,
+    imports: src.imports.map(summarize),
     view: "me",
     inHousehold: src.inHousehold,
     householdPlan: null,
@@ -332,7 +384,7 @@ async function householdFor(account: Account, mine: Live | null, today: ISODate)
   const [shares, rows, plan] = await Promise.all([loadShares(account), loadSharedMoney(account), loadHouseholdPlan(account)]);
   if (!plan) throw new Error("Not in a household any more.");
   const others = key ? rows.map((r) => openMember(r, key, today)) : [];
-  const own = mine ?? emptyLive(today, plaidConfig() !== null);
+  const own = privateToMe(mine ?? emptyLive(today, plaidConfig() !== null));
   const data = householdData(own, new Set(shares.keys()), { userId: account.userId, name: "You" }, others);
   const { budgets, goals, ...versions } = plan;
   return {
@@ -413,7 +465,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
   const plaid = plaidConfig();
   const cb = coinbaseConfig();
   const key = safeVaultKey();
-  const a = await loadAccount(account, key, { strict: true, withSync: true });
+  const a = await loadAccount(account, key, { strict: true, withSync: true, withImports: true });
   const timeZone = validZone(a.timeZone) ?? "UTC";
   const today = todayIn(timeZone);
   const record = a.coinbase;
@@ -423,6 +475,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     plaidSync: { stored: a.plaidSync, save: null },
     categories: a.categories,
     manual: a.manual,
+    imports: a.imports,
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
   };
   const base = greeted(await moneyFor(src, today, "Coinbase balances update the next time you open Prism."), a.firstName, isLive(src));

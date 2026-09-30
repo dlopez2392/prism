@@ -7,12 +7,13 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Gauge, House, KeyRound, Landmark, Lock, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
+import { FileUp, Gauge, House, KeyRound, Landmark, Lock, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
 import { DisconnectButton } from "@/components/disconnect-button";
+import { RemoveImport } from "@/components/remove-import";
 import { ShareAccounts, type ShareableAccount } from "@/components/household";
-import { Card, CardHeader, PageHeader, Pill, StatusPill, type Status } from "@/components/ui";
-import { money0 } from "@/lib/finance/format";
+import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill, StatusPill, type Status } from "@/components/ui";
+import { money0, monthYear } from "@/lib/finance/format";
 import { coinbaseConfig } from "@/lib/coinbase/client";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/finance/integrations";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
@@ -100,7 +101,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const outcome = typeof outcomeKey === "string" ? COINBASE_OUTCOME[outcomeKey] : undefined;
   const cbReady = coinbaseReady();
   const cbLinked = data.institutions.some((i) => i.source === "coinbase");
-  const byInstitution = data.institutions.map((inst) => {
+  // Imported history is listed on its own card below, where it can be removed.
+  const byInstitution = data.institutions.filter((inst) => inst.source !== "import").map((inst) => {
     const accounts = data.accounts.filter((a) => a.institutionId === inst.id);
     return { inst, accounts, total: accounts.reduce((s, a) => s + a.balance, 0) };
   });
@@ -187,6 +189,54 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         </ul>
       </Card>
 
+      {data.account ? (
+        <section id="imported" className="scroll-mt-6">
+          <Card className="p-5 sm:p-6">
+            <CardHeader
+              title="Imported history"
+              subtitle="Transactions from Mint, Monarch or a spreadsheet. Kept encrypted in your account, never shared with your household."
+              action={
+                data.imports.length ? (
+                  <ButtonLink href="/connections/import">
+                    <FileUp aria-hidden className="size-4" />
+                    Import a file
+                  </ButtonLink>
+                ) : undefined
+              }
+            />
+            {data.imports.length ? (
+              <ul className="mt-3 divide-y divide-[var(--line)]">
+                {data.imports.map((imp) => {
+                  const into = imp.attachTo ? data.accounts.find((a) => a.id === imp.attachTo) : undefined;
+                  return (
+                    <li key={imp.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">
+                      <div className="grid size-10 shrink-0 place-items-center rounded-ctl bg-surface-2 text-ink-2">
+                        <FileUp aria-hidden className="size-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-ink-1 [overflow-wrap:anywhere]">{imp.name}</div>
+                        <div className="text-xs text-ink-3">
+                          {imp.rows.toLocaleString("en-US")} {imp.rows === 1 ? "transaction" : "transactions"} · {monthYear(imp.from)} – {monthYear(imp.to)} ·{" "}
+                          {into ? `older history of ${into.name}${into.mask ? ` ·· ${into.mask}` : ""}` : "an account of its own"}
+                        </div>
+                      </div>
+                      <RemoveImport id={imp.id} name={imp.name} rows={imp.rows} />
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <EmptyState
+                icon={FileUp}
+                title="Bring your history with you"
+                body="Import years of transactions from a Mint or Monarch export or any spreadsheet, and every chart reaches further back. The file never leaves your browser."
+                action={<ButtonLink href="/connections/import">Import a file</ButtonLink>}
+              />
+            )}
+          </Card>
+        </section>
+      ) : null}
+
       {data.inHousehold ? (
         <section id="share" className="scroll-mt-6">
           <Card className="p-5 sm:p-6">
@@ -237,6 +287,15 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                         </div>
                         <p className="mt-1 text-[13px] text-ink-2">{it.adds}</p>
                         <p className="mt-1 text-xs text-ink-3">{it.how}</p>
+                        {it.id === "csv" && data.accountsEnabled ? (
+                          <Link
+                            href={signInFirst ? "/sign-in?next=%2Fconnections%2Fimport" : "/connections/import"}
+                            className="mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-ctl border border-line-strong px-3.5 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
+                          >
+                            <FileUp aria-hidden className="size-4" />
+                            {signInFirst ? "Sign in to import a file" : "Import a file"}
+                          </Link>
+                        ) : null}
                         {it.id === "mcp" && data.accountsEnabled ? (
                           <Link
                             href={signInFirst ? "/sign-in?next=%2Faccount" : "/account#ai"}

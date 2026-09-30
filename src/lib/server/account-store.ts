@@ -10,6 +10,7 @@ import { randomBytes } from "node:crypto";
 import { refreshTokens, type CoinbaseConfig, type TokenSet } from "@/lib/coinbase/client";
 import { validCoinbaseValue } from "@/lib/coinbase/map";
 import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
+import { assembleImports, type ImportedHistory } from "@/lib/finance/import";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
 import type { Budget } from "@/lib/finance/types";
@@ -42,6 +43,7 @@ type PlaidRow = {
 type CoinbaseRow = { sealed_tokens: string; expires_at: string; version: number; linked_at: string; sealed_snapshot?: string | null; snapshot_at?: string | null };
 type FeedRow = { updated_at: string; sealed_token: string };
 
+type ImportPartRow = { import_id: string; part: number; sealed: string; created_at: string };
 export type CoinbaseRecord = { tokens: TokenSet; version: number; linkedAt: string };
 
 export type AccountSources = {
@@ -52,6 +54,8 @@ export type AccountSources = {
   categories: CategoryRules;
   /** What they own or owe that no bank reports, added by hand. */
   manual: ManualItem[];
+  /** History they imported from a file, finished imports only — empty unless asked for. */
+  imports: ImportedHistory[];
   items: VaultItem[];
   /** Each linked bank's stored sync (cursor, transactions, balances), by item id — empty unless asked for. */
   plaidSync: Map<string, StoredSync>;
@@ -85,9 +89,9 @@ function openCoinbase(row: CoinbaseRow | null, key: VaultKey | null): CoinbaseRe
  * instead of an empty account — for a connected app, which must never be told
  * "nothing is linked" (and shown the example household) because a query failed.
  */
-export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false } = {}): Promise<AccountSources> {
+export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false, withImports = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
-  const [profile, plaid, coinbase, feed, household, coinbaseShare] = await Promise.all([
+  const [profile, plaid, coinbase, feed, household, coinbaseShare, imported] = await Promise.all([
     db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
     db
       .from("plaid_items")
@@ -98,8 +102,11 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     db.from("calendar_feeds").select("updated_at, sealed_token").eq("user_id", account.userId).maybeSingle<FeedRow>(),
     db.from("household_members").select("household_id").eq("user_id", account.userId).limit(1),
     db.from("shared_accounts").select("account_id").eq("user_id", account.userId).eq("account_id", "coinbase").limit(1),
+    withImports
+      ? db.from("imported_history").select("import_id, part, sealed, created_at").eq("user_id", account.userId).returns<ImportPartRow[]>()
+      : Promise.resolve({ data: [] as ImportPartRow[], error: null }),
   ]);
-  if (strict && (profile.error || plaid.error || coinbase.error || feed.error)) throw new Error("Couldn't read the account.");
+  if (strict && (profile.error || plaid.error || coinbase.error || feed.error || imported.error)) throw new Error("Couldn't read the account.");
   const items: VaultItem[] = [];
   const plaidSync = new Map<string, StoredSync>();
   const stale = staleSeals(account, key);
@@ -125,12 +132,22 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const rawRules = key && profile.data?.sealed_category_rules ? openPacked(profile.data.sealed_category_rules, key) : null;
   const rawManual = key && profile.data?.sealed_manual_items ? openPacked(profile.data.sealed_manual_items, key) : null;
   if (profile.data) stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual });
+  // A part that won't open under any key in the ring counts as missing, and its import as unfinished.
+  const parts = (imported.data ?? []).map((r) => {
+    const opened = key ? openPacked(r.sealed, key) : null;
+    if (opened !== null) stale.importPart(r, opened);
+    return { importId: r.import_id, part: r.part, opened, createdAt: r.created_at };
+  });
+  const { imports, abandoned } = assembleImports(parts);
+  // Without a key nothing opens, so nothing can be told apart from abandoned: nothing is removed.
+  if (key) for (const id of abandoned) stale.abandonedImport(id);
   return {
     firstName: profile.data?.first_name ?? null,
     timeZone: profile.data?.time_zone ?? null,
     plan: { budgets: validBudgets(profile.data?.plan_budgets ?? undefined), goals: validGoals(profile.data?.plan_goals ?? undefined) },
     categories: rawRules === null ? NO_RULES : validCategoryRules(rawRules),
     manual: rawManual === null ? [] : validManualItems(rawManual),
+    imports,
     items,
     plaidSync,
     coinbase: coinbaseRecord,
@@ -202,6 +219,16 @@ function staleSeals(account: Account, key: VaultKey | null) {
       if (Object.keys(patch).length === 0) return;
       const was = row.updated_at;
       jobs.push(() => db.from("profiles").update(patch).eq("user_id", account.userId).eq("updated_at", was));
+    },
+    /** A stored part of an import: written once and never changed, so its key alone guards the write. */
+    importPart(row: ImportPartRow, opened: unknown) {
+      if (!due(row.sealed)) return;
+      const sealed = sealPacked(opened, key!);
+      jobs.push(() => db.from("imported_history").update({ sealed }).eq("user_id", account.userId).eq("import_id", row.import_id).eq("part", row.part));
+    },
+    /** An import left unfinished for over a day (a tab closed mid-way): nothing will ever complete it. */
+    abandonedImport(importId: string) {
+      jobs.push(() => db.from("imported_history").delete().eq("user_id", account.userId).eq("import_id", importId));
     },
     /** The feed's secret, and its bill list with it: both were sealed by the key being replaced. */
     feed(row: FeedRow) {

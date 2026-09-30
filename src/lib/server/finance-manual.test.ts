@@ -20,6 +20,7 @@ vi.mock("./account-store", () => ({
     plan: { budgets: null, goals: null },
     categories: { v: 1, merchants: {}, transactions: {} },
     manual,
+    imports: [],
     items: [],
     plaidSync: new Map(),
     coinbase: null,

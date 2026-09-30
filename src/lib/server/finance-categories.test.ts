@@ -34,6 +34,7 @@ vi.mock("./account-store", () => ({
     // "Blue Bottle is food, not shopping" — and one bank transfer the person says is really rent.
     categories: { v: 1, merchants: { "blue bottle": "food" }, transactions: { "t-rent": "housing" } },
     manual: [],
+    imports: [],
     items: [{ itemId: "item-1", accessToken: "access-sandbox-1", institutionId: null, institutionName: "First Bank", linkedAt: "2026-09-01" }],
     plaidSync: new Map([
       [
