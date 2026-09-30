@@ -108,7 +108,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    itself from the balance, with the account's real history on the chart.
    **Sharing Coinbase built (2026-09-30):** the household sees a shared
    Coinbase as its total value from the owner's last visit; Prism keeps
-   that one number (sealed) only while it's shared.
+   that one number (sealed) only while it's shared. **Closed to connected
+   apps (2026-09-30):** a connected app reads nothing of a household — not
+   its members, its invitations or anyone's share list — and an invitation
+   that has run out is deleted rather than kept.
 5. **A fallback aggregator** (Finicity or MX) for when a bank's Plaid
    connection breaks.
 6. **The committed integrations above**, with the MCP server (#6) as soon as

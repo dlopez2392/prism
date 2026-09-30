@@ -48,9 +48,14 @@ export async function loadHousehold(account: Account): Promise<Household | null>
   if (people.error || invites.error) throw new Error("Couldn't read your household.");
   const rows = (people.data ?? []) as { user_id: string; first_name: string | null; email: string; joined_at: string; is_me: boolean }[];
   if (!rows.length) return null;
+  const now = Date.now();
+  const live = (invites.data ?? []).filter((i) => Date.parse(i.expires_at) > now);
+  // An invitation that ran out can't be used or shown, so the address it went to isn't kept either.
+  const expired = (invites.data ?? []).filter((i) => !live.includes(i)).map((i) => i.id);
+  if (expired.length) await db.from("household_invites").delete().in("id", expired).then(undefined, () => undefined);
   return {
     people: rows.map((p) => ({ userId: p.user_id, firstName: p.first_name, email: p.email, joinedAt: p.joined_at, me: p.is_me })),
-    invites: (invites.data ?? []).filter((i) => Date.parse(i.expires_at) > Date.now()).map((i) => ({ id: i.id, email: i.email, expiresAt: i.expires_at })),
+    invites: live.map((i) => ({ id: i.id, email: i.email, expiresAt: i.expires_at })),
   };
 }
 

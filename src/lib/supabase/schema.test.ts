@@ -587,6 +587,37 @@ describe("a household", () => {
     expect(await fails(H2, `select public.leave_household()`, [], CONNECTED_APP)).toBe(true);
   });
 
+  it("isn't even readable by a connected app: not who's in it, whom it invited, or what anyone shares", async () => {
+    // (Written past the policies: this household is full by now.)
+    await rows(`insert into public.household_invites (household_id, invited_by, email, token_hash) select household_id, $1, 'guest@x.test', $2 from public.household_members where user_id = $1`, [H1, hash("guest")]);
+    await call(H2, `insert into public.shared_accounts (user_id, account_id) values ($1, 'manual-bike') on conflict do nothing`, [H2]);
+    for (const table of ["household_members", "household_invites", "shared_accounts"]) {
+      // The member themself sees their rows…
+      expect((await call(H2, `select * from public.${table}`)).length, table).toBeGreaterThan(0);
+      // …and the same member's connected app sees none of them.
+      expect(await call(H2, `select * from public.${table}`, [], CONNECTED_APP), table).toEqual([]);
+    }
+    await rows(`delete from public.household_invites where email = 'guest@x.test'`);
+    await call(H2, `delete from public.shared_accounts where user_id = $1 and account_id = 'manual-bike'`, [H2]);
+  });
+
+  it("keeps no invitation that has run out: the next one made clears them", async () => {
+    const household = ((await rows(`select household_id from public.household_members where user_id = $1`, [H1])) as { household_id: string }[])[0]!.household_id;
+    await rows(`insert into public.household_invites (household_id, invited_by, email, token_hash, expires_at) values ($1, $2, 'late@x.test', $3, now() - interval '1 day')`, [household, H1, hash("late")]);
+    // Another household's expired invitation is none of this one's business.
+    const other = ((await rows(`insert into public.households default values returning id`)) as { id: string }[])[0]!.id;
+    await rows(`insert into public.household_invites (household_id, invited_by, email, token_hash, expires_at) values ($1, $2, 'theirs@x.test', $3, now() - interval '1 day')`, [other, X, hash("theirs")]);
+    // However the next one arrives (the app only ever makes them through create_household_invite).
+    await rows(`insert into public.household_invites (household_id, invited_by, email, token_hash) values ($1, $2, 'fresh@x.test', $3)`, [household, H1, hash("fresh")]);
+    const left = (await rows(`select email from public.household_invites where household_id = $1`, [household])).map((r) => r.email);
+    // The expired one is gone; the new one, and any still open, stay.
+    expect(left).toContain("fresh@x.test");
+    expect(left).not.toContain("late@x.test");
+    expect(await rows(`select email from public.household_invites where household_id = $1`, [other])).toEqual([{ email: "theirs@x.test" }]);
+    await rows(`delete from public.household_invites where email in ('fresh@x.test', 'theirs@x.test')`);
+    await rows(`delete from public.households where id = $1`, [other]);
+  });
+
   it("is closed to a session that hasn't passed the member's own second step", async () => {
     const [F, PASSED, EMAIL_ONLY] = ["4f000000-0000-4000-8000-000000000001", "4f000000-0000-4000-8000-000000000002", "4f000000-0000-4000-8000-000000000003"];
     await rows(`insert into auth.mfa_factors (id, user_id, status) values ($1, $2, 'verified')`, [F, H1]);
