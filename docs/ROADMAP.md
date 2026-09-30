@@ -78,8 +78,11 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    household that every member can change (each list shows who changed it
    last, and a save from an outdated list is refused rather than lost);
    budgets pace spending from shared accounts only and are drafted from it
-   until someone sets them. **Next:** link a goal to a shared savings account
-   so its progress fills itself; sharing Coinbase.
+   until someone sets them. **Goals that follow an account built
+   (2026-09-30):** any goal, personal or household, can follow a savings,
+   checking, investment, retirement or crypto account, so its progress fills
+   itself from the balance, with the account's real history on the chart.
+   **Next:** sharing Coinbase.
 5. **A fallback aggregator** (Finicity or MX) for when a bank's Plaid
    connection breaks.
 6. **The committed integrations above**, with the MCP server (#6) as soon as

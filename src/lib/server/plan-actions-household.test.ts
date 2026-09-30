@@ -161,6 +161,19 @@ describe("the household's goals", () => {
     expect(await deleteGoal(IDLE, form({ scope: "household", id: "car" }))).toMatchObject({ status: "error", message: "That goal is already gone." });
   });
 
+  it("let one account feed one goal only, and unlink when the choice is cleared", async () => {
+    const { row, writes } = member();
+    Object.assign(row, { goals: [{ ...samsGoal, accountId: "u-sam:savings" }], goals_version: 1 });
+    expect(await saveGoal(IDLE, goalForm({ name: "Trip", account: "u-sam:savings" }))).toMatchObject({ status: "error", message: expect.stringMatching(/“Car” already follows that account/) });
+    expect(writes).toEqual([]);
+    // The goal that follows it can keep it through an edit…
+    expect(await saveGoal(IDLE, goalForm({ id: "car", name: "Car", account: "u-sam:savings" }))).toMatchObject({ status: "saved" });
+    expect((row.goals as GoalSettings[])[0]).toMatchObject({ accountId: "u-sam:savings" });
+    // …and a cleared choice means "what I enter" again.
+    expect(await saveGoal(IDLE, goalForm({ id: "car", name: "Car", account: "" }))).toMatchObject({ status: "saved" });
+    expect((row.goals as GoalSettings[])[0]).not.toHaveProperty("accountId");
+  });
+
   it("need a signed-in member in a household", async () => {
     expect(await saveGoal(IDLE, goalForm({ name: "Trip" }))).toMatchObject({ status: "error", message: expect.stringMatching(/Sign in/) });
     member({ inHousehold: false });

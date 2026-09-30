@@ -111,6 +111,18 @@
   ever put back. Forms carry `scope=household` (and budgets a `version`);
   the actions never infer the scope from the view cookie. The plan stays
   with the household when someone leaves.
+- In the Household view EVERY id — the viewer's own included — is
+  `<owner userId>:<id>` (`householdId`), so an id means the same account to
+  every member. Anything a household stores about an account (a goal's
+  `accountId`) uses that form.
+- A goal can follow an account (`Goal.accountId`, `followAccounts` in
+  `finance/plan.ts`, applied in `applyPlan` and for household goals in the
+  loader): `saved` and `history` then come from its balance, clamped at 0.
+  Only savings, checking, investment, retirement and crypto accounts
+  (`isTrackable`) — never a home's value or a debt — and one account feeds
+  one goal (checked in `saveGoal`). If the account goes away, the goal keeps
+  the stored `saved` (the balance when it was linked) and the card says so.
+  Goal lists are written exactly as `validGoals` returns them.
 - Connecting real money needs an account (`src/lib/linking.ts`). With
   accounts on, the link-token, exchange and both Coinbase routes refuse a
   signed-out caller BEFORE Plaid or Coinbase is asked for anything, and the

@@ -94,6 +94,12 @@ export type Goal = {
   /** Month-end saved amounts, oldest first, ending with `saved`. */
   history: Cents[];
   colorSlot: number;
+  /**
+   * The account whose balance IS what's saved, when the goal follows one:
+   * `saved` and `history` then come from it, and `saved` as stored is only
+   * the last amount known, shown if the account goes away.
+   */
+  accountId?: string;
 };
 
 export type AssetClass = "US stocks" | "International" | "Bonds" | "Cash" | "Crypto" | "Real estate";

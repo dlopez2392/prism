@@ -5,19 +5,19 @@
 // laptop and a house can share one axis honestly), past solid, future dashed.
 
 import type { Metadata } from "next";
-import { PiggyBank } from "lucide-react";
+import { Landmark, PiggyBank } from "lucide-react";
 import { ChartCard } from "@/components/chart-card";
 import { Legend } from "@/components/charts/core";
 import { ProgressRing } from "@/components/charts/radial";
 import { TimeSeriesChart } from "@/components/charts/time-series";
-import { GoalEditor, RestoreGoals } from "@/components/goal-editor";
+import { GoalEditor, RestoreGoals, type FollowableAccount } from "@/components/goal-editor";
 import { GoalWhatIf } from "@/components/goal-what-if";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
 import { slotColor } from "@/lib/finance/categories";
 import { addMonths, lastMonths } from "@/lib/finance/dates";
 import { lastChanged, money0, monthShort, monthYear, percent } from "@/lib/finance/format";
 import { projectGoal } from "@/lib/finance/networth";
-import { goalSettings, MAX_GOALS } from "@/lib/finance/plan";
+import { goalSettings, isTrackable, MAX_GOALS } from "@/lib/finance/plan";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Goals" };
@@ -32,7 +32,15 @@ export default async function GoalsPage() {
   const settings = goals.map(goalSettings);
   const restore = data.source === "demo" && data.planEdited.goals && !household ? <RestoreGoals /> : null;
   const changed = household ? lastChanged(data.householdPlan?.goalsChanged) : null;
-  const editor = (mode: "new" | "empty") => <GoalEditor mode={mode} others={settings} today={today} signedIn={data.account !== null} household={household} />;
+  // What a goal can follow: the money in view (in the Household view, what everyone shared).
+  const institution = new Map(data.institutions.map((i) => [i.id, i.name]));
+  const accounts: FollowableAccount[] = data.accounts
+    .filter(isTrackable)
+    .map((a) => ({ id: a.id, name: a.name, detail: `${institution.get(a.institutionId) ?? ""}${a.mask ? ` ·· ${a.mask}` : ""}`, balance: a.balance }));
+  const accountName = new Map(accounts.map((a) => [a.id, a.name]));
+  const editor = (mode: "new" | "empty") => (
+    <GoalEditor mode={mode} others={settings} today={today} signedIn={data.account !== null} household={household} accounts={accounts} />
+  );
 
   if (goals.length === 0) {
     return (
@@ -148,7 +156,7 @@ export default async function GoalsPage() {
           return (
             <Card as="li" key={g.id} className="relative flex flex-col items-center p-5 text-center">
               <div className="absolute top-3 right-3">
-                <GoalEditor mode="edit" goal={goalSettings(g)} others={settings} today={today} signedIn={data.account !== null} household={household} />
+                <GoalEditor mode="edit" goal={goalSettings(g)} others={settings} today={today} signedIn={data.account !== null} household={household} accounts={accounts} />
               </div>
               <ProgressRing ratio={p.progress} color={color} size={128} stroke={13} label={`${g.name}: ${percent(p.progress)} saved`}>
                 <span aria-hidden className="text-3xl">
@@ -170,6 +178,19 @@ export default async function GoalsPage() {
               <div className="mt-3 text-xs text-ink-3">
                 {money0(g.monthlyContribution)}/mo · {p.onTrack ? "keep it up" : `${money0(p.neededMonthly)}/mo gets you there on time`}
               </div>
+              {g.accountId ? (
+                accountName.has(g.accountId) ? (
+                  <div className="mt-2 inline-flex max-w-full items-center gap-1 text-xs text-ink-2">
+                    <Landmark aria-hidden className="size-3.5 shrink-0" />
+                    <span className="[overflow-wrap:anywhere]">Follows {accountName.get(g.accountId)}</span>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex flex-col items-center gap-1">
+                    <StatusPill status="warn">Account not available</StatusPill>
+                    <span className="text-xs text-ink-3">Showing {money0(g.saved)}, the last amount known.</span>
+                  </div>
+                )
+              ) : null}
             </Card>
           );
         })}

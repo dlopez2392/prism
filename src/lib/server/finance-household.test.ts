@@ -115,7 +115,11 @@ describe("the Household view", () => {
     jar.set("prism-view", "household");
     plan.current = {
       budgets: [{ category: "transport", limit: 20_000 }],
-      goals: [{ id: "trip", name: "Trip", emoji: "🗾", target: 500_000, saved: 50_000, monthlyContribution: 20_000, targetDate: "2027-06-30", colorSlot: 1 }],
+      goals: [
+        { id: "trip", name: "Trip", emoji: "🗾", target: 500_000, saved: 50_000, monthlyContribution: 20_000, targetDate: "2027-06-30", colorSlot: 1 },
+        // Follows my shared checking, by the id every member knows it by.
+        { id: "rainy", name: "Rainy day", emoji: "🛟", target: 900_000, saved: 1, monthlyContribution: 0, targetDate: "2027-06-30", colorSlot: 2, accountId: "u-me:joint" },
+      ],
       budgetsVersion: 3,
       goalsVersion: 5,
       budgetsChanged: { by: "Sam", at: "2026-09-29T18:00:00Z" },
@@ -124,7 +128,11 @@ describe("the Household view", () => {
     const { getFinance, getPersonalFinance } = await import("./finance");
     const data = await getFinance();
     expect(data.budgets).toEqual([{ category: "transport", limit: 20_000 }]);
-    expect(data.goals).toEqual([expect.objectContaining({ id: "trip", saved: 50_000, history: [50_000] })]);
+    expect(data.goals).toEqual([
+      expect.objectContaining({ id: "trip", saved: 50_000, history: [50_000] }),
+      expect.objectContaining({ id: "rainy", saved: 50_000, accountId: "u-me:joint" }),
+    ]);
+    expect(data.accounts.map((a) => a.id).sort()).toEqual(["u-me:joint", "u-sam:sam-card"]);
     expect(data).toMatchObject({ planEdited: { budgets: true, goals: true }, householdPlan: { budgetsVersion: 3, goalsVersion: 5, budgetsChanged: { by: "Sam" } } });
     // Me is untouched: the person's own plan, and no household versions.
     const me = await getPersonalFinance();

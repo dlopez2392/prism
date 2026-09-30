@@ -117,8 +117,10 @@ async function currentGoals(): Promise<GoalSettings[]> {
   return sources.plan.goals ?? (await sourceGoals(sources)).map(goalSettings);
 }
 
-async function writeGoals(goals: GoalSettings[] | null, message: string): Promise<PlanFormState> {
-  if (goals && validGoals(goals) === null) return failed("Something in that goal didn't check out. Try again.");
+async function writeGoals(edited: GoalSettings[] | null, message: string): Promise<PlanFormState> {
+  // Written exactly as validated: nothing the validator wouldn't keep (an unlinked goal's empty accountId, say).
+  const goals = edited && validGoals(edited);
+  if (edited && !goals) return failed("Something in that goal didn't check out. Try again.");
   const account = await currentAccount();
   if (account) {
     try {
@@ -157,9 +159,10 @@ async function changeHouseholdGoals(change: GoalChange): Promise<PlanFormState> 
     if (!plan) return failed(NOT_IN_HOUSEHOLD);
     const next = change([...(plan.goals ?? [])]);
     if ("error" in next) return failed(next.error);
-    if (validGoals(next.goals) === null) return failed("Something in that goal didn't check out. Try again.");
+    const goals = validGoals(next.goals);
+    if (!goals) return failed("Something in that goal didn't check out. Try again.");
     try {
-      await saveHouseholdGoals(account, next.goals, plan.goalsVersion);
+      await saveHouseholdGoals(account, goals, plan.goalsVersion);
     } catch (e) {
       if (e instanceof HouseholdError && e.reason === "stale") continue;
       if (e instanceof HouseholdError && e.reason === "outside") return failed(NOT_IN_HOUSEHOLD);
@@ -185,6 +188,9 @@ export async function saveGoal(_prev: PlanFormState, form: FormData): Promise<Pl
   if ("errors" in read) return failed("Check the highlighted fields.", read.errors);
   const id = form.get("id");
   return changeGoals(form, (goals) => {
+    // One account, one goal: two goals following the same balance would count it twice.
+    const taken = read.goal.accountId ? goals.find((g) => g.accountId === read.goal.accountId && g.id !== id) : undefined;
+    if (taken) return { error: `“${taken.name}” already follows that account. Pick another, or enter what's saved yourself.` };
     if (typeof id === "string" && id !== "") {
       const i = goals.findIndex((g) => g.id === id);
       if (i < 0) return { error: "That goal isn't here any more. It may have been deleted in another tab." };
