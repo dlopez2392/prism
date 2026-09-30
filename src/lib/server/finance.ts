@@ -24,11 +24,11 @@ import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { householdData, narrowTo, type MemberMoney } from "@/lib/finance/household";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
-import { coinbaseNeedsSignIn, mapCoinbase } from "@/lib/coinbase/map";
+import { coinbaseNeedsSignIn, mapCoinbase, sharedCoinbase, validCoinbaseValue } from "@/lib/coinbase/map";
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
 import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
-import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveAccountTimeZone, saveFeedSnapshot } from "./account-store";
+import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveAccountTimeZone, saveCoinbaseValue, saveFeedSnapshot, type AccountSources } from "./account-store";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { loadHouseholdPlan, loadShares, loadSharedMoney, type HouseholdPlan, type SharedMoneyRow } from "./household-store";
 import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
@@ -118,6 +118,8 @@ export type Sources = {
   manual: ManualItem[];
   /** They're in a household. A device never is. */
   inHousehold: boolean;
+  /** They share Coinbase with their household: the value last copied for it, and when. A device never does. */
+  coinbaseShared: AccountSources["coinbaseShared"];
   items: VaultItem[];
   /** A live Coinbase access token — or null for a dead link — fetched on demand. */
   coinbase: { config: CoinbaseConfig; token: () => Promise<string | null> } | null;
@@ -165,6 +167,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       categories: a.categories,
       manual: a.manual,
       inHousehold: a.inHousehold,
+      coinbaseShared: a.coinbaseShared,
       items: plaid ? a.items : [],
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
@@ -195,6 +198,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     categories: NO_RULES,
     manual: [],
     inHousehold: false,
+    coinbaseShared: null,
     items: plaid ? vaultItems(jar) : [],
     coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
     feedUpdatedAt: null,
@@ -299,6 +303,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
     base = greeted(base, src.firstName, isLive(src));
     rememberZone(src.account, src.timeZone, zone);
+    if (src.coinbaseShared) rememberCoinbase(src.account, src.coinbaseShared, base);
   }
   // The person's own edits win over seeded or drafted budgets and goals.
   const personal: Loaded = {
@@ -354,6 +359,13 @@ function openMember(row: SharedMoneyRow, key: VaultKey, today: ISODate): MemberM
     // "As of" is their last visit: nobody else's visit syncs their bank.
     institutions.push({ id: item.itemId, name: item.institutionName ?? "Their bank", health: "healthy", lastSyncedAt: item.syncedAt, source: "plaid" });
   }
+  const coinbase = row.coinbase?.sealed ? validCoinbaseValue(openPacked(row.coinbase.sealed, key)) : null;
+  if (coinbase) {
+    // As of their last visit: nobody else's visit reaches their Coinbase.
+    const { institution, account } = sharedCoinbase(coinbase, row.coinbase!.at);
+    institutions.push(institution);
+    accounts.push(account);
+  }
   const manual = row.sealedManualItems ? validManualItems(openPacked(row.sealedManualItems, key)) : [];
   if (manual.length) {
     institutions.push(manualInstitution());
@@ -367,6 +379,21 @@ function openMember(row: SharedMoneyRow, key: VaultKey, today: ISODate): MemberM
  * Keep the account's time zone current, so a connected app's "this month" is
  * the person's month. After the response, and only when it moved.
  */
+/**
+ * The household sees a shared Coinbase as the value copied on its owner's
+ * own visits (never anyone else's, and never a connected app's). Refreshed
+ * after the response, at most every ten minutes, and only from a live load:
+ * if Coinbase couldn't be reached, the last copy stands.
+ */
+function rememberCoinbase(account: Account, shared: { balance: number | null; at: string | null }, base: Live): void {
+  const live = base.accounts.find((a) => a.source === "coinbase");
+  const key = safeVaultKey();
+  if (!live || !key || live.balance === shared.balance) return;
+  if (shared.at && Date.now() - Date.parse(shared.at) < COINBASE_COPY_EVERY) return;
+  after(() => saveCoinbaseValue(account, Math.max(0, live.balance), key).catch(() => undefined));
+}
+const COINBASE_COPY_EVERY = 10 * 60_000;
+
 function rememberZone(account: Account, stored: string | null, seen: string | undefined): void {
   const zone = validZone(seen);
   if (!zone || zone === stored) return;

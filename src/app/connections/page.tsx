@@ -77,11 +77,17 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       : data.accounts.map((a) => ({
           id: a.id,
           name: a.name,
-          detail: `${institutionName.get(a.institutionId) ?? ""}${a.mask ? ` ·· ${a.mask}` : ""}`,
+          detail:
+            a.source === "coinbase"
+              ? "Its total value, as of your last visit. Nobody else's visit reaches your Coinbase."
+              : `${institutionName.get(a.institutionId) ?? ""}${a.mask ? ` ·· ${a.mask}` : ""}`,
           itemId: a.source === "plaid" ? a.institutionId : null,
-          shareable: a.source === "plaid" || a.source === "manual",
-          why: "Coinbase can't be shared yet: it loads live, with your own access.",
+          shareable: true,
         }));
+  // Shared, but Coinbase couldn't be reached just now: still listed, so it can always be unshared.
+  if (shares?.includes("coinbase") && !shareable.some((a) => a.id === "coinbase")) {
+    shareable.push({ id: "coinbase", name: "Coinbase", detail: "Can't be reached just now. You can stop sharing it any time.", itemId: null, shareable: true });
+  }
   // Real money connects only to an account (src/lib/linking.ts): signed out, the button goes to sign-in first.
   const signInFirst = data.accountsEnabled && !data.account;
   const outcomeKey = (await searchParams).coinbase;

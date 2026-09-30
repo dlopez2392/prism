@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CoinbaseAccount } from "./client";
-import { coinbaseNeedsSignIn, mapCoinbase, toUsdCents } from "./map";
+import { coinbaseNeedsSignIn, mapCoinbase, sharedCoinbase, toUsdCents, validCoinbaseValue } from "./map";
 
 const wallet = (code: string, amount: string, opts: { type?: string; fiat?: boolean; name?: string } = {}): CoinbaseAccount => ({
   id: `${code}-${amount}`,
@@ -57,5 +57,21 @@ describe("mapCoinbase", () => {
 
   it("marks a dead link for a fresh sign-in", () => {
     expect(coinbaseNeedsSignIn()).toMatchObject({ id: "coinbase", health: "needs_attention", lastSyncedAt: null });
+  });
+});
+
+describe("a shared Coinbase's value", () => {
+  it("reads back only a whole, non-negative number of cents, all or nothing", () => {
+    expect(validCoinbaseValue({ v: 1, balance: 12_345 })).toEqual({ v: 1, balance: 12_345 });
+    expect(validCoinbaseValue({ v: 1, balance: 0 })).toEqual({ v: 1, balance: 0 });
+    for (const bad of [null, "12", { v: 2, balance: 1 }, { v: 1, balance: -1 }, { v: 1, balance: 1.5 }, { v: 1, balance: "1" }, { v: 1, balance: 1e20 }]) {
+      expect(validCoinbaseValue(bad)).toBeNull();
+    }
+  });
+
+  it("becomes one account and one honest point, as of the owner's last visit", () => {
+    const { institution, account } = sharedCoinbase({ v: 1, balance: 900 }, "2026-09-30T08:00:00Z");
+    expect(institution).toMatchObject({ id: "coinbase", name: "Coinbase", lastSyncedAt: "2026-09-30T08:00:00Z", source: "coinbase" });
+    expect(account).toMatchObject({ id: "coinbase", kind: "crypto", balance: 900, history: [900] });
   });
 });

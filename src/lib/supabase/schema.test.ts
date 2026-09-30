@@ -399,7 +399,13 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealPacked({ cursor: "c" }, ring(newKey)),
       SEALED,
     ]);
-    await rows(`insert into public.coinbase_links (user_id, sealed_tokens, expires_at) values ($1, $2, now())`, [D, sealJson({ accessToken: "a" }, ring(oldKey))]);
+    // The Coinbase value exists only while Coinbase is shared.
+    await rows(`insert into public.shared_accounts (user_id, account_id) values ($1, 'coinbase')`, [D]);
+    await rows(`insert into public.coinbase_links (user_id, sealed_tokens, expires_at, sealed_snapshot, snapshot_at) values ($1, $2, now(), $3, now())`, [
+      D,
+      sealJson({ accessToken: "a" }, ring(oldKey)),
+      sealPacked({ v: 1, balance: 1 }, ring(newKey)),
+    ]);
     await rows(`insert into public.calendar_feeds (user_id, token_hash, sealed_token, snapshot) values ($1, $2, $3, $4)`, [
       D,
       "d".repeat(64),
@@ -418,11 +424,12 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       delta("bank token", "unnamed"),
       delta("bank transactions", n),
       delta("coinbase", o),
+      delta("coinbase value", n),
       delta("calendar link", n),
       delta("calendar bills", n),
       delta("category fixes", o),
       delta("added by hand", n),
-    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
+    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
     for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
     await rows(`delete from auth.users where id = $1`, [D]);
   });
@@ -689,5 +696,83 @@ describe("a household's plan", () => {
     await call(P2, `select public.leave_household()`);
     await call(P3, `select public.leave_household()`);
     expect(await rows(`select count(*)::int as n from public.households where id = $1`, [household])).toEqual([{ n: 0 }]);
+  });
+});
+
+describe("a household's Coinbase", () => {
+  const person = (n: number) => `6c000000-0000-4000-8000-00000000000${n}`;
+  const [C1, C2] = [person(1), person(2)];
+  const call = (who: string, sql: string, params: unknown[] = [], claims: Record<string, unknown> = {}) => as("authenticated", who, () => rows(sql, params), claims);
+  const fails = (who: string, sql: string, params: unknown[] = [], claims: Record<string, unknown> = {}) => as("authenticated", who, () => refused(sql, params), claims);
+  const hash = (s: string) => createHash("sha256").update(s).digest("hex");
+  const VALUE = "z1." + "v".repeat(40);
+  const copy = async () => (await rows(`select sealed_snapshot, snapshot_at from public.coinbase_links where user_id = $1`, [C1]))[0];
+  const write = () => call(C1, `update public.coinbase_links set sealed_snapshot = $2, snapshot_at = now() where user_id = $1 returning user_id`, [C1, VALUE]);
+
+  beforeAll(async () => {
+    for (const [id, n] of [[C1, 1], [C2, 2]] as const) await rows(`insert into auth.users (id, email) values ($1, $2)`, [id, `c${n}@coin.test`]);
+    await rows(`insert into public.coinbase_links (user_id, sealed_tokens, expires_at) values ($1, $2, now() + interval '1 hour')`, [C1, SEALED]);
+    await rows(`update public.profiles set sealed_manual_items = $2 where user_id = $1`, [C1, "z1." + "m".repeat(40)]);
+    await call(C1, `select public.create_household_invite('c2@coin.test', $1)`, [hash("coin-2")]);
+    await call(C2, `select public.accept_household_invite($1)`, [hash("coin-2")]);
+  });
+
+  it("keeps no copy of Coinbase's value unless it's shared", async () => {
+    await write();
+    expect(await copy()).toEqual({ sealed_snapshot: null, snapshot_at: null });
+  });
+
+  it("is shared like something added by hand: no bank connection", async () => {
+    expect(await fails(C1, `insert into public.shared_accounts (user_id, account_id, item_id) values ($1, 'coinbase', 'item-x')`, [C1])).toBe(true);
+    await call(C1, `insert into public.shared_accounts (user_id, account_id) values ($1, 'coinbase')`, [C1]);
+    await write();
+    expect((await copy())!.sealed_snapshot).toBe(VALUE);
+  });
+
+  it("reaches the others as its stored value only, and never someone's hand-added items with it", async () => {
+    const [money] = await call(C2, `select shared_account_ids, sealed_manual_items, items, coinbase from public.household_shared_money()`);
+    expect(money).toMatchObject({ shared_account_ids: ["coinbase"], sealed_manual_items: null, items: [], coinbase: { sealed: VALUE } });
+    expect(Object.keys(money!.coinbase as object).sort()).toEqual(["at", "sealed"]);
+    expect(JSON.stringify(money)).not.toContain(SEALED);
+    // Nobody but the owner writes it, and a connected app can't even for the owner.
+    expect(await call(C2, `update public.coinbase_links set sealed_snapshot = $2 where user_id = $1 returning user_id`, [C1, "z1." + "x".repeat(40)])).toEqual([]);
+    expect(await call(C1, `update public.coinbase_links set sealed_snapshot = $2 where user_id = $1 returning user_id`, [C1, "z1." + "x".repeat(40)], CONNECTED_APP)).toEqual([]);
+    expect((await copy())!.sealed_snapshot).toBe(VALUE);
+  });
+
+  it("wipes the copy the moment sharing stops", async () => {
+    await call(C1, `delete from public.shared_accounts where user_id = $1 and account_id = 'coinbase'`, [C1]);
+    expect(await copy()).toEqual({ sealed_snapshot: null, snapshot_at: null });
+    expect((await call(C2, `select coinbase from public.household_shared_money()`)).length).toBe(0);
+  });
+
+  it("wipes it when its owner leaves, and a reconnected Coinbase starts private", async () => {
+    await call(C1, `insert into public.shared_accounts (user_id, account_id) values ($1, 'coinbase')`, [C1]);
+    await write();
+    await call(C1, `select public.leave_household()`);
+    expect(await copy()).toEqual({ sealed_snapshot: null, snapshot_at: null });
+    // Back in, sharing again, then Coinbase is disconnected: the share goes with it.
+    await call(C2, `select public.create_household_invite('c1@coin.test', $1)`, [hash("coin-1")]);
+    await call(C1, `select public.accept_household_invite($1)`, [hash("coin-1")]);
+    await call(C1, `insert into public.shared_accounts (user_id, account_id) values ($1, 'coinbase')`, [C1]);
+    await call(C1, `delete from public.coinbase_links where user_id = $1`, [C1]);
+    expect(await rows(`select account_id from public.shared_accounts where user_id = $1`, [C1])).toEqual([]);
+    await rows(`insert into public.coinbase_links (user_id, sealed_tokens, expires_at) values ($1, $2, now() + interval '1 hour')`, [C1, SEALED]);
+    expect((await call(C2, `select coinbase from public.household_shared_money()`)).length).toBe(0);
+  });
+
+  it("never hands anyone a copy without a share, even one left behind", async () => {
+    // Share Coinbase and something else, copy the value, then drop the Coinbase share with the wipe switched off.
+    await call(C1, `insert into public.shared_accounts (user_id, account_id) values ($1, 'coinbase'), ($1, 'manual-bike')`, [C1]);
+    await write();
+    await rows(`alter table public.shared_accounts disable trigger coinbase_unshared`);
+    try {
+      await rows(`delete from public.shared_accounts where user_id = $1 and account_id = 'coinbase'`, [C1]);
+      expect((await copy())!.sealed_snapshot).toBe(VALUE);
+      const [money] = await call(C2, `select shared_account_ids, coinbase from public.household_shared_money()`);
+      expect(money).toEqual({ shared_account_ids: ["manual-bike"], coinbase: null });
+    } finally {
+      await rows(`alter table public.shared_accounts enable trigger coinbase_unshared`);
+    }
   });
 });

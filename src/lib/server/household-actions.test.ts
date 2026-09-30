@@ -198,11 +198,20 @@ describe("sharing an account", () => {
     expect(ops).toEqual([{ table: "shared_accounts", op: "upsert", filters: [], values: { user_id: "u1", account_id: "manual-car", item_id: null }, options: { onConflict: "user_id,account_id" } }]);
   });
 
-  it("won't share Coinbase, which loads live with its owner's own access", async () => {
+  it("shares Coinbase only when it's connected, never as a bank, and always lets it go", async () => {
+    // Not connected: nothing to share.
     const { ops } = person({ read: theirs });
     expect(await setAccountShared("coinbase", null, true)).toEqual({ ok: false });
     expect(await setAccountShared("coinbase", "coinbase", true)).toEqual({ ok: false });
     expect(ops.filter((o) => o.op !== "select")).toEqual([]);
+    // Connected: shared like something added by hand, with no bank connection.
+    const linked = person({ read: (op) => (op.table === "coinbase_links" ? { data: [{ user_id: "u1" }], error: null } : theirs(op)) });
+    expect(await setAccountShared("coinbase", null, true)).toEqual({ ok: true });
+    expect(linked.ops.at(-1)).toEqual({ table: "shared_accounts", op: "upsert", filters: [], values: { user_id: "u1", account_id: "coinbase", item_id: null }, options: { onConflict: "user_id,account_id" } });
+    // Stopping needs no link at all: a Coinbase that's gone can still be unshared.
+    const gone = person({ read: theirs });
+    expect(await setAccountShared("coinbase", null, false)).toEqual({ ok: true });
+    expect(gone.ops.at(-1)).toEqual({ table: "shared_accounts", op: "delete", filters: [["user_id", "u1"], ["account_id", "coinbase"]] });
   });
 
   it("stops sharing their own row, and only theirs", async () => {

@@ -94,8 +94,18 @@
   and `getPersonalFinance()` never does — Connections and the Account page
   are always the person's own. The Household view carries no credit score or
   other people's holdings, and its transactions and items aren't editable
-  (fix categories and add items from Me). Coinbase isn't shareable: it loads
-  live, with its owner's own access.
+  (fix categories and add items from Me).
+- A shared Coinbase (`supabase/migrations/20260930150000_share_coinbase.sql`)
+  reaches the household as ONE number, its total value, sealed in
+  `coinbase_links.sealed_snapshot` and copied only on the owner's own visits
+  (`rememberCoinbase`: after the response, from a live load, at most every
+  ten minutes; never from a connected app). The database keeps that copy
+  only while Coinbase is shared: a trigger blanks any copy written without a
+  share, stopping the share (or leaving) wipes it, and disconnecting
+  Coinbase deletes the share so a reconnect starts private. It is in
+  `staleSeals` and the README census. Someone's hand-added items reach the
+  household only when they share a "manual-…" item, never merely because
+  they share something without a bank connection.
 - Household budgets and goals (`supabase/migrations/20260930120000_household_plan.sql`):
   ONE plan per household, on the `households` row, the same JSON and the same
   all-or-nothing validators as a person's own. Budgets and Goals follow the

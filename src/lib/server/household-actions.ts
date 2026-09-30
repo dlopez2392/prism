@@ -13,6 +13,7 @@
 
 import { refresh } from "next/cache";
 import { cookies } from "next/headers";
+import { COINBASE_ID } from "@/lib/coinbase/map";
 import { currentAccount } from "@/lib/supabase/server";
 import { VIEW_COOKIE } from "./finance";
 import {
@@ -119,16 +120,22 @@ export async function leaveTheHousehold(): Promise<{ ok: boolean }> {
 /**
  * Share one of the person's own accounts, or stop. A bank account names its
  * connection, which must be one of theirs (their own rows are all they can
- * read); something added by hand has none. Coinbase isn't shareable yet: it
- * loads live, as its owner, and a household never uses anyone's access.
+ * read); something added by hand has none, and neither does Coinbase, which
+ * must be connected. A household never uses anyone's access: a shared
+ * Coinbase reaches it as the value copied on its owner's own visits.
  */
 export async function setAccountShared(accountId: string, itemId: string | null, shared: boolean): Promise<{ ok: boolean }> {
   const account = await currentAccount();
   if (!account || typeof accountId !== "string" || accountId.length === 0 || accountId.length > 200) return { ok: false };
-  const manual = accountId.startsWith("manual-");
-  if (manual !== (itemId === null)) return { ok: false };
-  if (!manual) {
+  const coinbase = accountId === COINBASE_ID;
+  const noConnection = accountId.startsWith("manual-") || coinbase;
+  if (noConnection !== (itemId === null)) return { ok: false };
+  if (!noConnection) {
     const { data, error } = await account.supabase.from("plaid_items").select("item_id").eq("user_id", account.userId).eq("item_id", itemId!).limit(1);
+    if (error || !data?.length) return { ok: false };
+  }
+  if (coinbase && shared) {
+    const { data, error } = await account.supabase.from("coinbase_links").select("user_id").eq("user_id", account.userId).limit(1);
     if (error || !data?.length) return { ok: false };
   }
   try {
