@@ -43,13 +43,15 @@ For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 **Home values from RentCast are off until you set `RENTCAST_API_KEY`**
 (Sensitive, in Vercel). Once set, a home on Net worth offers "Keep its value up
 to date with RentCast": the person gives its address, told first that it goes
-to RentCast once a month and nothing else about them does. The address is
+to RentCast once a month and nothing else about them does. Each request asks
+RentCast not to log it (`suppressLogging=true`, RentCast's documented opt-out),
+so the address isn't kept in RentCast's request logs. The address is
 sealed in a column of its own (`profiles.sealed_home_values`), never in what a
 household is sent. RentCast bills every request past the plan's allowance, so
 **the database decides** (`claim_home_value_lookup`): at most
 `home_value_lookups_31_days` lookups in any 31 days across everyone (45 to
 start, of the free plan's 50: a rolling window, so no billing month can hold
-more), three homes a person, each home once a month, never for a connected app
+more), three lookups a person in any 31 days, each home once a month, never for a connected app
 or before the second step. Raise the cap only with the plan
 (`update app_limits set value = 950 where name = 'home_value_lookups_31_days'`
 for the $74 plan's 1,000). A value the person types for a month is theirs; the

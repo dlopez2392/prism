@@ -2,7 +2,9 @@
 //
 // A home's value from RentCast's automated valuation (GET /v1/avm/value).
 // Switched on by RENTCAST_API_KEY. Only the address is sent: no name, no
-// account, nothing else about the person. RentCast bills past the plan's
+// account, nothing else about the person, and RentCast is told not to keep the
+// request in its logs (suppressLogging, its documented opt-out; without it the
+// address would sit in RentCast's request logs). RentCast bills past the plan's
 // allowance, so this is never called without the database's go-ahead first
 // (claim_home_value_lookup, supabase/migrations/20260930230000_home_values.sql).
 //
@@ -35,7 +37,7 @@ export async function estimateHomeValue(address: string, env: Env = process.env,
   const key = (env.RENTCAST_API_KEY ?? "").trim();
   if (!key) throw new HomeValueError("refused");
   const base = (env.RENTCAST_API_URL ?? "").trim() || RENTCAST_API_URL;
-  const url = `${base}/avm/value?${new URLSearchParams({ address, compCount: "5" })}`;
+  const url = `${base}/avm/value?${new URLSearchParams({ address, compCount: "5", suppressLogging: "true" })}`;
   let res: Response;
   try {
     res = await fetchImpl(url, { headers: { Accept: "application/json", "X-Api-Key": key }, signal: AbortSignal.timeout(10_000), cache: "no-store" });

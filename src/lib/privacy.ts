@@ -79,7 +79,7 @@ export const PROVIDERS: Provider[] = [
 /** Listed only while the operator has home estimates switched on (RENTCAST_API_KEY), in the same deploy. */
 export const RENTCAST: Provider = {
   name: "RentCast",
-  does: "Estimates the value of a home you ask Prism to keep up to date. It receives the home's address, and nothing else about you, about once a month.",
+  does: "Estimates the value of a home you ask Prism to keep up to date. It receives the home's address, and nothing else about you, about once a month, and is asked not to keep it in its logs.",
   policy: "https://www.rentcast.io/privacy",
 };
 
