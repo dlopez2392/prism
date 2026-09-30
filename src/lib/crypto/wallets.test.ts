@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amountOf, assetAmountText, FRESH_MS, priced, readAgo, validWallets, walletMoney, walletsInstitution, walletStale, type Wallet } from "./wallets";
+import { amountOf, assetAmountText, FRESH_MS, isWholeWallet, priced, readAgo, validWallets, WHOLE_FRESH_MS, walletMoney, walletsInstitution, walletStale, type Wallet } from "./wallets";
 
 const NOW = Date.parse("2026-09-30T18:00:00Z");
 const wallet = (over: Partial<Wallet> = {}): Wallet => ({
@@ -68,5 +68,44 @@ describe("what's stored", () => {
     };
     expect(validWallets(stored)).toEqual([wallet(), { ...wallet({ id: "d4d4d4d4d4d4", chain: "ethereum", address: "0x52908400098527886e0f7030069857d2e4169ee7" }), reading: null }]);
     expect(validWallets({ v: 2, wallets: [wallet()] })).toEqual([]);
+  });
+});
+
+describe("a whole Bitcoin wallet", () => {
+  const XPUB = "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ";
+  const whole = (over: Partial<Wallet> = {}): Wallet => ({
+    id: "d4d4d4d4d4d4",
+    chain: "bitcoin",
+    address: XPUB,
+    name: "Hardware wallet",
+    reading: { at: new Date(NOW).toISOString(), assets: [{ symbol: "BTC", name: "Bitcoin", units: "70000", decimals: 8, usd: 5_851 }], addresses: 3 },
+    scripts: ["p2tr"],
+    ...over,
+  });
+
+  it("is kept with its scripts, its address count and when it was last tried, and nothing else", () => {
+    const [w] = validWallets({ v: 1, wallets: [{ ...whole({ tried: "2026-09-30T18:00:00.000Z" }), scripts: ["p2tr", "p2tr", "p2wsh", 7], extra: "dropped" }] });
+    expect(w).toEqual({ ...whole(), scripts: ["p2tr"], tried: "2026-09-30T18:00:00.000Z" });
+    expect(isWholeWallet(w!)).toBe(true);
+    // A bare xpub whose kind isn't known yet.
+    expect(validWallets({ v: 1, wallets: [{ ...whole(), scripts: undefined }] })[0]!.scripts).toEqual([]);
+    // A single address never carries scripts or a try, whatever was stored.
+    const [one] = validWallets({ v: 1, wallets: [{ ...wallet(), scripts: ["p2wpkh"], tried: "2026-09-30T18:00:00.000Z" }] });
+    expect(one).not.toHaveProperty("scripts");
+    expect(one).not.toHaveProperty("tried");
+    // Not an xpub: a zpub is kept only in its canonical xpub form, and a key of the wrong length not at all.
+    expect(validWallets({ v: 1, wallets: [{ ...whole(), address: `z${XPUB.slice(1)}` }] })).toEqual([]);
+    expect(validWallets({ v: 1, wallets: [{ ...whole(), address: XPUB.slice(0, -1) }] })).toEqual([]);
+    // A reading's address count must be a count.
+    expect(validWallets({ v: 1, wallets: [whole({ reading: { ...whole().reading!, addresses: -1 } })] })[0]!.reading).toBeNull();
+  });
+
+  it("is read every 30 minutes, not 15, and not again soon after a try, whether or not that try worked", () => {
+    expect(walletStale(whole(), NOW + FRESH_MS + 1)).toBe(false);
+    expect(walletStale(whole(), NOW + WHOLE_FRESH_MS + 1)).toBe(true);
+    const tried = new Date(NOW + 20 * 60_000).toISOString();
+    expect(walletStale(whole({ tried }), NOW + WHOLE_FRESH_MS + 1)).toBe(false);
+    expect(walletStale(whole({ reading: null, tried }), NOW + 21 * 60_000)).toBe(false);
+    expect(walletStale(whole({ reading: null }), NOW)).toBe(true);
   });
 });

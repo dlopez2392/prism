@@ -13,7 +13,7 @@ import { DisconnectButton } from "@/components/disconnect-button";
 import { RemoveImport } from "@/components/remove-import";
 import { AddWallet, RemoveWallet } from "@/components/wallets";
 import { chainEnabled } from "@/lib/crypto/balances";
-import { assetAmountText, CHAINS, MAX_WALLETS, readAgo } from "@/lib/crypto/wallets";
+import { assetAmountText, CHAINS, isWholeWallet, MAX_WALLETS, readAgo, type Wallet } from "@/lib/crypto/wallets";
 import { ShareAccounts, type ShareableAccount } from "@/components/household";
 import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill, StatusPill, type Status } from "@/components/ui";
 import { money0, monthYear, shortDate } from "@/lib/finance/format";
@@ -41,10 +41,18 @@ const HEALTH: Record<Institution["health"], { status: Status; label: string }> =
 /** How a connection is doing, in words: only the person can fix a bank that wants them to sign in again, so it says so. */
 const health = (inst: Institution) => (inst.signInAgain ? { status: "warn" as const, label: "Needs you to sign in" } : HEALTH[inst.health]);
 
+/** Where a wallet's money is: one address ("·· f3t4"), or a whole wallet and how many of its addresses have been used. */
+function walletPlace(w: Wallet): string {
+  if (!isWholeWallet(w)) return `·· ${w.address.slice(-4)}`;
+  const used = w.reading?.addresses;
+  if (used === undefined) return "whole wallet";
+  return used === 0 ? "whole wallet, not used yet" : `whole wallet, ${used} ${used === 1 ? "address" : "addresses"}`;
+}
+
 /** The wallets entry while only Bitcoin can be read (no Alchemy key in this deployment). */
 const BITCOIN_WALLETS_ONLY = {
-  adds: "Bitcoin in your net worth, by public address. Ethereum and Solana are coming soon.",
-  how: "Add a wallet's public address: Prism reads what it holds through mempool.space and can never move it. Nothing to sign, and no seed phrase, ever.",
+  adds: "Bitcoin in your net worth, by public address or the whole wallet. Ethereum and Solana are coming soon.",
+  how: "Add a wallet's public address, or its extended public key (xpub) to see every address in it: Prism reads what it holds through mempool.space and can never move it. Nothing to sign, and no recovery phrase, ever.",
 };
 
 const INTEGRATION: Record<IntegrationStatus, { status: Status; label: string }> = {
@@ -276,7 +284,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           <Card className="p-5 sm:p-6">
             <CardHeader
               title="Crypto wallets"
-              subtitle="Wallets you hold yourself, by public address. Prism can see what they hold and can never move it, and they stay yours alone."
+              subtitle="Wallets you hold yourself, by public address, or for Bitcoin the whole wallet by its extended public key. Prism can see what they hold and can never move it, and they stay yours alone."
               action={<AddWallet enabled={walletChains} full={data.wallets.length >= MAX_WALLETS} />}
             />
             {data.wallets.length ? (
@@ -292,13 +300,13 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                       <div className="min-w-48 flex-1">
                         <div className="text-sm font-bold text-ink-1 [overflow-wrap:anywhere]">{w.name}</div>
                         <div className="text-xs text-ink-3">
-                          {CHAINS[w.chain].label} ·· {w.address.slice(-4)} · {w.reading ? `read ${readAgo(w.reading.at)}` : "not read yet, tried again on your next visit"}
+                          {CHAINS[w.chain].label} · {walletPlace(w)} · {w.reading ? `read ${readAgo(w.reading.at)}` : "not read yet, tried again soon"}
                         </div>
                         {held.length ? <div className="num text-xs text-ink-2">{held.map(assetAmountText).join(" · ")}</div> : null}
                       </div>
                       <div className="ml-auto flex items-center gap-4">
                         <div className="num text-sm font-bold text-ink-1">{money0(balance)}</div>
-                        <RemoveWallet id={w.id} name={w.name} />
+                        <RemoveWallet id={w.id} name={w.name} whole={isWholeWallet(w)} />
                       </div>
                     </li>
                   );
@@ -308,7 +316,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               <EmptyState
                 icon={WalletIcon}
                 title="Add a wallet you hold yourself"
-                body={`Paste a ${walletChains.ethereum ? "Bitcoin, Ethereum or Solana" : "Bitcoin"} wallet's public address, and what it holds counts in your net worth. Nothing to sign, and Prism can never move it.`}
+                body={`Paste a ${walletChains.ethereum ? "Bitcoin, Ethereum or Solana" : "Bitcoin"} wallet's public address, or a Bitcoin wallet's extended public key for everything in it, and it counts in your net worth. Nothing to sign, and Prism can never move it.`}
               />
             )}
           </Card>

@@ -103,8 +103,9 @@ export default function PrivacyPage() {
               amount and category), stored encrypted in your account. The file itself is read on your device and never sent to {BRAND.product}.
             </li>
             <li>
-              The public address of each crypto wallet you add, and what it last held, stored encrypted and never shared with your household. A public address is
-              the one you&apos;d give someone to pay you: {BRAND.product} can see what it holds and can never move it, and never asks for a seed phrase or private key.
+              The public address of each crypto wallet you add, or for a whole Bitcoin wallet its extended public key, and what it last held, stored encrypted and never
+              shared with your household. A public address is the one you&apos;d give someone to pay you, and an extended public key shows every address in a wallet:
+              {BRAND.product} can see what they hold and can never move it, and never asks for a recovery phrase or private key.
             </li>
             <li>Categories you fix, such as &ldquo;everything at this shop is groceries&rdquo;, so Prism files your purchases where you put them. They name the shops, so they&apos;re stored encrypted, like your transactions.</li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
@@ -194,7 +195,7 @@ export default function PrivacyPage() {
             <li>Transactions from your bank older than about two years drop out of {BRAND.product}&apos;s copy of them.</li>
             <li>History you import stays until you remove it on Connections, or delete your account.</li>
             {homeValuesEnabled() ? <li>A home&apos;s address stays until you turn off its estimates, remove the home, or delete your account.</li> : null}
-            <li>A wallet&apos;s address stays until you remove the wallet on Connections, or delete your account.</li>
+            <li>A wallet&apos;s address or extended public key stays until you remove the wallet on Connections, or delete your account.</li>
             <li>
               When you delete your account, we disconnect every bank and Coinbase link first, then erase your account and everything in it. Encrypted database
               backups roll off shortly after.

@@ -12,8 +12,9 @@ const signedIn = { current: null as unknown };
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn.current }));
 
 const { addWallet, removeWallet } = await import("./wallet-actions");
-const { readWallets } = await import("./wallets");
-const { saveWalletReadings } = await import("./account-store");
+const { readWallets, refreshWholeWallets } = await import("./wallets");
+const { claimWalletScans, saveWalletReadings } = await import("./account-store");
+const { walletAddresses } = await import("@/lib/crypto/xpub");
 const { openPacked, sealPacked, vaultKey } = await import("./vault");
 
 const KEY = randomBytes(32);
@@ -177,5 +178,108 @@ describe("reading wallets on a visit", () => {
     const other = profileDb([kept({ address: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" })]);
     expect(await saveWalletReadings(other.account, new Map([["a1b2c3d4e5f6", { address: BTC, reading }]]), key())).toBe(false);
     expect(other.writes).toEqual([]);
+  });
+});
+
+describe("a whole Bitcoin wallet", () => {
+  // BIP 84's test wallet (it holds nothing): its zpub, the same key as Prism keeps it, and its descriptor.
+  const ZPUB = "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs";
+  const XPUB = "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V";
+  const BTC_PRICE = 83_593;
+
+  /** Coinbase for prices; mempool.space answering for each of the wallet's native SegWit addresses. */
+  const ledger = (held: Record<number, number>) => {
+    const at = walletAddresses(XPUB);
+    const funded = new Map(Object.entries(held).map(([i, sats]) => [at("p2wpkh", 0, Number(i)), sats]));
+    const f = vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      if (u.startsWith("https://api.coinbase.com/")) return new Response(JSON.stringify({ data: { rates: { BTC: String(1 / BTC_PRICE) } } }));
+      if (u.startsWith("https://mempool.space/api/address/")) {
+        const sats = funded.get(u.slice("https://mempool.space/api/address/".length)) ?? 0;
+        return new Response(JSON.stringify({ chain_stats: { funded_txo_sum: sats, spent_txo_sum: 0, tx_count: sats ? 1 : 0 }, mempool_stats: { tx_count: 0 } }));
+      }
+      throw new Error(`unexpected request: ${u}`);
+    });
+    vi.stubGlobal("fetch", f);
+    return f;
+  };
+  const sentKey = (f: ReturnType<typeof ledger>) => f.mock.calls.some(([u]) => /[xyz]pub|6rFR7y4Q|CatWdiZi/.test(String(u)));
+
+  it("is read in full when added, kept as one canonical key, and never sent anywhere", async () => {
+    const db = profileDb(null);
+    const f = ledger({ 0: 1_000_000, 3: 2_000_000 });
+    const r = await addWallet(IDLE, form({ chain: "bitcoin", address: ZPUB, name: "" }));
+    expect(r).toMatchObject({ status: "saved", message: "Bitcoin wallet added: $2,508 today, across 2 addresses." });
+    const [w] = db.wallets();
+    expect(w).toMatchObject({ address: XPUB, scripts: ["p2wpkh"], reading: { addresses: 2, assets: [{ symbol: "BTC", units: "3000000", usd: 250_779 }] } });
+    expect(sentKey(f)).toBe(false);
+    expect(db.row.sealed_wallets).not.toContain("xpub");
+    // The same wallet again, as its descriptor: already there.
+    expect(await addWallet(IDLE, form({ chain: "bitcoin", address: `wpkh([73c5da0a/84h/0h/0h]${XPUB}/<0;1>/*)`, name: "" }))).toMatchObject({ status: "error", message: "That wallet is already in Prism." });
+  });
+
+  it("says so when it hasn't been used, or couldn't be read, and keeps it either way", async () => {
+    let db = profileDb(null);
+    ledger({});
+    expect(await addWallet(IDLE, form({ chain: "bitcoin", address: ZPUB, name: "New" }))).toMatchObject({ message: "New added. It hasn't been used yet, so it counts $0 until bitcoin arrives." });
+    db = profileDb(null);
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (String(url).startsWith("https://api.coinbase.com/") ? new Response(JSON.stringify({ data: { rates: { BTC: "0.00001" } } })) : new Response("", { status: 429 }))));
+    expect(await addWallet(IDLE, form({ chain: "bitcoin", address: ZPUB, name: "Busy" }))).toMatchObject({ message: expect.stringMatching(/couldn't read all of its addresses just now/) });
+    expect(db.wallets()[0]).toMatchObject({ address: XPUB, reading: null, scripts: ["p2wpkh"] });
+  });
+
+  it("refuses anything that can spend, before any request or write, and never repeats it back", async () => {
+    const db = profileDb(null);
+    const f = ledger({});
+    const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    const secrets = [
+      `xprv${Array.from({ length: 107 }, (_, i) => B58[(i * 7) % 58]).join("")}`,
+      Array.from({ length: 12 }, (_, i) => ["river", "stone", "apple"][i % 3]).join(" "),
+      `K${Array.from({ length: 51 }, (_, i) => B58[(i * 5) % 58]).join("")}`,
+    ];
+    for (const secret of secrets) {
+      const r = await addWallet(IDLE, form({ chain: "bitcoin", address: secret, name: "" }));
+      expect(r).toMatchObject({ status: "error", fields: { address: expect.stringMatching(/Prism didn't keep it/) } });
+      expect(JSON.stringify(r)).not.toContain(secret.slice(4, 30));
+    }
+    expect(f).not.toHaveBeenCalled();
+    expect(db.writes).toEqual([]);
+  });
+
+  it("names a test-network or multisig key instead of reading it", async () => {
+    profileDb(null);
+    ledger({});
+    const tpub = "tpubDC8msFGeGuwnKG9Upg7DM2b4DaRqg3CUZa5g8v2SRQ6K4NSkxUgd7HsL2XVWbVm39yBA4LAxysQAm397zwQSQoQgewGiYZqrA9DsP4zbQ1M";
+    expect(await addWallet(IDLE, form({ chain: "bitcoin", address: tpub, name: "" }))).toMatchObject({ fields: { address: expect.stringMatching(/test network/) } });
+  });
+
+  it("is never read while a page waits: a visit hands it back to read after the response", async () => {
+    const f = ledger({});
+    const stale: Wallet = { id: "d4d4d4d4d4d4", chain: "bitcoin", address: XPUB, name: "Hardware", reading: null, scripts: ["p2wpkh"] };
+    const r = await readWallets([stale], { now: NOW });
+    expect(r.later.map((w) => w.id)).toEqual(["d4d4d4d4d4d4"]);
+    expect(r.fresh.size).toBe(0);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("is read by one request at a time: claimed first, read, kept, and not read again until due", async () => {
+    const key = () => vaultKey()!;
+    const stale: Wallet = { id: "d4d4d4d4d4d4", chain: "bitcoin", address: XPUB, name: "Hardware", reading: null, scripts: [] };
+    const db = profileDb([stale]);
+    const f = ledger({ 0: 500_000 });
+    await refreshWholeWallets(db.account, [stale], key(), { now: NOW });
+    expect(db.wallets()[0]).toMatchObject({ scripts: ["p2wpkh"], tried: new Date(NOW).toISOString(), reading: { addresses: 1, assets: [{ units: "500000" }] } });
+    // Another page a minute later: already fresh, nothing is asked.
+    const asked = f.mock.calls.length;
+    await refreshWholeWallets(db.account, [stale], key(), { now: NOW + 60_000 });
+    expect(f.mock.calls.length).toBe(asked);
+
+    // Two pages at once: the claim that loses the race reads nothing.
+    const raced = profileDb([stale], { afterRead: (row) => Object.assign(row, { updated_at: "2026-09-30T17:59:59Z" }) });
+    expect(await claimWalletScans(raced.account, ["d4d4d4d4d4d4"], key(), NOW)).toEqual([]);
+    expect(raced.wallets()[0]!.tried).toBeUndefined();
+    // A single address is never claimed this way.
+    const single = profileDb([kept()]);
+    expect(await claimWalletScans(single.account, ["a1b2c3d4e5f6"], key(), NOW)).toEqual([]);
   });
 });

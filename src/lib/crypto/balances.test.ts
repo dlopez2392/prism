@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { BalanceError, chainEnabled, ETHEREUM_TOKENS, readBalances, SOLANA_TOKENS, usdRatesPublic } from "./balances";
+import { BalanceError, chainEnabled, ETHEREUM_TOKENS, GAP_LIMIT, MAX_ADDRESS_INDEX, readBalances, readWholeWallet, SOLANA_TOKENS, usdRatesPublic } from "./balances";
+import type { Script } from "./wallets";
+import { parseWalletKey, walletAddresses, type WalletKey } from "./xpub";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const reason = (p: Promise<unknown>) => p.then(() => "none", (e: unknown) => (e instanceof BalanceError ? e.reason : "other"));
@@ -94,5 +96,104 @@ describe("prices", () => {
     const f = vi.fn<typeof fetch>(async () => json({ data: { currency: "USD", rates: { BTC: "0.0000119629", ETH: "0.000373", JUNK: "abc", ZERO: "0" } } }));
     expect(await usdRatesPublic(f)).toEqual({ BTC: 0.0000119629, ETH: 0.000373 });
     expect(String(f.mock.calls[0]![0])).toBe("https://api.coinbase.com/v2/exchange-rates?currency=USD");
+  });
+});
+
+describe("a whole Bitcoin wallet, by its extended public key", () => {
+  // BIP 84's zpub and BIP 86's xpub (the test wallet every BIP uses; it holds nothing).
+  const ZPUB = parseWalletKey("zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs") as WalletKey;
+  const XPUB = parseWalletKey("xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ") as WalletKey;
+
+  type Held = { funded?: number; spent?: number; txs?: number; waiting?: number };
+  /** mempool.space for a few known addresses; every other address has never been used. */
+  const ledger = (key: string, held: [Script, 0 | 1, number, Held][], answer?: (address: string) => Response | undefined) => {
+    const at = walletAddresses(key);
+    const byAddress = new Map(held.map(([script, change, i, h]) => [at(script, change, i), h]));
+    return vi.fn<typeof fetch>(async (url) => {
+      const address = String(url).replace("https://mempool.space/api/address/", "");
+      const special = answer?.(address);
+      if (special) return special;
+      const h = byAddress.get(address) ?? {};
+      const funded = h.funded ?? 0;
+      return json({
+        address,
+        chain_stats: { funded_txo_sum: funded, spent_txo_sum: h.spent ?? 0, tx_count: h.txs ?? (funded > 0 ? 1 : 0) },
+        mempool_stats: { funded_txo_sum: 0, spent_txo_sum: 0, tx_count: h.waiting ?? 0 },
+      });
+    });
+  };
+  const asked = (f: ReturnType<typeof vi.fn<typeof fetch>>) => f.mock.calls.map(([u]) => String(u).replace("https://mempool.space/api/address/", ""));
+
+  it("reads every address until twenty in a row are unused, on both sides, and asks about addresses alone", async () => {
+    const f = ledger(ZPUB.key, [
+      ["p2wpkh", 0, 0, { funded: 100_000, spent: 100_000, txs: 2 }], // used, now empty
+      ["p2wpkh", 0, 1, { funded: 250_000 }],
+      ["p2wpkh", 0, 5, { funded: 40_000 }],
+      ["p2wpkh", 0, 24, { funded: 10_000 }], // past the first twenty: found because 5 was used
+      ["p2wpkh", 1, 0, { funded: 60_000 }], // change
+    ]);
+    const r = await readWholeWallet(ZPUB.key, ZPUB.scripts, f);
+    expect(r).toEqual({ assets: [{ symbol: "BTC", name: "Bitcoin", units: "360000", decimals: 8 }], used: 5, scripts: ["p2wpkh"] });
+    const at = walletAddresses(ZPUB.key);
+    const urls = asked(f);
+    // Receiving 0–44 (twenty past the last used, 24) and change 0–20, each once; never 45.
+    expect(urls.length).toBe(45 + 21);
+    expect(new Set(urls).size).toBe(urls.length);
+    expect(urls).toContain(at("p2wpkh", 0, 44));
+    expect(urls).not.toContain(at("p2wpkh", 0, 45));
+    expect(urls).not.toContain(at("p2wpkh", 1, 21));
+    // Only addresses: the key never leaves Prism, in any form.
+    for (const u of f.mock.calls.map(([u]) => String(u))) expect(u).toMatch(/^https:\/\/mempool\.space\/api\/address\/bc1q[02-9ac-hj-np-z]+$/);
+    expect(GAP_LIMIT).toBe(20);
+  });
+
+  it("counts a payment still waiting for a block as a used address, but not as money yet", async () => {
+    const f = ledger(ZPUB.key, [
+      ["p2wpkh", 0, 0, { funded: 50_000 }],
+      ["p2wpkh", 0, 18, { waiting: 1 }],
+    ]);
+    const r = await readWholeWallet(ZPUB.key, ZPUB.scripts, f);
+    expect(r.assets[0]!.units).toBe("50000");
+    expect(r.used).toBe(2);
+    expect(asked(f)).toContain(walletAddresses(ZPUB.key)("p2wpkh", 0, 38));
+  });
+
+  it("finds which kind of address a bare xpub pays to from its history, and waits while it has none", async () => {
+    const f = ledger(XPUB.key, [["p2tr", 0, 0, { funded: 70_000 }]]);
+    expect(await readWholeWallet(XPUB.key, [], f)).toMatchObject({ used: 1, scripts: ["p2tr"], assets: [{ units: "70000" }] });
+    // The first address of each kind was checked, once each.
+    const at = walletAddresses(XPUB.key);
+    expect(asked(f)).toEqual(expect.arrayContaining(["p2wpkh", "p2tr", "p2sh-p2wpkh", "p2pkh"].map((s) => at(s as Script, 0, 0))));
+    expect(asked(f).filter((u) => u === at("p2tr", 0, 0))).toHaveLength(1);
+
+    const unused = ledger(XPUB.key, []);
+    expect(await readWholeWallet(XPUB.key, [], unused)).toEqual({ assets: [{ symbol: "BTC", name: "Bitcoin", units: "0", decimals: 8 }], used: 0, scripts: [] });
+    expect(unused).toHaveBeenCalledTimes(4);
+  });
+
+  it("is all or nothing: one unreadable address means no reading, and nothing more is asked", async () => {
+    const at = walletAddresses(ZPUB.key);
+    const f = ledger(ZPUB.key, [["p2wpkh", 0, 0, { funded: 1 }]], (a) => (a === at("p2wpkh", 0, 3) ? json({}, 503) : undefined));
+    expect(await reason(readWholeWallet(ZPUB.key, ZPUB.scripts, f))).toBe("unavailable");
+    expect(f.mock.calls.length).toBeLessThan(21 + 21);
+    // An answer without a transaction count can't place the gap limit.
+    const vague = vi.fn<typeof fetch>(async () => json({ chain_stats: { funded_txo_sum: 0, spent_txo_sum: 0 } }));
+    expect(await reason(readWholeWallet(ZPUB.key, ZPUB.scripts, vague))).toBe("unavailable");
+    // Past its deadline, nothing is asked at all.
+    const late = ledger(ZPUB.key, []);
+    expect(await reason(readWholeWallet(ZPUB.key, ZPUB.scripts, late, AbortSignal.abort()))).toBe("unavailable");
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it("refuses a wallet with more addresses than Prism reads, rather than half-reading it", async () => {
+    let calls = 0;
+    const everything = vi.fn<typeof fetch>(async () => {
+      // Without the limit this wallet never ends: fail loudly instead of hanging.
+      if (++calls > 4 * (MAX_ADDRESS_INDEX + GAP_LIMIT)) throw new Error("read past the limit");
+      return json({ chain_stats: { funded_txo_sum: 1, spent_txo_sum: 0, tx_count: 1 }, mempool_stats: { tx_count: 0 } });
+    });
+    expect(await reason(readWholeWallet(ZPUB.key, ZPUB.scripts, everything))).toBe("too-large");
+    const at = walletAddresses(ZPUB.key);
+    expect(asked(everything)).not.toContain(at("p2wpkh", 0, MAX_ADDRESS_INDEX + 1));
   });
 });

@@ -4,7 +4,9 @@
 // ever sent: no name, no account, nothing else about the person.
 //
 //   Bitcoin  — mempool.space's public API: confirmed coins only (a payment
-//              still waiting for a block isn't counted until it lands).
+//              still waiting for a block isn't counted until it lands). A
+//              whole wallet (xpub.ts) is read address by address: Prism
+//              works out each address itself and never sends the key.
 //   Ethereum — Alchemy (ALCHEMY_API_KEY): ETH, and a short list of well-known
 //              tokens named by CONTRACT, never by symbol, because scam tokens
 //              copy real names and airdrop themselves into every wallet.
@@ -13,7 +15,8 @@
 // Ethereum and Solana are off until the operator sets ALCHEMY_API_KEY.
 // Pure apart from the requests, which take an injectable fetch.
 
-import type { Chain, WalletAsset } from "./wallets";
+import { SCRIPTS, type Chain, type Script, type WalletAsset } from "./wallets";
+import { walletAddresses } from "./xpub";
 
 type Env = Record<string, string | undefined>;
 
@@ -40,18 +43,24 @@ export function chainEnabled(chain: Chain, env: Env = process.env): boolean {
   return chain === "bitcoin" || (env.ALCHEMY_API_KEY ?? "").trim().length > 0;
 }
 
-/** Why there's no reading: an address the service refused, or no answer. */
+/** Why there's no reading: an address the service refused, no answer, or a wallet with more addresses than Prism reads. */
 export class BalanceError extends Error {
-  constructor(readonly reason: "refused" | "unavailable") {
+  constructor(readonly reason: "refused" | "unavailable" | "too-large") {
     super(`balance ${reason}`);
     this.name = "BalanceError";
   }
 }
 
-async function getJson(fetchImpl: typeof fetch, url: string, init: RequestInit = {}): Promise<unknown> {
+async function getJson(fetchImpl: typeof fetch, url: string, init: RequestInit = {}, deadline?: AbortSignal): Promise<unknown> {
   let res: Response;
+  const timeout = AbortSignal.timeout(TIMEOUT_MS);
   try {
-    res = await fetchImpl(url, { ...init, headers: { Accept: "application/json", ...(init.headers ?? {}) }, signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" });
+    res = await fetchImpl(url, {
+      ...init,
+      headers: { Accept: "application/json", ...(init.headers ?? {}) },
+      signal: deadline ? AbortSignal.any([timeout, deadline]) : timeout,
+      cache: "no-store",
+    });
   } catch {
     throw new BalanceError("unavailable");
   }
@@ -70,14 +79,110 @@ const whole = (x: unknown): bigint | null => {
   return null;
 };
 
-async function bitcoin(address: string, fetchImpl: typeof fetch): Promise<WalletAsset[]> {
-  const body = (await getJson(fetchImpl, `${MEMPOOL_API_URL}/address/${encodeURIComponent(address)}`)) as {
-    chain_stats?: { funded_txo_sum?: unknown; spent_txo_sum?: unknown };
+/**
+ * One address: its confirmed balance, and whether it has ever been used (a
+ * payment still waiting counts). `used` is null when the answer doesn't say,
+ * which a single address doesn't need but a whole wallet's gap limit does.
+ */
+async function bitcoinAddress(address: string, fetchImpl: typeof fetch, deadline?: AbortSignal): Promise<{ confirmed: bigint; used: boolean | null }> {
+  const body = (await getJson(fetchImpl, `${MEMPOOL_API_URL}/address/${encodeURIComponent(address)}`, {}, deadline)) as {
+    chain_stats?: { funded_txo_sum?: unknown; spent_txo_sum?: unknown; tx_count?: unknown };
+    mempool_stats?: { tx_count?: unknown };
   };
   const funded = whole(body.chain_stats?.funded_txo_sum);
   const spent = whole(body.chain_stats?.spent_txo_sum);
   if (funded === null || spent === null || spent > funded) throw new BalanceError("unavailable");
-  return [{ symbol: "BTC", name: "Bitcoin", units: (funded - spent).toString(), decimals: 8 }];
+  const confirmedTxs = whole(body.chain_stats?.tx_count);
+  const waitingTxs = whole(body.mempool_stats?.tx_count);
+  return { confirmed: funded - spent, used: confirmedTxs === null || waitingTxs === null ? null : confirmedTxs + waitingTxs > BigInt(0) };
+}
+
+const btc = (units: bigint): WalletAsset => ({ symbol: "BTC", name: "Bitcoin", units: units.toString(), decimals: 8 });
+
+async function bitcoin(address: string, fetchImpl: typeof fetch): Promise<WalletAsset[]> {
+  return [btc((await bitcoinAddress(address, fetchImpl)).confirmed)];
+}
+
+/** BIP 44's gap limit: a wallet is read until this many addresses in a row have never been used. */
+export const GAP_LIMIT = 20;
+/** The furthest address read on each side (receiving, change) of each script: a wallet past it is refused, not half-read. */
+export const MAX_ADDRESS_INDEX = 500;
+/** How many addresses are asked about at once: gentle on a free public service. */
+const CONCURRENCY = 6;
+
+export type WholeWalletReading = { assets: WalletAsset[]; used: number; scripts: Script[] };
+
+/**
+ * Everything a whole wallet holds: every address on both sides of each of
+ * its scripts, read until GAP_LIMIT in a row are unused. With no scripts yet
+ * (a bare xpub), the first receiving address of each kind is checked, and
+ * the kinds that have been used are the wallet's; none used means an unused
+ * wallet, $0, and the check again next time. All or nothing: if any address
+ * can't be read, or `deadline` passes, there's no reading, never a part-total.
+ */
+export async function readWholeWallet(key: string, known: Script[], fetchImpl: typeof fetch = fetch, deadline?: AbortSignal): Promise<WholeWalletReading> {
+  const at = walletAddresses(key);
+  const seen = new Map<string, Promise<{ confirmed: bigint; used: boolean }>>();
+  let running = 0;
+  // Once one address fails the reading is lost, so nothing more is asked.
+  let stopped = false;
+  const queue: (() => void)[] = [];
+  const ask = (address: string) => {
+    let p = seen.get(address);
+    if (!p) {
+      p = new Promise<void>((go) => (running < CONCURRENCY ? (running++, go()) : queue.push(() => (running++, go()))))
+        .then(() => {
+          if (stopped || deadline?.aborted) throw new BalanceError("unavailable");
+          return bitcoinAddress(address, fetchImpl, deadline);
+        })
+        // Where the gap limit falls depends on it: an answer that doesn't say is no answer.
+        .then((r) => {
+          if (r.used === null) throw new BalanceError("unavailable");
+          return { confirmed: r.confirmed, used: r.used };
+        })
+        .catch((e: unknown) => {
+          stopped = true;
+          throw e;
+        })
+        .finally(() => {
+          running--;
+          queue.shift()?.();
+        });
+      seen.set(address, p);
+    }
+    return p;
+  };
+
+  let scripts = known;
+  if (scripts.length === 0) {
+    const first = await Promise.all(SCRIPTS.map((s) => ask(at(s, 0, 0))));
+    scripts = SCRIPTS.filter((_, i) => first[i]!.used);
+    if (scripts.length === 0) return { assets: [btc(BigInt(0))], used: 0, scripts: [] };
+  }
+
+  let total = BigInt(0);
+  let used = 0;
+  const side = async (script: Script, change: 0 | 1) => {
+    let next = 0;
+    let lastUsed = -1;
+    while (next <= lastUsed + GAP_LIMIT) {
+      const end = lastUsed + GAP_LIMIT;
+      if (end > MAX_ADDRESS_INDEX) throw new BalanceError("too-large");
+      const indexes = Array.from({ length: end - next + 1 }, (_, i) => next + i);
+      const results = await Promise.all(indexes.map((i) => ask(at(script, change, i))));
+      results.forEach((r, j) => {
+        total += r.confirmed;
+        if (r.used) {
+          used++;
+          lastUsed = Math.max(lastUsed, indexes[j]!);
+        }
+      });
+      next = end + 1;
+    }
+  };
+  await Promise.all(scripts.flatMap((s) => [side(s, 0), side(s, 1)]));
+  if (deadline?.aborted) throw new BalanceError("unavailable");
+  return { assets: [btc(total)], used, scripts };
 }
 
 /** Each call on its own, all at once: plain JSON-RPC, which every endpoint answers (not every one takes a batch). */

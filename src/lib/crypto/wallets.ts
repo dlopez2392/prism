@@ -6,8 +6,14 @@
 // worth in dollars) so a page never waits on a slow service, and is read
 // again once that reading is FRESH_MS old.
 //
+// A Bitcoin wallet can also be added whole, by its extended public key
+// (xpub.ts): every address in it, kept as one canonical xpub with the kinds
+// of address it pays to. Reading one means asking about dozens of addresses,
+// so it is read after the page is sent, at most every WHOLE_FRESH_MS, and
+// `tried` marks the attempt so two pages never read the same wallet at once.
+//
 // An address is private: anyone who ties it to a person sees everything it has
-// ever held. So wallets are sealed in the person's own account
+// ever held, and an extended public key shows every address in the wallet. So wallets are sealed in the person's own account
 // (profiles.sealed_wallets) and never shared with a household.
 //
 // Pure: the balance services are in balances.ts, the checksums in address.ts.
@@ -22,6 +28,14 @@ export const CHAINS: Record<Chain, { label: string; symbol: string; placeholder:
   solana: { label: "Solana", symbol: "SOL", placeholder: "A Solana address", readBy: "Alchemy" },
 };
 
+/** The kinds of single-key Bitcoin address, most common first: the order a bare xpub's history is checked in. */
+export type Script = "p2pkh" | "p2sh-p2wpkh" | "p2wpkh" | "p2tr";
+export const SCRIPTS: Script[] = ["p2wpkh", "p2tr", "p2sh-p2wpkh", "p2pkh"];
+
+export function isScript(x: unknown): x is Script {
+  return typeof x === "string" && (SCRIPTS as string[]).includes(x);
+}
+
 export function isChain(x: unknown): x is Chain {
   return typeof x === "string" && Object.hasOwn(CHAINS, x);
 }
@@ -34,29 +48,43 @@ export type Reading = {
   at: string;
   /** What the address held, each with its dollar value then (null when there was no price for it). */
   assets: (WalletAsset & { usd: Cents | null })[];
+  /** For a whole wallet: how many of its addresses have ever been used. */
+  addresses?: number;
 };
 
 export type Wallet = {
   /** A short random id, never derived from the address. */
   id: string;
   chain: Chain;
+  /** The public address, or for a whole Bitcoin wallet its canonical extended public key ("xpub…"). */
   address: string;
   name: string;
   reading: Reading | null;
+  /** A whole wallet's kinds of address; empty until its history shows which (a bare xpub). */
+  scripts?: Script[];
+  /** When a whole wallet was last set to be read (ISO time): no second read starts before it's due again. */
+  tried?: string;
 };
 
 export const MAX_WALLETS = 10;
 export const WALLET_NAME_MAX = 40;
 /** How old a reading may be before the next visit reads the address again. */
 export const FRESH_MS = 15 * 60_000;
+/** The same for a whole wallet, which takes dozens of requests to read. */
+export const WHOLE_FRESH_MS = 30 * 60_000;
 export const WALLETS_INSTITUTION_ID = "wallets";
 
 const ID = /^[a-z0-9]{8,16}$/;
 const ADDRESS: Record<Chain, RegExp> = {
-  bitcoin: /^(bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/,
+  bitcoin: /^(bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34}|xpub[1-9A-HJ-NP-Za-km-z]{107})$/,
   ethereum: /^0x[0-9a-f]{40}$/,
   solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
 };
+
+/** A Bitcoin wallet added whole, by its extended public key. */
+export function isWholeWallet(w: Pick<Wallet, "chain" | "address">): boolean {
+  return w.chain === "bitcoin" && w.address.startsWith("xpub");
+}
 
 /** A name as a person would type it: trimmed, spaces collapsed, no control characters. */
 export function cleanWalletName(x: unknown): string | null {
@@ -85,7 +113,9 @@ function validReading(x: unknown): Reading | null {
     if (!ok) return null;
     assets.push({ symbol: a.symbol, name: a.name, units: a.units, decimals: a.decimals, usd: a.usd });
   }
-  return { at: r.at, assets };
+  const addresses = r.addresses;
+  if (addresses !== undefined && !(Number.isSafeInteger(addresses) && addresses >= 0 && addresses <= 10_000)) return null;
+  return addresses === undefined ? { at: r.at, assets } : { at: r.at, assets, addresses };
 }
 
 /** What's stored, as wallets: each valid one survives on its own; never two with one id, or one address twice. */
@@ -101,7 +131,13 @@ export function validWallets(x: unknown): Wallet[] {
     if (!name || seen.has(w.id) || seen.has(`${w.chain}:${w.address}`)) continue;
     seen.add(w.id);
     seen.add(`${w.chain}:${w.address}`);
-    out.push({ id: w.id, chain: w.chain, address: w.address, name, reading: validReading(w.reading) });
+    const wallet: Wallet = { id: w.id, chain: w.chain, address: w.address, name, reading: validReading(w.reading) };
+    if (isWholeWallet(wallet)) {
+      const scripts = Array.isArray(w.scripts) ? w.scripts.filter(isScript) : [];
+      wallet.scripts = [...new Set(scripts)];
+      if (typeof w.tried === "string" && Number.isFinite(Date.parse(w.tried))) wallet.tried = w.tried;
+    }
+    out.push(wallet);
   }
   return out;
 }
@@ -111,7 +147,8 @@ export function storedWallets(wallets: Wallet[]) {
 }
 
 export function walletStale(w: Wallet, now = Date.now()): boolean {
-  return !w.reading || now - Date.parse(w.reading.at) > FRESH_MS;
+  const last = Math.max(w.reading ? Date.parse(w.reading.at) : -Infinity, w.tried ? Date.parse(w.tried) : -Infinity);
+  return now - last > (isWholeWallet(w) ? WHOLE_FRESH_MS : FRESH_MS);
 }
 
 /** A whole number of smallest units as a decimal amount. Exact enough to price; the units stay exact. */

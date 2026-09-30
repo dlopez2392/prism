@@ -13,7 +13,7 @@ import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/li
 import { assembleImports, type ImportedHistory, type LockedImport } from "@/lib/finance/import";
 import { storedHomeValues, validHomeValues, type HomeValuation } from "@/lib/finance/home-value";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
-import { storedWallets, validWallets, type Reading, type Wallet } from "@/lib/crypto/wallets";
+import { storedWallets, validWallets, walletStale, type Reading, type Script, type Wallet } from "@/lib/crypto/wallets";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
 import type { Budget } from "@/lib/finance/types";
 import type { Account } from "@/lib/supabase/server";
@@ -491,9 +491,10 @@ export function saveAccountWallets(account: Account, wallets: Wallet[], key: Vau
 /**
  * New readings, kept only for wallets still there at the same address, and
  * written only over the profile as it was read: a wallet added or removed
- * meanwhile is never undone for a cached balance. True when written.
+ * meanwhile is never undone for a cached balance. A whole wallet's scripts,
+ * as its history showed them, go with its reading. True when written.
  */
-export async function saveWalletReadings(account: Account, readings: Map<string, { address: string; reading: Reading }>, key: VaultKey): Promise<boolean> {
+export async function saveWalletReadings(account: Account, readings: Map<string, { address: string; reading: Reading; scripts?: Script[] }>, key: VaultKey): Promise<boolean> {
   const db = account.supabase;
   const { data, error } = await db.from("profiles").select("sealed_wallets, updated_at").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_wallets" | "updated_at">>();
   if (error || !data?.sealed_wallets) return false;
@@ -503,7 +504,7 @@ export async function saveWalletReadings(account: Account, readings: Map<string,
     const r = readings.get(w.id);
     if (!r || r.address !== w.address) return w;
     changed = true;
-    return { ...w, reading: r.reading };
+    return r.scripts && w.scripts ? { ...w, reading: r.reading, scripts: r.scripts } : { ...w, reading: r.reading };
   });
   if (!changed) return false;
   const { error: failed, count } = await db
@@ -514,3 +515,29 @@ export async function saveWalletReadings(account: Account, readings: Map<string,
   return !failed && count === 1;
 }
 
+/**
+ * Claims whole wallets for reading: marks each still-stale one `tried` now,
+ * in one write guarded like the readings, and returns the ids it marked.
+ * Whoever loses the race gets none, so a wallet is read by one request at a
+ * time, and one that failed isn't asked about again until it's due.
+ */
+export async function claimWalletScans(account: Account, ids: string[], key: VaultKey, now = Date.now()): Promise<string[]> {
+  const db = account.supabase;
+  const { data, error } = await db.from("profiles").select("sealed_wallets, updated_at").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_wallets" | "updated_at">>();
+  if (error || !data?.sealed_wallets) return [];
+  const wanted = new Set(ids);
+  const claimed: string[] = [];
+  const tried = new Date(now).toISOString();
+  const next = validWallets(openPacked(data.sealed_wallets, key)).map((w) => {
+    if (!wanted.has(w.id) || !w.scripts || !walletStale(w, now)) return w;
+    claimed.push(w.id);
+    return { ...w, tried };
+  });
+  if (claimed.length === 0) return [];
+  const { error: failed, count } = await db
+    .from("profiles")
+    .update({ sealed_wallets: sealPacked(storedWallets(next), key) }, { count: "exact" })
+    .eq("user_id", account.userId)
+    .eq("updated_at", data.updated_at);
+  return !failed && count === 1 ? claimed : [];
+}
