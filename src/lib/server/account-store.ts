@@ -20,7 +20,7 @@ import type { Account } from "@/lib/supabase/server";
 import { needsRefresh } from "./coinbase-store";
 import { feedTokenHash, openFeedSnapshot, sealFeedSnapshot } from "./feed-token";
 import { validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
-import { needsReseal, openJson, openPacked, sealJson, sealPacked, type VaultItem, type VaultKey } from "./vault";
+import { needsReseal, openJson, openPacked, sealJson, sealPacked, type BankAttention, type VaultItem, type VaultKey } from "./vault";
 
 type ProfileRow = {
   first_name: string | null;
@@ -43,6 +43,8 @@ type PlaidRow = {
   sync_version: number;
   synced_at: string | null;
   changed_at: string | null;
+  attention?: string | null;
+  disconnect_at?: string | null;
 };
 type CoinbaseRow = { sealed_tokens: string; expires_at: string; version: number; linked_at: string; sealed_snapshot?: string | null; snapshot_at?: string | null };
 type FeedRow = { updated_at: string; sealed_token: string };
@@ -105,7 +107,11 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
     db
       .from("plaid_items")
-      .select(withSync ? "item_id, sealed_token, institution_id, institution_name, linked_at, sealed_sync, sync_version, synced_at, changed_at" : "item_id, sealed_token, institution_id, institution_name, linked_at")
+      .select(
+        withSync
+          ? "item_id, sealed_token, institution_id, institution_name, linked_at, sealed_sync, sync_version, synced_at, changed_at, attention, disconnect_at"
+          : "item_id, sealed_token, institution_id, institution_name, linked_at, attention, disconnect_at",
+      )
       .eq("user_id", account.userId)
       .returns<PlaidRow[]>(),
     db.from("coinbase_links").select("sealed_tokens, expires_at, version, linked_at, sealed_snapshot, snapshot_at").eq("user_id", account.userId).maybeSingle<CoinbaseRow>(),
@@ -123,7 +129,8 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   for (const r of plaid.data ?? []) {
     const opened = key ? (openJson(r.sealed_token, key) as { accessToken?: unknown } | null) : null;
     if (typeof opened?.accessToken !== "string") continue; // sealed under another key: unusable, so unseen
-    items.push({ itemId: r.item_id, accessToken: opened.accessToken, institutionId: r.institution_id, institutionName: r.institution_name, linkedAt: r.linked_at });
+    const attention = bankAttention(r);
+    items.push({ itemId: r.item_id, accessToken: opened.accessToken, institutionId: r.institution_id, institutionName: r.institution_name, linkedAt: r.linked_at, ...(attention ? { attention } : {}) });
     stale.plaidToken(r, opened);
     if (!withSync) continue;
     // A copy that won't open or doesn't read as one starts over at the next sync.
@@ -383,6 +390,32 @@ export async function saveAccountPlaidSync(account: Account, itemId: string, sta
     .select("item_id");
   if (error) throw new Error(`Couldn't save the bank's sync: ${error.message}`);
   return (data?.length ?? 0) > 0;
+}
+
+/** A bank's warning as stored: one the database would accept, or none. */
+function bankAttention(r: Pick<PlaidRow, "attention" | "disconnect_at">): BankAttention | null {
+  if (r.attention === "sign-in" || r.attention === "revoked") return { state: r.attention, disconnectAt: null };
+  if (r.attention === "disconnecting" && r.disconnect_at && Number.isFinite(Date.parse(r.disconnect_at))) return { state: "disconnecting", disconnectAt: r.disconnect_at };
+  return null;
+}
+
+/**
+ * A bank's warning is over: it synced (so it isn't waiting on a sign-in and
+ * hasn't been withdrawn), or its owner finished signing in again (which also
+ * renews a consent that was ending). `only` limits it to those states, so a
+ * mere sync never clears a consent that's still running out; `news` marks the
+ * bank as changed so the next visit reads it afresh (after a sign-in).
+ */
+export async function clearBankAttention(account: Account, itemId: string, { only, news = false }: { only?: BankAttention["state"][]; news?: boolean } = {}): Promise<void> {
+  const cleared = { attention: null, attention_at: null, disconnect_at: null };
+  let q = account.supabase
+    .from("plaid_items")
+    .update(news ? { ...cleared, changed_at: new Date().toISOString() } : cleared)
+    .eq("user_id", account.userId)
+    .eq("item_id", itemId);
+  q = only ? q.in("attention", only) : q.not("attention", "is", null);
+  const { error } = await q;
+  if (error) throw new Error(`Couldn't clear the bank's warning: ${error.message}`);
 }
 
 export async function removeAccountPlaidItem(account: Account, itemId: string): Promise<void> {

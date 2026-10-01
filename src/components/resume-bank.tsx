@@ -9,6 +9,7 @@
 // same connection carries on) and take the person back to where they
 // started. A full page load, so every screen, the layout included, redraws.
 
+import { bankSignedInAgain } from "@/lib/server/bank-actions";
 import { useEffect, useRef, useState } from "react";
 import { Landmark } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
@@ -52,6 +53,8 @@ export function ResumeBank({ linkToken, back, reconnect = null }: { linkToken: s
               // Update mode: the connection Prism already holds works again; there's nothing to exchange.
               handler?.destroy();
               setState({ kind: "done", name, reconnected: true });
+              // Whatever Plaid warned about this bank is over now.
+              await bankSignedInAgain(reconnect);
               window.location.replace(back);
               return;
             }

@@ -214,6 +214,67 @@ describe("a bank's stored sync", () => {
       expect(await refused(`select public.plaid_item_changed('item-b')`)).toBe(true);
     });
   });
+
+  it("keeps Plaid's warnings about a bank: the webhook can set three columns and nothing else, its owner can clear them", async () => {
+    const state = async () => (await rows(`select attention, attention_at is not null as dated, disconnect_at is not null as ends from public.plaid_items where item_id = 'item-b'`))[0];
+    const warn = (event: string, at: string | null = null) => as("anon", null, async () => expect(await refused(`select public.plaid_bank_warning('item-b', $1, $2::timestamptz)`, [event, at])).toBe(false));
+    const inAWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();
+
+    await warn("disconnecting", inAWeek);
+    expect(await state()).toEqual({ attention: "disconnecting", dated: true, ends: true });
+    // A sign-in outranks a consent running out, and isn't downgraded back to it.
+    await warn("login-required");
+    expect(await state()).toEqual({ attention: "sign-in", dated: true, ends: false });
+    await warn("disconnecting", inAWeek);
+    expect(await state()).toMatchObject({ attention: "sign-in" });
+    await warn("repaired");
+    expect(await state()).toEqual({ attention: null, dated: false, ends: false });
+    // A withdrawal stays until a sync or a sign-in proves otherwise; a repair is only of a sign-in.
+    await warn("revoked");
+    await warn("login-required");
+    await warn("repaired");
+    expect(await state()).toMatchObject({ attention: "revoked" });
+
+    // Nonsense changes nothing: an unknown event, a consent with no end or an absurd one, someone else's bank.
+    await rows(`update public.plaid_items set attention = null, attention_at = null, disconnect_at = null`);
+    await warn("anything");
+    await warn("disconnecting", null);
+    await warn("disconnecting", new Date(Date.now() + 365 * 86_400_000).toISOString());
+    await as("anon", null, async () => {
+      expect(await refused(`select public.plaid_bank_warning($1, 'revoked')`, ["' or 1=1 --"])).toBe(false);
+      expect(await refused(`select public.plaid_bank_warning('no-such-item', 'revoked')`)).toBe(false);
+    });
+    expect(await rows(`select item_id, attention from public.plaid_items order by item_id`)).toEqual([
+      { item_id: "item-a", attention: null },
+      { item_id: "item-b", attention: null },
+    ]);
+    // Only those three columns: the sealed copy is as it was.
+    expect((await rows(`select sealed_sync from public.plaid_items where item_id = 'item-b'`))[0]!.sealed_sync).toBe(packed);
+    await as("authenticated", B, async () => {
+      expect(await refused(`select public.plaid_bank_warning('item-b', 'revoked')`)).toBe(true);
+    });
+
+    // Its owner clears it (after a sync, or signing in again); nobody else, and never a connected app.
+    await warn("disconnecting", inAWeek);
+    await as("authenticated", A, async () => {
+      expect(await rows(`update public.plaid_items set attention = null, attention_at = null, disconnect_at = null where item_id = 'item-b' returning item_id`)).toEqual([]);
+    });
+    await as(
+      "authenticated",
+      B,
+      async () => {
+        expect(await rows(`update public.plaid_items set attention = null, attention_at = null, disconnect_at = null where item_id = 'item-b' returning item_id`)).toEqual([]);
+      },
+      CONNECTED_APP,
+    );
+    expect(await state()).toMatchObject({ attention: "disconnecting" });
+    await as("authenticated", B, async () => {
+      expect(await rows(`update public.plaid_items set attention = null, attention_at = null, disconnect_at = null where item_id = 'item-b' returning item_id`)).toEqual([{ item_id: "item-b" }]);
+      // A warning is whole or absent: a consent ending needs its date.
+      expect(await refused(`update public.plaid_items set attention = 'disconnecting', attention_at = now() where item_id = 'item-b'`)).toBe(true);
+    });
+    expect(await state()).toEqual({ attention: null, dated: false, ends: false });
+  });
 });
 
 describe("what an account signs in with", () => {

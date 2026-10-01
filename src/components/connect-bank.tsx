@@ -26,6 +26,7 @@ import { Landmark, Lock, Plus, RotateCw, X } from "lucide-react";
 import clsx from "clsx";
 import { signInToConnect } from "@/lib/linking";
 import { loadLink, saveBank } from "@/lib/plaid/link";
+import { bankSignedInAgain } from "@/lib/server/bank-actions";
 
 type State = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "error"; message: string } | { kind: "done"; message: string };
 
@@ -86,6 +87,8 @@ export function ConnectBank({
           if (reconnect) {
             handler.destroy();
             setState({ kind: "done", message: `${metadata.institution?.name ?? "Your bank"} is reconnected. Bringing it up to date…` });
+            // Whatever Plaid warned about this bank is over now.
+            await bankSignedInAgain(reconnect);
             if (landOn) window.location.replace(landOn);
             else router.refresh();
             return;

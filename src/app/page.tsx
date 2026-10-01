@@ -7,7 +7,8 @@
 
 import { Sparkles, Telescope } from "lucide-react";
 import Link from "next/link";
-import { InsightList, SeeAll, StatTile, TransactionRow, UpcomingList } from "@/components/blocks";
+import { HeadsUp, InsightList, SeeAll, StatTile, TransactionRow, UpcomingList } from "@/components/blocks";
+import { alertsFor } from "@/lib/finance/alerts";
 import { ChartCard } from "@/components/chart-card";
 import { Legend } from "@/components/charts/core";
 import { ActivityRings } from "@/components/charts/radial";
@@ -51,6 +52,8 @@ export default async function OverviewPage() {
   const upcoming = a.forecast ? a.forecast.events.filter((e) => e.date <= addDays(a.today, 14)) : [];
   const thisMonth = a.flows.at(-1)!;
   const savedRate = thisMonth.savingsRate;
+  // Only what's the person's own to act on: another member's bank isn't theirs to sign in to. A price rise is an insight below.
+  const headsUp = household ? [] : alertsFor(a).filter((x) => x.urgent);
 
   return (
     <div className="space-y-5">
@@ -62,6 +65,8 @@ export default async function OverviewPage() {
           </h1>
         </div>
       </div>
+
+      <HeadsUp alerts={headsUp} />
 
       {/* Row 1 — the hero and the number people actually act on. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">

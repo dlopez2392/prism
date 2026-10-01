@@ -38,8 +38,17 @@ const HEALTH: Record<Institution["health"], { status: Status; label: string }> =
   needs_attention: { status: "warn", label: "Can't be reached right now" },
 };
 
-/** How a connection is doing, in words: only the person can fix a bank that wants them to sign in again, so it says so. */
-const health = (inst: Institution) => (inst.signInAgain ? { status: "warn" as const, label: "Needs you to sign in" } : HEALTH[inst.health]);
+/**
+ * How a connection is doing, in words: only the person can fix a bank that
+ * wants them to sign in again, so it says so — and, a week ahead, by when
+ * (Plaid's warning that the bank's consent ends then).
+ */
+const health = (inst: Institution) =>
+  inst.signInAgain
+    ? { status: "warn" as const, label: "Needs you to sign in" }
+    : inst.disconnectsAt
+      ? { status: "warn" as const, label: `Sign in by ${shortDate(inst.disconnectsAt.slice(0, 10))}` }
+      : HEALTH[inst.health];
 
 /** Where a wallet's money is: one address ("·· f3t4"), or a whole wallet and how many of its addresses have been used. */
 function walletPlace(w: Wallet): string {
@@ -198,7 +207,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                   </StatusPill>
                 )}
                 {/* Signing in again keeps the same connection: its accounts, goals and household shares carry on. */}
-                {inst.source === "plaid" && inst.signInAgain ? <ConnectBank label="Sign in again" reconnect={inst.id} size="sm" /> : null}
+                {inst.source === "plaid" && (inst.signInAgain || inst.disconnectsAt) ? <ConnectBank label="Sign in again" reconnect={inst.id} size="sm" /> : null}
                 {inst.source === "coinbase" && inst.signInAgain && cbReady ? (
                   <a
                     href="/api/coinbase/connect"
