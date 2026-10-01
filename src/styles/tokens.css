@@ -117,7 +117,8 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-@media (prefers-color-scheme: dark) {
+/* Dark is for screens: printing (the year page's "Save as PDF") is always light, so nothing pale lands on white paper. */
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --surface-0: #0b0b1a;
@@ -162,45 +163,48 @@
   }
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --surface-0: #0b0b1a;
-  --surface-1: #15152e;
-  --surface-2: #1c1c3a;
-  --surface-3: #26264b;
-  --line: rgba(255, 255, 255, 0.07);
-  --line-strong: rgba(255, 255, 255, 0.14);
-  --ink-1: #f5f4ff;
-  --ink-2: #bbb9d8;
-  --ink-3: #8f8db0;
-  --accent: #8b5cf6;
-  --accent-strong: #a78bfa;
-  --accent-soft: rgba(139, 92, 246, 0.16);
-  --accent-ink: #a78bfa;
-  --focus: #a78bfa;
-  --gradient-text: linear-gradient(90deg, #a78bfa, #f472b6 60%, #fb923c);
-  --glow-1: rgba(139, 92, 246, 0.28);
-  --glow-2: rgba(236, 72, 153, 0.16);
-  --glow-3: rgba(8, 145, 178, 0.18);
-  --c-1: #8b5cf6;
-  --c-2: #ec4899;
-  --c-7: #3b82f6;
-  --c-other: #6e6c8f;
-  --flow-in: #2dd4bf;
-  --flow-out: #fb7185;
-  --flow-mid: #2c2c52;
-  --seq-0: #1d1d3c;
-  --seq-1: #2e2560;
-  --seq-2: #47338f;
-  --seq-3: #6843c9;
-  --seq-4: #8b5cf6;
-  --seq-5: #c4b5fd;
-  --good-ink: #3ddc3d;
-  --crit-ink: #ff7a7a;
-  --grid: #22223f;
-  --axis: #34345c;
-  --crosshair: rgba(245, 244, 255, 0.35);
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 40px -20px rgba(0, 0, 0, 0.7);
-  --shadow-pop: 0 20px 60px -12px rgba(0, 0, 0, 0.75);
-  --shadow-hero: 0 30px 80px -28px rgba(168, 85, 247, 0.75);
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #0b0b1a;
+    --surface-1: #15152e;
+    --surface-2: #1c1c3a;
+    --surface-3: #26264b;
+    --line: rgba(255, 255, 255, 0.07);
+    --line-strong: rgba(255, 255, 255, 0.14);
+    --ink-1: #f5f4ff;
+    --ink-2: #bbb9d8;
+    --ink-3: #8f8db0;
+    --accent: #8b5cf6;
+    --accent-strong: #a78bfa;
+    --accent-soft: rgba(139, 92, 246, 0.16);
+    --accent-ink: #a78bfa;
+    --focus: #a78bfa;
+    --gradient-text: linear-gradient(90deg, #a78bfa, #f472b6 60%, #fb923c);
+    --glow-1: rgba(139, 92, 246, 0.28);
+    --glow-2: rgba(236, 72, 153, 0.16);
+    --glow-3: rgba(8, 145, 178, 0.18);
+    --c-1: #8b5cf6;
+    --c-2: #ec4899;
+    --c-7: #3b82f6;
+    --c-other: #6e6c8f;
+    --flow-in: #2dd4bf;
+    --flow-out: #fb7185;
+    --flow-mid: #2c2c52;
+    --seq-0: #1d1d3c;
+    --seq-1: #2e2560;
+    --seq-2: #47338f;
+    --seq-3: #6843c9;
+    --seq-4: #8b5cf6;
+    --seq-5: #c4b5fd;
+    --good-ink: #3ddc3d;
+    --crit-ink: #ff7a7a;
+    --grid: #22223f;
+    --axis: #34345c;
+    --crosshair: rgba(245, 244, 255, 0.35);
+    --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 40px -20px rgba(0, 0, 0, 0.7);
+    --shadow-pop: 0 20px 60px -12px rgba(0, 0, 0, 0.75);
+    --shadow-hero: 0 30px 80px -28px rgba(168, 85, 247, 0.75);
+  }
 }
+

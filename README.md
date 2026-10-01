@@ -225,6 +225,23 @@ Replacing the secret is the same three steps with a new one; the old one
 stops working the moment the fingerprint changes. The job sends to people
 one at a time and stops 45 seconds in; anyone left is first the next day.
 
+## Download your data
+
+On the Account page, a signed-in person downloads everything Prism shows them
+(`src/app/account/export/*`, built by `src/lib/finance/export.ts`):
+
+- **Download everything** is a zip (`src/lib/server/zip.ts`, `node:zlib`
+  only) of `transactions.csv`, `accounts.csv`, `balances.csv` (every month-end
+  balance), `budgets.csv`, `goals.csv`, `holdings.csv`, `everything.json`
+  (all of it plus wallets, homes and things added by hand) and a README.
+- **Transactions only** is the one spreadsheet; the year page asks for one
+  year of it (`?year=2025`). Prism's own Import history reads it back exactly.
+- Only the person's OWN money (`getPersonalFinance`, never the household
+  view), never the demo household, never cached, and nothing that opens
+  anything: no bank or Coinbase token, no calendar link, no sealed value. A
+  text cell that starts like a formula gets a leading apostrophe, so a
+  merchant name can't run in a spreadsheet.
+
 ## Link Coinbase (read-only)
 
 1. On the Coinbase Developer Platform, create an OAuth client and register
@@ -474,6 +491,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
+| **Your year** | One calendar year on one page: what came in, what went out, what you kept (against the same stretch the year before when Prism holds it), month by month, where it went by category, the ten places you paid most, net worth from the year's start, pay, subscriptions, and the year in a few lines; honest about where the records start and a year still under way; **print or save as PDF** (always in the light theme) and download that year's transactions |
 | **Connections** | Per-institution health (with **Sign in by <date>** a week before a bank's consent runs out), how data is protected, an honest catalogue of every integration and its real access path, **Import history** from a Mint, Monarch or bank CSV (read in the browser, never uploaded), and, in a household, **Shared / Private** for each of the person's accounts (Coinbase included: the household sees its total value as of the owner's last visit) |
 | **Household** | Overview, Cash flow, Spending, Budgets, Future, Goals and Net worth over what every member shared, each account marked with whose it is; shared budgets and goals any member can change, showing who changed them last; invitations and members on the Account page, and a join page for the link |
 

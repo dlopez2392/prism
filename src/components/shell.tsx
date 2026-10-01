@@ -11,6 +11,7 @@ import { useId } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CalendarRange,
   ChartPie,
   Landmark,
   LayoutDashboard,
@@ -37,6 +38,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
       { href: "/cash-flow", label: "Cash flow", icon: Waves },
       { href: "/spending", label: "Spending", icon: ChartPie },
       { href: "/budgets", label: "Budgets", icon: Target },
+      { href: "/year", label: "Your year", icon: CalendarRange },
     ],
   },
   {
@@ -108,7 +110,7 @@ export function Sidebar({ householdName, sourceLabel, account }: { householdName
     );
   };
   return (
-    <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface-1/70 px-3 py-5 backdrop-blur-xl lg:flex">
+    <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface-1/70 px-3 py-5 backdrop-blur-xl lg:flex print:hidden">
       <Link href="/" className="mb-7 flex items-center gap-2.5 px-3" aria-label={`${BRAND.product} by ${BRAND.company} — overview`}>
         <PrismMark className="size-8" />
         <span className="leading-tight">
@@ -170,7 +172,7 @@ export function BottomNav({ account }: { account: AccountNav }) {
     <>
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface-1/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface-1/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden print:hidden"
       >
         <ul className="mx-auto grid max-w-lg grid-cols-5">
           {tabs.map((item) => {

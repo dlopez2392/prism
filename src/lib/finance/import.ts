@@ -201,6 +201,8 @@ const CATEGORY_WORDS: [RegExp, CategoryId, "in" | "out" | "any"][] = [
   [/\b(health|medical|doctors?|dentist|pharmacy|fitness|gym|insurance)\b/, "health", "any"],
   [/\b(entertainment|movies?|music|games?|hobbies|sports?|fun|streaming|amusement|television|tv|arts|newspapers|magazines)\b/, "fun", "any"],
   [/\b(shopping|clothing|electronics|gifts?|books|merchandise|personal care|hair)\b/, "shopping", "any"],
+  // Prism's own export says "Other" for what it couldn't place; a refund there is still Other, not income.
+  [/^other$/, "other", "any"],
 ];
 
 /** Prism's category for the source's own label, or from the direction of the money when the label says nothing Prism knows. */

@@ -215,6 +215,17 @@
   same-origin paths only; never give it a fetch handler or a cache — it must
   never serve money figures from an old visit. Permission is asked only on
   the person's tap.
+- Download your data (`src/app/account/export/*`, `src/lib/finance/export.ts`)
+  and Your year (`/year`, `src/lib/finance/year.ts`): exports read ONLY
+  `getPersonalFinance` (never the household view), refuse the demo household,
+  are `private, no-store` attachments, and must never carry a token, a
+  calendar link or a sealed value (`export-routes.test.ts` holds it). Text
+  cells starting like a formula are prefixed with an apostrophe; amounts are
+  plain numbers. `transactions.csv` must stay readable by Prism's own
+  importer (`export.test.ts` round-trips it). The year counts exactly as
+  `cashflow.ts` counts, starts where the records do, and compares with the
+  year before only when Prism holds that whole span. Printing is always light:
+  the dark tokens live under `@media screen` in `tokens.css`.
 - Bank redirects (OAuth banks): `/connections/return` is the address
   allow-listed with Plaid (`RETURN_PATH`), so never move or rename it. It
   resumes Link with the SAME Link token, kept in the httpOnly

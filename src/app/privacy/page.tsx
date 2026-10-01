@@ -283,7 +283,15 @@ export default function PrivacyPage() {
               </Link>{" "}
               page.
             </li>
-            <li>Ask us for a copy of your data, or to correct it, at {mail}.</li>
+            <li>
+              Download a copy of everything {BRAND.product} shows you, whenever you like, from the{" "}
+              <Link href="/account#data" className={link}>
+                Account
+              </Link>{" "}
+              page: spreadsheets of your transactions, accounts and balances, budgets and goals, and one file with all of it. It&apos;s made from your own accounts
+              only, never anyone else&apos;s in your household.
+            </li>
+            <li>Ask us for a copy of anything else we hold about you, or to correct it, at {mail}.</li>
           </Bullets>
           <p>
             Depending on where you live, such as California, you may have more rights over your information. We honour these requests wherever you live, and we

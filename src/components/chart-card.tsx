@@ -46,7 +46,7 @@ export function ChartCard({
               type="button"
               onClick={() => setAsTable((v) => !v)}
               aria-pressed={asTable}
-              className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-line px-2.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:bg-surface-3"
+              className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-line px-2.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:bg-surface-3 print:hidden"
             >
               {asTable ? <ChartColumn aria-hidden className="size-3.5" /> : <Table2 aria-hidden className="size-3.5" />}
               {asTable ? "Chart" : "Table"}
