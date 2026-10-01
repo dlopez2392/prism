@@ -1,4 +1,5 @@
 {
   "framework": "nextjs",
-  "buildCommand": "pnpm lint && pnpm test && pnpm build"
+  "buildCommand": "pnpm lint && pnpm test && pnpm build",
+  "crons": [{ "path": "/api/cron/alerts", "schedule": "0 13 * * *" }]
 }

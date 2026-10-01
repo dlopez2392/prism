@@ -176,8 +176,21 @@
   calendar feed's snapshot is sealed too (`sealFeedSnapshot`). Saves
   go through `saveAccountPlaidSync` (version-guarded) after the response;
   `agentFinance` passes no saver. The webhook (`/api/plaid/webhook`) must
-  verify Plaid's signature and may only call `plaid_item_changed` — it has
-  no key to anyone's bank and must never gain one.
+  verify Plaid's signature and may only call `plaid_item_changed` and
+  `plaid_bank_warning` — it has no key to anyone's bank and must never gain one.
+- Alert emails (`src/lib/alerts/*`, migration `alert_emails`): opt-in on the
+  Account page. The daily job (`/api/cron/alerts`, Vercel Cron) holds no key
+  to anyone's data: it reaches the database ONLY through `alerts_due`,
+  `alerts_sent` and `alerts_stop`, which answer to `CRON_SECRET` (the
+  database keeps its sha256 in `job_keys`, which no API role can read). Its
+  figures come from `alert_snapshots`, sealed and written only by the
+  person's own visit (`rememberAlerts` in `finance.ts`, never a connected app
+  or the household view), kept only while their emails are on. Each alert is
+  sent once by fingerprint (sha256 of person + alert id); a quiet Monday
+  still sends its summary, saying so. Emails carry no images or tracking and
+  one-click unsubscribe (HMAC of `CRON_SECRET`). Never give the job a
+  service-role key, never let it write anything but delivery fingerprints and
+  the off switch, and keep amounts out of an email whose owner turned them off.
 - Bank redirects (OAuth banks): `/connections/return` is the address
   allow-listed with Plaid (`RETURN_PATH`), so never move or rename it. It
   resumes Link with the SAME Link token, kept in the httpOnly

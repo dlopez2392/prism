@@ -8,7 +8,7 @@
 import { BRAND } from "@/lib/brand";
 
 /** Shown on the page. Change it whenever the policy's substance changes. */
-export const POLICY_UPDATED = "September 30, 2026";
+export const POLICY_UPDATED = "October 1, 2026";
 
 /** Where privacy questions and requests go. Must be a mailbox someone reads. */
 export const PRIVACY_CONTACT = BRAND.privacyEmail;
@@ -97,6 +97,14 @@ export const ALCHEMY: Provider = {
   policy: "https://www.alchemy.com/policies/privacy-policy",
 };
 
-export function providers(homeValues: boolean, alchemy = false): Provider[] {
-  return [...PROVIDERS, MEMPOOL, ...(alchemy ? [ALCHEMY] : []), ...(homeValues ? [RENTCAST] : [])];
+/** Resend's entry while the operator has alert emails switched on (RESEND_API_KEY and CRON_SECRET), in the same deploy. */
+export const RESEND_WITH_ALERTS: Provider = {
+  name: "Resend",
+  does: "Sends your sign-in codes by email, and your alert emails if you turn them on. For an alert it receives your email address and the email itself, which can name a bank or a shop and, if you allow it, amounts.",
+  policy: "https://resend.com/legal/privacy-policy",
+};
+
+export function providers(homeValues: boolean, alchemy = false, alerts = false): Provider[] {
+  const base = alerts ? PROVIDERS.map((p) => (p.name === RESEND_WITH_ALERTS.name ? RESEND_WITH_ALERTS : p)) : PROVIDERS;
+  return [...base, MEMPOOL, ...(alchemy ? [ALCHEMY] : []), ...(homeValues ? [RENTCAST] : [])];
 }

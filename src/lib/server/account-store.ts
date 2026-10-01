@@ -15,6 +15,8 @@ import { storedHomeValues, validHomeValues, type HomeValuation } from "@/lib/fin
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { storedWallets, validWallets, walletStale, type Reading, type Script, type Wallet } from "@/lib/crypto/wallets";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
+import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
+import { ALERT_CHOICES, isAlertChoice, type AlertChoice } from "@/lib/alerts/choices";
 import type { Budget } from "@/lib/finance/types";
 import type { Account } from "@/lib/supabase/server";
 import { needsRefresh } from "./coinbase-store";
@@ -31,8 +33,12 @@ type ProfileRow = {
   sealed_manual_items: string | null;
   sealed_home_values: string | null;
   sealed_wallets: string | null;
+  alert_email?: boolean;
+  alert_kinds?: unknown;
+  alert_amounts?: boolean;
   updated_at: string;
 };
+type AlertSnapshotRow = { sealed: string; updated_at: string };
 type PlaidRow = {
   item_id: string;
   sealed_token: string;
@@ -51,6 +57,8 @@ type FeedRow = { updated_at: string; sealed_token: string };
 
 type ImportPartRow = { import_id: string; part: number; sealed: string; created_at: string };
 export type CoinbaseRecord = { tokens: TokenSet; version: number; linkedAt: string };
+/** What a person chose for alert emails (Account page). */
+export type AlertSettings = { on: boolean; kinds: AlertChoice[]; amounts: boolean };
 
 export type AccountSources = {
   firstName: string | null;
@@ -80,6 +88,8 @@ export type AccountSources = {
   feedUpdatedAt: string | null;
   /** They're in a household, so the Me / Household switch applies. */
   inHousehold: boolean;
+  /** Their alert emails: what they chose, and when their visits last left the job a snapshot. */
+  alerts: AlertSettings & { takenAt: string | null; stale: boolean };
   /**
    * Seals this account holds that the current vault key didn't make, sealed
    * again under it; null when there are none. For a caller that may write,
@@ -103,8 +113,12 @@ function openCoinbase(row: CoinbaseRow | null, key: VaultKey | null): CoinbaseRe
  */
 export async function loadAccount(account: Account, key: VaultKey | null, { strict = false, withSync = false, withImports = false } = {}): Promise<AccountSources> {
   const db = account.supabase;
-  const [profile, plaid, coinbase, feed, household, coinbaseShare, imported] = await Promise.all([
-    db.from("profiles").select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, updated_at").eq("user_id", account.userId).maybeSingle<ProfileRow>(),
+  const [profile, plaid, coinbase, feed, household, coinbaseShare, imported, alertSnapshot] = await Promise.all([
+    db
+      .from("profiles")
+      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, alert_email, alert_kinds, alert_amounts, updated_at")
+      .eq("user_id", account.userId)
+      .maybeSingle<ProfileRow>(),
     db
       .from("plaid_items")
       .select(
@@ -121,6 +135,8 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     withImports
       ? db.from("imported_history").select("import_id, part, sealed, created_at").eq("user_id", account.userId).returns<ImportPartRow[]>()
       : Promise.resolve({ data: [] as ImportPartRow[], error: null }),
+    // A connected app is never shown one (the database refuses it), and that's no failure.
+    db.from("alert_snapshots").select("sealed, updated_at").eq("user_id", account.userId).maybeSingle<AlertSnapshotRow>(),
   ]);
   if (strict && (profile.error || plaid.error || coinbase.error || feed.error || imported.error)) throw new Error("Couldn't read the account.");
   const items: VaultItem[] = [];
@@ -177,6 +193,12 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     coinbaseShared: sharesCoinbase ? { balance: value?.balance ?? null, at: value ? (coinbase.data?.snapshot_at ?? null) : null } : null,
     feedUpdatedAt: feed.data?.updated_at ?? null,
     inHousehold: (household.data?.length ?? 0) > 0,
+    alerts: {
+      ...alertSettings(profile.data),
+      takenAt: alertSnapshot.data?.updated_at ?? null,
+      // Not resealed in place: the next visit takes a new one, under the current key.
+      stale: key !== null && !!alertSnapshot.data && needsReseal(alertSnapshot.data.sealed, key),
+    },
     reseal: stale.run(),
   };
 }
@@ -282,6 +304,12 @@ function staleSeals(account: Account, key: VaultKey | null) {
   };
 }
 
+/** Their alert email choices as stored: off, every kind, with amounts, until they say otherwise. */
+function alertSettings(row: Pick<ProfileRow, "alert_email" | "alert_kinds" | "alert_amounts"> | null): AlertSettings {
+  const kinds = Array.isArray(row?.alert_kinds) ? row.alert_kinds.filter(isAlertChoice) : [...ALERT_CHOICES];
+  return { on: row?.alert_email === true, kinds, amounts: row?.alert_amounts !== false };
+}
+
 async function upsertProfile(account: Account, patch: Record<string, unknown>): Promise<void> {
   const { error } = await account.supabase.from("profiles").upsert({ user_id: account.userId, ...patch }, { onConflict: "user_id" });
   if (error) throw new Error(`Couldn't save to your account: ${error.message}`);
@@ -352,6 +380,26 @@ export function saveAccountManualItemsAndHomes(account: Account, items: ManualIt
     sealed_manual_items: items.length ? sealPacked(items, key) : null,
     sealed_home_values: kept.length ? sealPacked(storedHomeValues(kept), key) : null,
   });
+}
+
+/** Alert email choices, already checked by `saveAlertEmails`; off alone keeps the rest. Turning them off deletes the job's snapshot too (a trigger). */
+export function saveAlertSettings(account: Account, settings: AlertSettings | { on: false }) {
+  return upsertProfile(account, "kinds" in settings ? { alert_email: settings.on, alert_kinds: settings.kinds, alert_amounts: settings.amounts } : { alert_email: false });
+}
+
+/**
+ * What this visit found, for the alert email job, sealed. The database keeps
+ * it only while the person's emails are on, so a write that lands after
+ * they turned them off is refused, and that's fine.
+ */
+export async function saveAlertSnapshot(account: Account, snapshot: AlertSnapshot, key: VaultKey): Promise<void> {
+  const { error } = await account.supabase.from("alert_snapshots").upsert({ user_id: account.userId, sealed: sealPacked(snapshot, key) }, { onConflict: "user_id" });
+  if (error) throw new Error(`Couldn't keep the alert snapshot: ${error.message}`);
+}
+
+/** Nothing of theirs is live any more (the last bank removed): the job gets no figures from an old visit. */
+export async function forgetAlertSnapshot(account: Account): Promise<void> {
+  await account.supabase.from("alert_snapshots").delete().eq("user_id", account.userId);
 }
 
 export async function addAccountPlaidItem(account: Account, item: VaultItem, key: VaultKey): Promise<void> {

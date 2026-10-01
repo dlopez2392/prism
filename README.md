@@ -149,7 +149,52 @@ a wording without dollar amounts):
 - **A recurring charge that just went up** (for 35 days after the rise).
 
 On Overview, the urgent ones show as a **Heads up** at the top, on the
-person's own view only. Email alerts (opt-in, with a weekly summary) are next.
+person's own view only.
+
+### Alert emails
+
+Opt-in, per person, on the Account page: which of the four kinds (a bank
+needs you, a bill may not be covered, a subscription went up, a Monday
+summary) and whether amounts may show. Prism holds no service-role key, so
+the daily job (`/api/cron/alerts`, Vercel Cron at 13:00 UTC) can't read
+anyone's money as itself:
+
+- **Each visit leaves a snapshot.** After the person's own page loads, at
+  most every 15 minutes, what the visit found (short bills, price rises, the
+  week's figures, the next two weeks' bills) is sealed with the vault key into
+  `alert_snapshots`, and only while their emails are on. Turning them off
+  deletes it (a trigger). Bank warnings come straight from `plaid_items`.
+- **The job answers to a secret.** Vercel Cron calls the route with
+  `CRON_SECRET`; the database keeps only its sha256 (`job_keys`, unreadable
+  over the API) and answers `alerts_due`, `alerts_sent` and `alerts_stop`
+  to nothing else. With the secret alone, a caller learns email addresses,
+  choices and which banks need a sign-in: every figure stays sealed.
+- **News goes once.** Each alert's occasion is fingerprinted (sha256 of the
+  person and the alert id) and recorded after sending; a Resend idempotency
+  key covers a retried run. Bills and price rises come only from a snapshot
+  under 8 days old, a short bill from 7 days before it's due. On the person's
+  own Monday the summary goes even in a quiet or stale week, saying so.
+- **One click stops them.** Every email carries `List-Unsubscribe` (RFC 8058
+  one-click) and a link to `/alerts/unsubscribe`, both signed for that person
+  with an HMAC of `CRON_SECRET`; opening the link changes nothing until its
+  button is pressed. No images, no tracking.
+
+**Switching it on** (owner, once):
+
+1. In Resend, create an API key named "Prism alerts" with **Sending access**
+   for `bis-rgv.com`, and add it in Vercel as `RESEND_API_KEY` (Production
+   only, **Sensitive**).
+2. On your own computer, make the secret and print its fingerprint:
+   `S=$(openssl rand -base64 32); printf %s "$S" | pbcopy; printf %s "$S" | shasum -a 256 | cut -d' ' -f1`.
+   Paste the copied secret into Vercel as `CRON_SECRET` (Production only,
+   **Sensitive**). The secret itself never goes in chat or a document.
+3. In Supabase → SQL editor, store the fingerprint (the 64 characters printed):
+   `insert into job_keys (name, sha256) values ('alerts', '<fingerprint>') on conflict (name) do update set sha256 = excluded.sha256;`
+4. Redeploy production. The Account page then offers **Alert emails**.
+
+Replacing the secret is the same three steps with a new one; the old one
+stops working the moment the fingerprint changes. The job sends to people
+one at a time and stops 45 seconds in; anyone left is first the next day.
 
 ## Link Coinbase (read-only)
 
@@ -346,7 +391,9 @@ the old one. The highest number seals; every number opens.
    which id is the new one.
 5. **Retire the old key** by deleting its variable and redeploying, once the
    census shows only the new id. Anything it still sealed stops opening,
-   and those people reconnect, as they would have without this tool. After a
+   and those people reconnect, as they would have without this tool. An
+   alert snapshot isn't resealed but retaken on its owner's next visit; one
+   left under the old key only means their next email carries no figures. After a
    suspected exposure, rotate the Plaid and Coinbase secrets FIRST (a stolen
    token is useless without them), then retire the old key within 30 days.
 
@@ -374,6 +421,8 @@ select what, key_id, count(*) from (
   select 'wallets', case when sealed_wallets like 'z2.%' then substr(sealed_wallets, 4, 8) else 'unnamed' end from profiles where sealed_wallets is not null
   union all
   select 'imported history', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from imported_history
+  union all
+  select 'alert snapshot', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from alert_snapshots
 ) seals group by what, key_id order by what, key_id;
 ```
 

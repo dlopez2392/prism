@@ -4,7 +4,8 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { CalendarClock, Landmark, PiggyBank, Target, Wallet, type LucideIcon } from "lucide-react";
+import { BellRing, CalendarClock, Landmark, PiggyBank, Target, Wallet, type LucideIcon } from "lucide-react";
+import { AlertEmails } from "@/components/alert-emails";
 import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { DeleteAccount } from "@/components/delete-account";
 import { HouseholdCard } from "@/components/household";
@@ -12,6 +13,7 @@ import { NameForm } from "@/components/name-form";
 import { SignOutButton } from "@/components/sign-in-form";
 import { TwoStepSettings } from "@/components/two-step";
 import { Card, CardHeader, PageHeader, StatusPill } from "@/components/ui";
+import { alertsConfig } from "@/lib/alerts/send";
 import { signOut } from "@/lib/server/auth-actions";
 import { connectingEnabled, MCP_PATH } from "@/lib/server/connected-apps";
 import { getPersonalFinance } from "@/lib/server/finance";
@@ -36,6 +38,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     myHousehold(),
   ]);
   const banks = data.institutions.filter((i) => i.source === "plaid").length;
+  // Offered only where the job can run: Resend and the job's secret are set (never on a preview).
+  const alerts = alertsConfig() ? data.account.alerts : null;
   const coinbase = data.institutions.some((i) => i.source === "coinbase");
 
   const rows: { icon: LucideIcon; label: string; value: string; on: boolean }[] = [
@@ -44,6 +48,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     { icon: Target, label: "Budgets", value: data.planEdited.budgets ? `${data.budgets.length} set by you` : "Suggested", on: data.planEdited.budgets },
     { icon: PiggyBank, label: "Goals", value: data.goals.length ? `${data.goals.length} ${data.goals.length === 1 ? "goal" : "goals"}` : "None yet", on: data.goals.length > 0 },
     { icon: CalendarClock, label: "Calendar link", value: data.account.calendarFeed ? "On" : "Off — turn it on from Future", on: data.account.calendarFeed },
+    ...(alerts ? [{ icon: BellRing, label: "Alert emails", value: alerts.on ? "On" : "Off — turn them on below", on: alerts.on }] : []),
   ];
 
   return (
@@ -76,6 +81,18 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           ))}
         </ul>
       </Card>
+
+      {alerts ? (
+        <section id="alerts" className="scroll-mt-6">
+          <Card className="p-5 sm:p-6">
+            <CardHeader
+              title="Alert emails"
+              subtitle="A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and a short summary on Mondays. Bills and figures are as of your last visit, and each email says when that was. No tracking, and one click stops them."
+            />
+            <AlertEmails settings={alerts} email={email} />
+          </Card>
+        </section>
+      ) : null}
 
       <section id="two-step" className="scroll-mt-6">
         <Card className="p-5 sm:p-6">
