@@ -368,13 +368,24 @@ How it's kept safe:
 
 Prism is an MCP server at **`/mcp`** (production:
 `https://prism.bis-rgv.com/mcp`). Add it to Claude (Customize → Connectors →
-Add custom connector) or ChatGPT (Developer mode → custom connector); the app
-sends the person to Prism to sign in and approve it, and from then on can ask
-ten read-only questions: `get_overview`, `list_accounts`,
-`search_transactions`, `spending_breakdown`, `get_cash_flow`, `get_budgets`,
-`get_goals`, `upcoming_bills`, `get_income`, `get_net_worth`. Answers cite the transactions
-they rest on, carry the person's own "today" and time zone, and say
-`demo: true` when nothing is linked yet.
+Add custom connector) or ChatGPT (Settings → Security and login → Developer
+mode, then Plugins → +); the app sends the person to Prism to sign in and
+approve it, and from then on can ask ten read-only questions: `get_overview`,
+`list_accounts`, `search_transactions`, `spending_breakdown`, `get_cash_flow`,
+`get_budgets`, `get_goals`, `upcoming_bills`, `get_income`, `get_net_worth`.
+Answers cite the transactions they rest on, carry the person's own "today"
+and time zone, and say `demo: true` when nothing is linked yet.
+
+Two more, `search` and `fetch`, are the pair **ChatGPT's deep research** (and
+its company knowledge) reads a connector through, in exactly the shapes
+OpenAI specifies (`src/lib/agent/research.ts`). They present the person's
+money as documents: the nine summaries, each month and each year, and each
+spending category and merchant of the last twelve months. A document's text
+cites transaction ids, and its link opens the Prism page showing the same
+figures, so every citation in a report can be checked by clicking it. A
+category or merchant link carries what to look for in its `#fragment`
+(`ledgerHash` in `src/lib/finance/view.ts`), which a browser never sends to
+the server: no merchant name ever lands in a request log.
 
 Sign-in is **Supabase Auth's OAuth 2.1 server**, so nothing new holds a
 secret. To switch it on (once per project): Authentication → OAuth Server →

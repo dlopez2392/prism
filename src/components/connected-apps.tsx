@@ -97,7 +97,7 @@ export function ConnectedApps({ endpoint, enabled, apps }: { endpoint: string; e
           <span className="font-semibold text-ink-1">Claude:</span> Customize → Connectors → + → Add custom connector. Paste the address and choose Connect.
         </li>
         <li>
-          <span className="font-semibold text-ink-1">ChatGPT</span> (Plus or higher, on the web): turn on Developer mode in Settings, add a custom connector with this address, and pick OAuth.
+          <span className="font-semibold text-ink-1">ChatGPT</span> (Plus or higher, on the web): in Settings → Security and login, turn on Developer mode. Then open Plugins, choose +, paste the address and pick OAuth. It works in chats and in deep research, and its reports link to the Prism pages they read.
         </li>
         <li>Sign in to Prism when asked, check the app is the one you started from, and choose Allow.</li>
       </ol>

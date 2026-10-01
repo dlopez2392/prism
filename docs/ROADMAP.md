@@ -176,3 +176,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     release, the database and the alert job's last run. Next, if it's ever
     needed: error tracking inside the app (Sentry), which would be a new
     company handling data and so a privacy-policy change first.
+12. **Research with ChatGPT.** **Built (2026-10-01):** the connector answers
+    ChatGPT's deep research through `search` and `fetch`, presenting the
+    person's money as documents (summaries, months, years, categories,
+    merchants), each linked to the Prism page with the same figures so every
+    citation in a report can be checked. Next, if people ask for it: listing
+    Prism in ChatGPT's plugin directory (OpenAI's review), so nobody needs
+    Developer mode to connect.

@@ -151,6 +151,12 @@
   functions over `analyze()` — never re-derive a number the screens show
   differently. Every tool is read-only and says so in its annotations; every
   result carries `as_of`, `time_zone` and `demo`, and cites transaction ids.
+  `search`/`fetch` (`src/lib/agent/research.ts`) are ChatGPT deep research's
+  pair: keep their names and shapes exactly as OpenAI specifies, build every
+  document from the same functions the screens use, and keep each document's
+  link pointing at a page that shows the SAME figures (a category or merchant
+  covers the Spending page's 12M view). Anything identifying in a link goes
+  in the `#fragment` (`ledgerHash`), never the query string.
   Tokens come from Supabase Auth's OAuth 2.1 server; `/mcp` accepts only
   tokens with a `client_id` and asks Supabase Auth about each one (so
   Disconnect is immediate). Read-only is a DATABASE rule — restrictive

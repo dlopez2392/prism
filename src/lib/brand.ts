@@ -8,6 +8,8 @@ export const BRAND = {
   tagline: "Your money, in full colour.",
   company: "Bespoke Intelligence Solutions",
   companyShort: "BIS",
+  /** Production's address: links handed to connected apps, which a person opens to check a figure. */
+  site: "https://prism.bis-rgv.com",
   /** Privacy questions and requests (the privacy policy). Must be a mailbox someone reads. */
   privacyEmail: "privacy@bis-rgv.com",
 } as const;

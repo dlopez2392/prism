@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { tx } from "./test-helpers";
-import { dailyBalances, monthWindow, parseRange } from "./view";
+import { dailyBalances, LEDGER_FIND_MAX, ledgerHash, monthWindow, parseRange, readLedgerHash } from "./view";
 
 describe("monthWindow", () => {
   it("counts the current month and mirrors the span before it", () => {
@@ -35,5 +35,23 @@ describe("dailyBalances", () => {
       { date: "2026-09-02", balance: 9_000 },
       { date: "2026-09-03", balance: 10_000 },
     ]);
+  });
+});
+
+describe("ledger links", () => {
+  it("carry a category or a merchant in the fragment, and read back as they were written", () => {
+    expect(ledgerHash({ category: "food" })).toBe("#category=food");
+    expect(ledgerHash({ find: "green basket & co" })).toBe("#find=green+basket+%26+co");
+    expect(readLedgerHash(ledgerHash({ find: "green basket & co" }))).toEqual({ find: "green basket & co" });
+    expect(readLedgerHash(ledgerHash({ category: "transfer" }))).toEqual({ category: "transfer" });
+  });
+
+  it("ignore a fragment that asks for nothing a ledger knows", () => {
+    for (const hash of ["", "#", "#transactions", "#category=snacks", "#category=__proto__", "#category=toString", "#find=", "#find=%20%20"]) expect(readLedgerHash(hash)).toBeNull();
+  });
+
+  it("never ask for more than the search box takes", () => {
+    expect(readLedgerHash(`#find=${"a".repeat(500)}`)).toEqual({ find: "a".repeat(LEDGER_FIND_MAX) });
+    expect(ledgerHash({ find: "b".repeat(500) })).toBe(`#find=${"b".repeat(LEDGER_FIND_MAX)}`);
   });
 });
