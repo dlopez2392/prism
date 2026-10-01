@@ -16,6 +16,7 @@ import { CategoryFixDialog } from "@/components/category-fixer";
 import { CategoryIcon } from "@/components/category-icon";
 import { CATEGORIES } from "@/lib/finance/categories";
 import { money, shortDate } from "@/lib/finance/format";
+import { normalizeMerchant } from "@/lib/finance/recurring";
 import type { CategoryId, Transaction } from "@/lib/finance/types";
 import { readLedgerHash } from "@/lib/finance/view";
 
@@ -62,7 +63,10 @@ export function TransactionsTable({
 
   const rows = useMemo(() => {
     const out = transactions.filter(
-      (t) => (category === "all" || t.category === category) && (q === "" || t.merchant.toLowerCase().includes(q) || money(t.amount).includes(q)),
+      (t) =>
+        (category === "all" || t.category === category) &&
+        // The name as Prism groups it too (store numbers dropped, spaces collapsed): what a ledger link carries.
+        (q === "" || t.merchant.toLowerCase().includes(q) || normalizeMerchant(t.merchant).includes(q) || money(t.amount).includes(q)),
     );
     return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   }, [transactions, category, q]);
