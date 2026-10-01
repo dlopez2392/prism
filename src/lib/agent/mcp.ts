@@ -1,13 +1,16 @@
 // src/lib/agent/mcp.ts
 //
-// Prism as an MCP server: ten read-only tools over the person's money, for
-// Claude, ChatGPT or any MCP client they connect. The data is loaded lazily,
-// once per request, by the loader the endpoint passes in — a tool list or a
-// handshake never touches a bank.
+// Prism as an MCP server: twelve read-only tools over the person's money, for
+// Claude, ChatGPT or any MCP client they connect. Ten answer questions
+// directly; `search` and `fetch` are the pair ChatGPT's deep research reads a
+// connector through (research.ts). The data is loaded lazily, once per
+// request, by the loader the endpoint passes in — a tool list or a handshake
+// never touches a bank.
 
 import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { BRAND } from "@/lib/brand";
+import { RESEARCH_RESULTS_MAX, researchFetch, researchSearch } from "./research";
 import {
   budgets,
   cashFlow,
@@ -32,6 +35,7 @@ export const INSTRUCTIONS = `${BRAND.product} is the user's personal finance app
 - Amounts are US dollars. In transactions, money out is negative and money in is positive.
 - Dates are the user's own calendar; each result says which day "today" is (as_of) and in which time zone.
 - For a broad question ("how am I doing?") start with get_overview; reach for the other tools for detail.
+- search and fetch serve research: search finds documents (summaries, each month and year, each category and merchant of the last 12 months) and fetch reads one in full, with a link to the page in ${BRAND.product} that shows the same figures.
 - When an answer rests on particular transactions, cite them — merchant, date and amount. Their ids are stable.
 - If a result says demo: true, the money is ${BRAND.product}'s example household, NOT the user's. Say so plainly, and suggest linking a bank in ${BRAND.product}.
 - If a result carries a notice (a bank needing attention, say), pass it on; the figures may be incomplete.
@@ -85,8 +89,8 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       name: "prism",
       title: `${BRAND.product} by ${BRAND.companyShort}`,
       version: MCP_VERSION,
-      websiteUrl: "https://prism.bis-rgv.com",
-      icons: [{ src: "https://prism.bis-rgv.com/icon.svg", mimeType: "image/svg+xml" }],
+      websiteUrl: BRAND.site,
+      icons: [{ src: `${BRAND.site}/icon.svg`, mimeType: "image/svg+xml" }],
     },
     {
       instructions: INSTRUCTIONS,
@@ -217,6 +221,45 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Net worth", ...READ_ONLY },
     },
     run(netWorth),
+  );
+
+  // — Deep research: the two tools ChatGPT reads a connector through, by these exact names and shapes. —
+
+  server.registerTool(
+    "search",
+    {
+      title: "Search the user's money",
+      description: `Find documents about the user's money for research. Returns up to ${RESEARCH_RESULTS_MAX}, each an id, a title and a link to the page in ${BRAND.product} that shows it; read one in full with fetch. There are summaries (overview, spending, cash flow, budgets, bills, accounts, net worth, goals, income), each month and each year, and each spending category and each merchant of the last 12 months. Name what you're after: 'groceries', a merchant, 'March 2026', '2025', 'last month', 'subscriptions'. A question that names nothing returns the summaries.`,
+      inputSchema: z.object({ query: z.string().max(200).describe("What to look for: a merchant, a category, a month or a year, or a topic like 'subscriptions' or 'net worth'.") }),
+      outputSchema: z.object({ results: z.array(z.object({ id: z.string(), title: z.string(), url: z.string() })) }),
+      annotations: { title: "Search the user's money", ...READ_ONLY },
+    },
+    runWith((d, args: { query: string }) => researchSearch(d, BRAND.site, args.query)),
+  );
+
+  server.registerTool(
+    "fetch",
+    {
+      title: "Read a document",
+      description: `Read one document from search in full, by its id: plain text with dates, amounts in US dollars (money out negative) and the id of every transaction behind a figure, plus a link to the page in ${BRAND.product} that shows the same figures.`,
+      inputSchema: z.object({ id: z.string().max(200).describe("An id from search, e.g. 'overview', 'month:2026-03', 'category:food'.") }),
+      outputSchema: z.object({
+        id: z.string(),
+        title: z.string(),
+        text: z.string(),
+        url: z.string(),
+        metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+      }),
+      annotations: { title: "Read a document", ...READ_ONLY },
+    },
+    async ({ id }): Promise<CallToolResult> => {
+      try {
+        const doc = researchFetch(await data(), BRAND.site, id);
+        return doc ? reply(doc) : { isError: true, content: [{ type: "text", text: `No document "${id.slice(0, 200)}". Use an id that search returned.` }] };
+      } catch {
+        return failed();
+      }
+    },
   );
 
   return server;

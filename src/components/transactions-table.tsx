@@ -5,16 +5,20 @@
 // Every transaction, searchable and filterable by category, newest first.
 // The list arrives with the page; filtering is instant because it is local.
 // With `canFix` (a signed-in account's own money), each row opens "Change
-// category"; a row the person changed says so, in words.
+// category"; a row the person changed says so, in words. A link whose
+// #fragment names a category or a merchant (a citation from a connected app's
+// research, view.ts ledgerHash) opens the list already narrowed to it.
 
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { CircleCheck, Search, SearchX } from "lucide-react";
 import clsx from "clsx";
 import { CategoryFixDialog } from "@/components/category-fixer";
 import { CategoryIcon } from "@/components/category-icon";
 import { CATEGORIES } from "@/lib/finance/categories";
 import { money, shortDate } from "@/lib/finance/format";
+import { normalizeMerchant } from "@/lib/finance/recurring";
 import type { CategoryId, Transaction } from "@/lib/finance/types";
+import { readLedgerHash } from "@/lib/finance/view";
 
 const PAGE = 25;
 const FILTERS: (CategoryId | "all")[] = ["all", "housing", "food", "transport", "shopping", "fun", "health", "travel", "bills", "other", "income", "transfer"];
@@ -40,10 +44,29 @@ export function TransactionsTable({
   const [category, setCategory] = useState<CategoryId | "all">("all");
   const [shown, setShown] = useState(PAGE);
   const q = useDeferredValue(query.trim().toLowerCase());
+  const root = useRef<HTMLDivElement>(null);
+
+  // Read after hydration (the server never sees a fragment), and again whenever the fragment changes.
+  useEffect(() => {
+    const narrow = () => {
+      const asked = readLedgerHash(window.location.hash);
+      if (!asked) return;
+      setQuery("find" in asked ? asked.find : "");
+      setCategory("category" in asked ? asked.category : "all");
+      setShown(PAGE);
+      root.current?.scrollIntoView({ block: "start" });
+    };
+    narrow();
+    window.addEventListener("hashchange", narrow);
+    return () => window.removeEventListener("hashchange", narrow);
+  }, []);
 
   const rows = useMemo(() => {
     const out = transactions.filter(
-      (t) => (category === "all" || t.category === category) && (q === "" || t.merchant.toLowerCase().includes(q) || money(t.amount).includes(q)),
+      (t) =>
+        (category === "all" || t.category === category) &&
+        // The name as Prism groups it too (store numbers dropped, spaces collapsed): what a ledger link carries.
+        (q === "" || t.merchant.toLowerCase().includes(q) || normalizeMerchant(t.merchant).includes(q) || money(t.amount).includes(q)),
     );
     return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   }, [transactions, category, q]);
@@ -58,7 +81,7 @@ export function TransactionsTable({
   }
 
   return (
-    <div>
+    <div ref={root} className="scroll-mt-24">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <span className="sr-only">Search transactions</span>

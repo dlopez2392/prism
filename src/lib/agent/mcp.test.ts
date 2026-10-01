@@ -10,7 +10,7 @@ import type { AgentData } from "./tools";
 const data: AgentData = { ...buildDemoData("2026-09-18"), demo: true, notice: null, timeZone: "America/Chicago", budgetsSetByPerson: false };
 
 type Rpc = { jsonrpc: "2.0"; id?: number; result?: Record<string, unknown> & { tools?: Tool[]; content?: { type: string; text: string }[]; isError?: boolean; structuredContent?: Record<string, unknown> }; error?: { code: number; message: string } };
-type Tool = { name: string; inputSchema: { properties?: Record<string, unknown> }; annotations?: Record<string, unknown> };
+type Tool = { name: string; inputSchema: { properties?: Record<string, unknown> }; outputSchema?: { properties?: Record<string, unknown> }; annotations?: Record<string, unknown> };
 
 function serve(load: () => Promise<AgentData>) {
   const handler = createMcpHandler(() => prismMcpServer(load), { legacy: "stateless" });
@@ -87,6 +87,7 @@ describe("the MCP endpoint", () => {
     expect(String(init.result?.instructions)).toMatch(/READ-ONLY/);
     const list = await call("tools/list");
     expect(list.result?.tools?.map((t) => t.name).sort()).toEqual([
+      "fetch",
       "get_budgets",
       "get_cash_flow",
       "get_goals",
@@ -94,6 +95,7 @@ describe("the MCP endpoint", () => {
       "get_net_worth",
       "get_overview",
       "list_accounts",
+      "search",
       "search_transactions",
       "spending_breakdown",
       "upcoming_bills",
@@ -142,5 +144,43 @@ describe("the MCP endpoint", () => {
     expect(r.result?.isError).toBe(true);
     expect(r.result!.content![0]!.text).toMatch(/couldn't load/);
     expect(JSON.stringify(r)).not.toContain("abc123");
+  });
+});
+
+describe("deep research (ChatGPT's search and fetch)", () => {
+  it("declares both by the names and shapes ChatGPT reads, read-only", async () => {
+    const tools = (await serve(async () => data)("tools/list")).result!.tools!;
+    const search = tools.find((t) => t.name === "search")!;
+    const fetch = tools.find((t) => t.name === "fetch")!;
+    expect(Object.keys(search.inputSchema.properties ?? {})).toEqual(["query"]);
+    expect(Object.keys(search.outputSchema?.properties ?? {})).toEqual(["results"]);
+    expect(Object.keys(fetch.inputSchema.properties ?? {})).toEqual(["id"]);
+    expect(Object.keys(fetch.outputSchema?.properties ?? {}).sort()).toEqual(["id", "metadata", "text", "title", "url"]);
+    for (const t of [search, fetch]) expect(t.annotations).toMatchObject({ readOnlyHint: true });
+  });
+
+  it("searches, then fetches a result, each as structured content and the same JSON as text", async () => {
+    const call = serve(async () => data);
+    const found = await call("tools/call", { name: "search", arguments: { query: "groceries" } });
+    expect(found.result?.isError).toBeFalsy();
+    const results = (found.result!.structuredContent as { results: { id: string; title: string; url: string }[] }).results;
+    expect(JSON.parse(found.result!.content![0]!.text)).toEqual({ results });
+    expect(results[0]).toEqual({ id: "category:food", title: "Food & dining: the last 12 months", url: "https://prism.bis-rgv.com/spending?range=12#category=food" });
+
+    const read = await call("tools/call", { name: "fetch", arguments: { id: results[0]!.id } });
+    expect(read.result?.isError).toBeFalsy();
+    const doc = read.result!.structuredContent as { id: string; text: string; url: string; metadata: Record<string, unknown> };
+    expect(JSON.parse(read.result!.content![0]!.text)).toEqual(doc);
+    expect(doc).toMatchObject({ id: "category:food", url: results[0]!.url, metadata: { kind: "category", demo: true } });
+    expect(doc.text).toMatch(/NOT the user's money/);
+  });
+
+  it("says plainly when an id names nothing, and refuses a question too long to be one", async () => {
+    const call = serve(async () => data);
+    const missing = await call("tools/call", { name: "fetch", arguments: { id: "month:1999-01" } });
+    expect(missing.result?.isError).toBe(true);
+    expect(missing.result!.content![0]!.text).toMatch(/Use an id that search returned/);
+    const long = await call("tools/call", { name: "search", arguments: { query: "x".repeat(201) } });
+    expect(long.error ?? long.result?.isError).toBeTruthy();
   });
 });

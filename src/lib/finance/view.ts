@@ -6,7 +6,7 @@
 import type { CategoryRow } from "./cashflow";
 import { CATEGORIES, categoryColor } from "./categories";
 import { addDays, addMonths, daysBetween, eachDay, lastMonths, startOfMonth } from "./dates";
-import type { Cents, ISODate, Transaction } from "./types";
+import type { CategoryId, Cents, ISODate, Transaction } from "./types";
 
 export type SliceData = { id: string; label: string; value: Cents; color: string };
 
@@ -63,4 +63,28 @@ export function dailyBalances(txns: Transaction[], accountId: string, balance: n
     running -= flows.get(days[i]!) ?? 0;
   }
   return out;
+}
+
+/** The longest merchant search a ledger link carries, as long as the search box takes. */
+export const LEDGER_FIND_MAX = 80;
+
+export type LedgerNarrowing = { category: CategoryId } | { find: string };
+
+/**
+ * A link's #fragment that opens a ledger narrowed to one category or one
+ * merchant. A fragment, not a query: a browser never sends it to a server, so
+ * what a person looked for never lands in a request log.
+ */
+export function ledgerHash(narrow: LedgerNarrowing): string {
+  const params: [string, string] = "category" in narrow ? ["category", narrow.category] : ["find", narrow.find.trim().slice(0, LEDGER_FIND_MAX)];
+  return `#${new URLSearchParams([params]).toString()}`;
+}
+
+/** What a ledger link's #fragment asks for, or null when it asks for nothing a ledger knows. */
+export function readLedgerHash(hash: string): LedgerNarrowing | null {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const category = params.get("category");
+  if (category && Object.hasOwn(CATEGORIES, category)) return { category: category as CategoryId };
+  const find = params.get("find")?.trim().slice(0, LEDGER_FIND_MAX);
+  return find ? { find } : null;
 }
