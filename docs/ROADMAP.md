@@ -155,4 +155,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    linked), the job reads the person's banks before deciding what to send, so
    alerts don't wait on a visit: sealed sources through a secret-gated
    function, balances and new transactions only, writing back only the bank's
-   copy (version-guarded) and the snapshot.
+   copy (version-guarded) and the snapshot. **Phone app built (2026-10-01):**
+   Prism installs to a Home Screen (web app manifest, icons, a service worker
+   that only shows notifications), and each alert email's news also goes to
+   the person's devices as an end-to-end encrypted Web Push notification
+   (RFC 8291/8292 in `node:crypto`, no new dependency; VAPID key derived from
+   `CRON_SECRET`). Next, if people ask for it: notifications without the
+   emails (a channel choice per person), and offline reading.

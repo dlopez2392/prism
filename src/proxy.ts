@@ -70,13 +70,16 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// Never the installed app's own files (icons, the manifest, the notification
+// service worker): a browser fetches them on its own schedule, and a session
+// refresh spent on one of those requests could sign the person out.
 // Literals only, repeated on purpose: Next reads this config at build time
 // and refuses anything it can't evaluate statically. A session cookie longer
 // than 3,180 bytes is split into prism-auth.0, prism-auth.1, …
 export const config = {
   matcher: [
     {
-      source: "/((?!api/|_next/static|_next/image|icon.svg|calendar/demo.ics|calendar/feed/).*)",
+      source: "/((?!api/|_next/static|_next/image|icon.svg|apple-icon.png|icons/|sw.js|manifest.webmanifest|calendar/demo.ics|calendar/feed/).*)",
       has: [{ type: "cookie", key: "prism-auth" }],
       missing: [
         { type: "header", key: "next-router-prefetch" },
@@ -84,7 +87,7 @@ export const config = {
       ],
     },
     {
-      source: "/((?!api/|_next/static|_next/image|icon.svg|calendar/demo.ics|calendar/feed/).*)",
+      source: "/((?!api/|_next/static|_next/image|icon.svg|apple-icon.png|icons/|sw.js|manifest.webmanifest|calendar/demo.ics|calendar/feed/).*)",
       has: [{ type: "cookie", key: "prism-auth.0" }],
       missing: [
         { type: "header", key: "next-router-prefetch" },
@@ -92,7 +95,7 @@ export const config = {
       ],
     },
     {
-      source: "/((?!api/|_next/static|_next/image|icon.svg|calendar/demo.ics|calendar/feed/).*)",
+      source: "/((?!api/|_next/static|_next/image|icon.svg|apple-icon.png|icons/|sw.js|manifest.webmanifest|calendar/demo.ics|calendar/feed/).*)",
       has: [{ type: "cookie", key: "prism-coinbase" }],
       missing: [
         { type: "header", key: "next-router-prefetch" },

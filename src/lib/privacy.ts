@@ -108,3 +108,15 @@ export function providers(homeValues: boolean, alchemy = false, alerts = false):
   const base = alerts ? PROVIDERS.map((p) => (p.name === RESEND_WITH_ALERTS.name ? RESEND_WITH_ALERTS : p)) : PROVIDERS;
   return [...base, MEMPOOL, ...(alchemy ? [ALCHEMY] : []), ...(homeValues ? [RENTCAST] : [])];
 }
+
+/**
+ * The push services that carry alerts to a device someone turns them on for
+ * (Account page). Not a processor Prism picks: each browser uses its own
+ * maker's. Listed under "only when you choose", while alerts are on offer.
+ */
+export const PUSH_SERVICES: Provider[] = [
+  { name: "Apple", does: "Safari, on an iPhone, iPad or Mac.", policy: "https://www.apple.com/legal/privacy/" },
+  { name: "Google", does: "Chrome, and Android.", policy: "https://policies.google.com/privacy" },
+  { name: "Mozilla", does: "Firefox.", policy: "https://www.mozilla.org/privacy/firefox/" },
+  { name: "Microsoft", does: "Edge on Windows.", policy: "https://privacy.microsoft.com/privacystatement" },
+];

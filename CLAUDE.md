@@ -199,6 +199,22 @@
   version read (`alerts_save_sync`) and the snapshot. Never give the job a
   service-role key, never widen what it reads or writes beyond that, and keep
   amounts out of an email whose owner turned them off.
+- Alerts on a device (Web Push; `src/lib/alerts/webpush.ts`, migration
+  `phone_alerts`): the same news as the email, sent by the same job only
+  AFTER the email went, built by `phoneAlertFor` from the email's own words
+  (so amounts follow the person's choice). Encryption (RFC 8291) and VAPID
+  (RFC 8292) are `node:crypto` only; keep them pinned to RFC 8291's worked
+  example in `webpush.test.ts`. The VAPID key is HKDF of `CRON_SECRET`, never
+  a separate variable. A push goes ONLY to a host in `PUSH_HOSTS` (Apple,
+  Google, Mozilla, Microsoft) — a new one means naming it in `PUSH_SERVICES`
+  on the privacy policy first (`privacy.test.ts` holds it). Subscriptions are
+  sealed in `push_subscriptions`, five a person, kept only while alert emails
+  are on (the `profiles_forget_alerts` trigger deletes them), written AS the
+  person (`src/lib/server/phones.ts`), and reached by the job only through
+  `push_due`/`push_forget`. `public/sw.js` shows notifications and opens
+  same-origin paths only; never give it a fetch handler or a cache — it must
+  never serve money figures from an old visit. Permission is asked only on
+  the person's tap.
 - Bank redirects (OAuth banks): `/connections/return` is the address
   allow-listed with Plaid (`RETURN_PATH`), so never move or rename it. It
   resumes Link with the SAME Link token, kept in the httpOnly
