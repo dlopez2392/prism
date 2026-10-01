@@ -49,6 +49,8 @@ export type Institution = {
   health: "healthy" | "syncing" | "needs_attention";
   /** Needs the person to sign in at the source again (a changed password, an expired consent); only they can fix it. */
   signInAgain?: true;
+  /** When the bank stops updating unless its owner signs in again (Plaid's week-ahead warning), as an ISO time. */
+  disconnectsAt?: string;
   lastSyncedAt: string | null;
   source: DataSource;
 };

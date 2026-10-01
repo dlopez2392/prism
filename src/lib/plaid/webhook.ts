@@ -93,7 +93,40 @@ export function isSyncWorthy(body: { webhook_type?: unknown; webhook_code?: unkn
     return ["SYNC_UPDATES_AVAILABLE", "INITIAL_UPDATE", "HISTORICAL_UPDATE", "DEFAULT_UPDATE", "TRANSACTIONS_REMOVED"].includes(String(body.webhook_code));
   }
   if (body.webhook_type === "ITEM") {
-    return ["ERROR", "PENDING_EXPIRATION", "PENDING_DISCONNECT", "USER_PERMISSION_REVOKED", "LOGIN_REPAIRED"].includes(String(body.webhook_code));
+    return ["ERROR", "PENDING_EXPIRATION", "PENDING_DISCONNECT", "USER_PERMISSION_REVOKED", "USER_ACCOUNT_REVOKED", "LOGIN_REPAIRED"].includes(String(body.webhook_code));
   }
   return false;
+}
+
+export type BankWarning = { event: "login-required" | "disconnecting" | "revoked" | "repaired"; at: string | null };
+
+const isoTime = (x: unknown): string | null => (typeof x === "string" && x.length <= 40 && Number.isFinite(Date.parse(x)) ? new Date(Date.parse(x)).toISOString() : null);
+
+/**
+ * What an ITEM webhook warns about a bank, if anything (plaid_bank_warning):
+ * it wants its owner to sign in again; its consent ends soon (PENDING_DISCONNECT
+ * in the US and Canada, PENDING_EXPIRATION in Europe, both about a week ahead,
+ * with the time it ends); access was withdrawn; or a sign-in was repaired
+ * elsewhere. Every other webhook warns about nothing.
+ */
+export function bankWarning(body: { webhook_type?: unknown; webhook_code?: unknown; error?: unknown; disconnect_time?: unknown; consent_expiration_time?: unknown }): BankWarning | null {
+  if (body.webhook_type !== "ITEM") return null;
+  switch (body.webhook_code) {
+    case "ERROR": {
+      const code = (body.error as { error_code?: unknown } | null | undefined)?.error_code;
+      return code === "ITEM_LOGIN_REQUIRED" ? { event: "login-required", at: null } : null;
+    }
+    case "PENDING_DISCONNECT":
+    case "PENDING_EXPIRATION": {
+      const at = isoTime(body.webhook_code === "PENDING_DISCONNECT" ? body.disconnect_time : body.consent_expiration_time);
+      return at ? { event: "disconnecting", at } : null;
+    }
+    case "USER_PERMISSION_REVOKED":
+    case "USER_ACCOUNT_REVOKED":
+      return { event: "revoked", at: null };
+    case "LOGIN_REPAIRED":
+      return { event: "repaired", at: null };
+    default:
+      return null;
+  }
 }

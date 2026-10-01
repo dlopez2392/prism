@@ -84,9 +84,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    Link token server-side by person would resume it, but only after the
    person also signs in to Prism in that other browser, so it saves one bank
    sign-in in a rare case: deferred until real use shows it happening. Also
-   deferred: warning a person BEFORE a bank's consent lapses (Plaid's
-   `PENDING_DISCONNECT` webhook, a week ahead), which needs the warning kept
-   on the bank's row; today the bank asks for the sign-in once it lapses.
+   deferred, then **built (2026-10-01)**: warning a person BEFORE a bank's
+   consent lapses (Plaid's `PENDING_DISCONNECT` webhook, a week ahead): the
+   warning is kept on the bank's row (`plaid_bank_warning`), Connections shows
+   "Sign in by <date>" with the button, and Overview a Heads up.
 3. **Editable budgets and goals**, saved per person. **Built on the device
    (2026-09-27):** people set every budget line, add, edit and delete goals,
    and save a what-if amount; the plan lives in two validated cookies on this
@@ -140,3 +141,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    calendar land on the real day. Income is counted by kind (pay, interest,
    dividends, benefits, tax refunds…) from the bank's own category, or the
    deposit's name when there is none.
+9. **Alerts.** **In the app built (2026-10-01):** a Heads up on Overview for a
+   bank that has stopped updating or will within the week, and a bill before
+   payday the account won't cover; price rises stay among the insights.
+   **Next:** opt-in email alerts and a Monday summary, sent by a daily job
+   that reaches the database only through functions answering to a secret
+   held in Vercel (no service-role key), from a sealed snapshot each visit
+   leaves; then a daily bank refresh so alerts don't wait on a visit.

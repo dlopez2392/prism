@@ -13,6 +13,7 @@ import { CategoryIcon } from "@/components/category-icon";
 import { Card } from "@/components/ui";
 import { CATEGORIES } from "@/lib/finance/categories";
 import { dayDate, money, shortDate } from "@/lib/finance/format";
+import type { Alert } from "@/lib/finance/alerts";
 import type { ForecastEvent } from "@/lib/finance/forecast";
 import type { Insight } from "@/lib/finance/insights";
 import type { Transaction } from "@/lib/finance/types";
@@ -167,3 +168,35 @@ export function SeeAll({ href, children }: { href: string; children: ReactNode }
   );
 }
 
+const ALERT_ACTION: Record<Alert["kind"], string> = { bank: "Go to Connections", "bill-short": "See the forecast", "price-rise": "See your bills" };
+
+/**
+ * What needs acting on now (alerts.ts): a bank that has stopped updating or
+ * soon will, a bill the account won't cover. Each says what to do and links
+ * to where to do it. Shown only when there is something.
+ */
+export function HeadsUp({ alerts }: { alerts: Alert[] }) {
+  if (alerts.length === 0) return null;
+  return (
+    <section aria-label="Heads up" className="rounded-card border border-line bg-surface-1 p-4 shadow-card sm:p-5">
+      <ul className="space-y-3">
+        {alerts.map((x) => (
+          <li key={x.id} className="flex gap-3">
+            <div className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2">
+              <TriangleAlert aria-hidden className={clsx("size-4", x.urgent ? "text-crit" : "text-warn")} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-3">Heads up</div>
+              <div className="mt-0.5 text-sm font-bold text-ink-1">{x.title}</div>
+              <p className="mt-1 text-[13px] text-ink-2">{x.detail}</p>
+              <Link href={x.href} className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-accent-ink hover:underline">
+                {ALERT_ACTION[x.kind]}
+                <ChevronRight aria-hidden className="size-3.5" />
+              </Link>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

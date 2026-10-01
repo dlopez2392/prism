@@ -105,7 +105,8 @@ Wells Fargo, Capital One and most large banks; Plaid calls this OAuth):
 - **Plaid's webhook says when there's news.** New links register
   `https://<your-domain>/api/plaid/webhook` (override with
   `PLAID_WEBHOOK_URL`). The endpoint believes only Plaid's ES256 signature
-  over the exact body, and then does one thing: flags that bank. Prism holds
+  over the exact body, and then flags that bank, keeping any warning about
+  it (sign in again, consent ending, access withdrawn: see Alerts). Prism holds
   no privileged key, so the person's own next visit — or their next question
   to a connected app — does the sync, as them. With no webhook, a copy older
   than 15 minutes is refreshed anyway.
@@ -129,6 +130,26 @@ Wells Fargo, Capital One and most large banks; Plaid calls this OAuth):
   replay, so Claude gets what's new, in memory, and the stored copy is left
   for the person's own visits.
 - A signed-out device keeps no copy and reads its banks in full, as before.
+
+## Alerts
+
+Prism says when something needs acting on, rather than waiting to be opened
+(`src/lib/finance/alerts.ts`, pure, each alert with an id for its occasion and
+a wording without dollar amounts):
+
+- **A bank that has stopped updating, or soon will.** Plaid's ITEM webhooks
+  are kept as a warning on the bank (`plaid_bank_warning`, which sets three
+  plain columns and nothing else): sign in again (`ITEM_LOGIN_REQUIRED`),
+  consent ending on a date (`PENDING_DISCONNECT` in the US and Canada,
+  `PENDING_EXPIRATION` in Europe, about a week ahead), or access withdrawn.
+  A sign-in or a withdrawal ends when Plaid answers again; a consent running
+  out ends only when its owner finishes "Sign in again".
+- **A bill before payday the account won't cover:** the first bill before
+  the next paycheck after which the forecast takes the account below zero.
+- **A recurring charge that just went up** (for 35 days after the rise).
+
+On Overview, the urgent ones show as a **Heads up** at the top, on the
+person's own view only. Email alerts (opt-in, with a weekly summary) are next.
 
 ## Link Coinbase (read-only)
 
@@ -363,14 +384,14 @@ with any key in the ring too, so retiring a key ends those as well.
 
 | Screen | What it shows |
 |---|---|
-| **Overview** | Net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
+| **Overview** | A **Heads up** for anything to act on now (a bank that has stopped updating or will within the week, a bill before payday the account won't cover), net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
 | **Cash flow** | Income → categories → saved **Sankey**; **your paychecks** (who pays you, how often, what lands, the next payday) and where your income comes from, by kind; money in vs out by month, what you kept each month, savings-rate trend |
 | **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop, kept sealed in their account and applied everywhere, Claude included) |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
-| **Connections** | Per-institution health, how data is protected, an honest catalogue of every integration and its real access path, **Import history** from a Mint, Monarch or bank CSV (read in the browser, never uploaded), and, in a household, **Shared / Private** for each of the person's accounts (Coinbase included: the household sees its total value as of the owner's last visit) |
+| **Connections** | Per-institution health (with **Sign in by <date>** a week before a bank's consent runs out), how data is protected, an honest catalogue of every integration and its real access path, **Import history** from a Mint, Monarch or bank CSV (read in the browser, never uploaded), and, in a household, **Shared / Private** for each of the person's accounts (Coinbase included: the household sees its total value as of the owner's last visit) |
 | **Household** | Overview, Cash flow, Spending, Budgets, Future, Goals and Net worth over what every member shared, each account marked with whose it is; shared budgets and goals any member can change, showing who changed them last; invitations and members on the Account page, and a join page for the link |
 
 ## How it's built

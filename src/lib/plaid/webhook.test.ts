@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaidConfig } from "./client";
-import { forgetWebhookKeys, isSyncWorthy, verifyPlaidWebhook } from "./webhook";
+import { bankWarning, forgetWebhookKeys, isSyncWorthy, verifyPlaidWebhook } from "./webhook";
 
 const config: PlaidConfig = { clientId: "c", secret: "s", env: "sandbox", host: "https://plaid.test" };
 const NOW = 1_790_600_000_000;
@@ -96,5 +96,29 @@ describe("which webhooks mean 'sync this bank'", () => {
     expect(isSyncWorthy({ webhook_type: "ITEM", webhook_code: "WEBHOOK_UPDATE_ACKNOWLEDGED" })).toBe(false);
     expect(isSyncWorthy({ webhook_type: "HOLDINGS", webhook_code: "DEFAULT_UPDATE" })).toBe(false);
     expect(isSyncWorthy({})).toBe(false);
+  });
+});
+
+describe("a bank's warnings, as Plaid sends them", () => {
+  const item = (webhook_code: string, extra: Record<string, unknown> = {}) => bankWarning({ webhook_type: "ITEM", webhook_code, ...extra });
+
+  it("knows a sign-in, a consent ending on a date, a withdrawal and a repair", () => {
+    expect(item("ERROR", { error: { error_code: "ITEM_LOGIN_REQUIRED" } })).toEqual({ event: "login-required", at: null });
+    // US and Canada say PENDING_DISCONNECT with disconnect_time; Europe says PENDING_EXPIRATION with consent_expiration_time.
+    expect(item("PENDING_DISCONNECT", { reason: "INSTITUTION_TOKEN_EXPIRATION", disconnect_time: "2026-10-08T13:25:17.766Z" })).toEqual({ event: "disconnecting", at: "2026-10-08T13:25:17.766Z" });
+    expect(item("PENDING_EXPIRATION", { consent_expiration_time: "2026-10-08T13:25:17Z" })).toEqual({ event: "disconnecting", at: "2026-10-08T13:25:17.000Z" });
+    expect(item("USER_PERMISSION_REVOKED")).toEqual({ event: "revoked", at: null });
+    expect(item("USER_ACCOUNT_REVOKED")).toEqual({ event: "revoked", at: null });
+    expect(item("LOGIN_REPAIRED")).toEqual({ event: "repaired", at: null });
+    expect(isSyncWorthy({ webhook_type: "ITEM", webhook_code: "USER_ACCOUNT_REVOKED" })).toBe(true);
+  });
+
+  it("warns about nothing else: other errors, a consent with no date, other kinds of webhook", () => {
+    expect(item("ERROR", { error: { error_code: "INSTITUTION_DOWN" } })).toBeNull();
+    expect(item("ERROR", { error: null })).toBeNull();
+    expect(item("PENDING_DISCONNECT")).toBeNull();
+    expect(item("PENDING_DISCONNECT", { disconnect_time: "soon" })).toBeNull();
+    expect(item("NEW_ACCOUNTS_AVAILABLE")).toBeNull();
+    expect(bankWarning({ webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE" })).toBeNull();
   });
 });

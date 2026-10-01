@@ -18,7 +18,9 @@ import type { Env } from "@/lib/plaid/client";
 export const VAULT_COOKIE = "prism-vault";
 export const VAULT_MAX_AGE = 60 * 60 * 24 * 30;
 
-export type VaultItem = { itemId: string; accessToken: string; institutionId: string | null; institutionName: string | null; linkedAt: string };
+/** What Plaid last warned about a linked bank (plaid_bank_warning); kept with the account, never in a device's vault. */
+export type BankAttention = { state: "sign-in" | "disconnecting" | "revoked"; disconnectAt: string | null };
+export type VaultItem = { itemId: string; accessToken: string; institutionId: string | null; institutionName: string | null; linkedAt: string; attention?: BankAttention };
 export type Vault = { v: 1; userId: string; items: VaultItem[] };
 
 export function emptyVault(): Vault {

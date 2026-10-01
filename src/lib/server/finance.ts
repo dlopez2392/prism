@@ -36,7 +36,7 @@ import { coinbaseNeedsSignIn, mapCoinbase, sharedCoinbase, validCoinbaseValue } 
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
 import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
-import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveWalletReadings, saveAccountTimeZone, saveCoinbaseValue, saveFeedSnapshot, type AccountSources } from "./account-store";
+import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveWalletReadings, saveAccountTimeZone, saveCoinbaseValue, saveFeedSnapshot, type AccountSources, clearBankAttention } from "./account-store";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { loadHouseholdPlan, loadShares, loadSharedMoney, type HouseholdPlan, type SharedMoneyRow } from "./household-store";
 import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
@@ -155,7 +155,12 @@ export type Sources = {
 };
 
 /** Where a bank's sync starts from, and where a newer one goes — `save` is null when nothing may be written. */
-type PlaidSync = { stored: Map<string, StoredSync>; save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null };
+type PlaidSync = {
+  stored: Map<string, StoredSync>;
+  save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null;
+  /** Where a bank's warning is cleared once Plaid answers (sign-in, revoked only) — null when nothing may be written. */
+  clear: ((itemId: string) => void) | null;
+};
 
 /**
  * Wallets as last read, where fresher readings go, and who reads a whole
@@ -247,6 +252,13 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
                 ),
               )
           : null,
+        // After the response too: a bank that answered is no longer waiting on a sign-in. Never a consent still running out.
+        clear: (itemId) =>
+          after(() =>
+            clearBankAttention(account, itemId, { only: ["sign-in", "revoked"] }).catch((e: unknown) =>
+              console.error("Prism: a bank's warning wasn't cleared:", e instanceof Error ? e.name : "unknown error"),
+            ),
+          ),
       },
     };
   }
@@ -558,7 +570,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
   const src: Money = {
     items: plaid ? a.items : [],
     // Catch up from the stored cursor in memory; a connected app never saves (and the database wouldn't let it).
-    plaidSync: { stored: a.plaidSync, save: null },
+    plaidSync: { stored: a.plaidSync, save: null, clear: null },
     categories: a.categories,
     manual: a.manual,
     imports: a.imports,
@@ -675,12 +687,14 @@ async function bankFor(
   syncedAt: string;
   fromCopy: boolean;
   signInAgain: boolean;
+  /** Plaid answered just now (not a stored copy served without asking): proof the bank's sign-in works. */
+  answered: boolean;
 }> {
   const stored = sync?.stored.get(item.itemId) ?? null;
   const copy = stored?.state ?? null;
   const kept = copy?.liabilities?.list ?? [];
   if (copy?.accounts && !needsSync(stored)) {
-    return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored!.syncedAt!, fromCopy: false, signInAgain: false };
+    return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored!.syncedAt!, fromCopy: false, signInAgain: false, answered: false };
   }
   const startedAt = new Date().toISOString();
   let next: SyncState;
@@ -689,7 +703,7 @@ async function bankFor(
     next = { ...synced, accounts: acc.accounts };
   } catch (e) {
     if (copy?.accounts && stored?.syncedAt) {
-      return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true, signInAgain: isReauth(e) };
+      return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true, signInAgain: isReauth(e), answered: false };
     }
     throw e;
   }
@@ -709,7 +723,7 @@ async function bankFor(
   if (liabilities) next = { ...next, liabilities };
   // Outside the try: a problem keeping the copy is never mistaken for Plaid being down.
   sync?.save?.(item.itemId, next, stored?.version ?? 0, startedAt);
-  return { accounts: next.accounts ?? [], transactions: next.transactions, liabilities: liabilities?.list ?? [], ready: next.ready, syncedAt: startedAt, fromCopy: false, signInAgain: false };
+  return { accounts: next.accounts ?? [], transactions: next.transactions, liabilities: liabilities?.list ?? [], ready: next.ready, syncedAt: startedAt, fromCopy: false, signInAgain: false, answered: true };
 }
 
 async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate, sync: PlaidSync | null = null, rules: CategoryRules = NO_RULES): Promise<Live> {
@@ -735,15 +749,23 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
             return t ? { ...account, liability: toLiability(t, today) } : account;
           }),
         );
+        // Plaid's own warning (plaid_bank_warning) stands until Plaid answers again: an answer ends a sign-in or a withdrawal.
+        let warning = item.attention;
+        if (warning && bank.answered && warning.state !== "disconnecting") {
+          sync?.clear?.(item.itemId);
+          warning = undefined;
+        }
+        const signIn = bank.signInAgain || warning?.state === "sign-in" || warning?.state === "revoked";
+        const disconnectsAt = !signIn && warning?.state === "disconnecting" ? warning.disconnectAt : null;
         institutions.push(
-          bank.signInAgain
+          signIn
             ? { id: item.itemId, name, health: "needs_attention", signInAgain: true, lastSyncedAt: bank.syncedAt, source: "plaid" }
-            : { id: item.itemId, name, health: bank.ready ? "healthy" : "syncing", lastSyncedAt: bank.syncedAt, source: "plaid" },
+            : { id: item.itemId, name, health: bank.ready ? "healthy" : "syncing", lastSyncedAt: bank.syncedAt, source: "plaid", ...(disconnectsAt ? { disconnectsAt } : {}) },
         );
-        if (bank.signInAgain) problems.push(`${name} needs you to sign in again — showing it as of the last sync.`);
+        if (signIn) problems.push(`${name} needs you to sign in again — showing it as of the last sync.`);
         else if (bank.fromCopy) problems.push(`${name} couldn't be updated just now — showing it as of the last sync.`);
         // Holdings aren't kept in the copy, and a bank waiting on a sign-in would only refuse again.
-        if (!bank.signInAgain && bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
+        if (!signIn && bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
           try {
             const h = await getHoldings(config, item.accessToken);
             holdings.push(...mapHoldings(h.holdings, h.securities));
