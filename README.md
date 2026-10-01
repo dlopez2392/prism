@@ -164,6 +164,18 @@ anyone's money as itself:
   week's figures, the next two weeks' bills) is sealed with the vault key into
   `alert_snapshots`, and only while their emails are on. Turning them off
   deletes it (a trigger). Bank warnings come straight from `plaid_items`.
+- **The morning check reads the banks first** (`src/lib/alerts/refresh.ts`),
+  for someone who left "Check my banks each morning" on
+  (`profiles.alert_refresh`) and has no Coinbase linked, when their snapshot
+  is over 12 hours old. It is the one place Prism reads a bank without its
+  owner present, so it is narrow: `alerts_sources` hands the job that
+  person's SEALED sources (never a home's address), the job opens them with
+  the vault key and draws their money exactly as a visit does
+  (`morningFinance`), asking Plaid only for balances and new transactions
+  (no holdings, no card terms) and nobody about wallets, and writes back only
+  the bank's sealed copy, over the version it read (`alerts_save_sync`), and
+  a "morning" snapshot (`alerts_save_snapshot`). 15 seconds a person at most;
+  the email then says the figures are from that check.
 - **The job answers to a secret.** Vercel Cron calls the route with
   `CRON_SECRET`; the database keeps only its sha256 (`job_keys`, unreadable
   over the API) and answers `alerts_due`, `alerts_sent` and `alerts_stop`

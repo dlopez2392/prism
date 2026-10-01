@@ -38,7 +38,12 @@ describe("saving alert email choices", () => {
   it("keeps the kinds Prism offers, once each, and whether amounts may show", async () => {
     const state = await saveAlertEmails(IDLE, form([["on", "on"], ["kinds", "bank"], ["kinds", "weekly"], ["kinds", "weekly"], ["kinds", "everything"]]));
     expect(state).toMatchObject({ status: "saved" });
-    expect(saveAlertSettings).toHaveBeenCalledWith(signedIn.current, { on: true, kinds: ["bank", "weekly"], amounts: false });
+    expect(saveAlertSettings).toHaveBeenCalledWith(signedIn.current, { on: true, kinds: ["bank", "weekly"], amounts: false, refresh: false });
+  });
+
+  it("keeps whether Prism may check their banks each morning", async () => {
+    await saveAlertEmails(IDLE, form([["on", "on"], ["kinds", "bill-short"], ["refresh", "on"]]));
+    expect(saveAlertSettings).toHaveBeenCalledWith(signedIn.current, { on: true, kinds: ["bill-short"], amounts: false, refresh: true });
   });
 
   it("asks for at least one kind when they're on", async () => {

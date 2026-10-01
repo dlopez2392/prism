@@ -38,6 +38,7 @@ function snapshot(over: Partial<AlertSnapshot> = {}): AlertSnapshot {
   return {
     v: 1,
     at: "2026-10-04T18:00:00.000Z",
+    by: "visit",
     today: "2026-10-04",
     alerts: [bill, rise],
     weekly: { from: "2026-09-27", to: "2026-10-03", spent: 84_000, spentBefore: 80_000, month: { spent: 30_000, limit: 200_000 }, netWorth: 1_250_000, netWorthLastMonth: 1_200_000 },
@@ -63,7 +64,7 @@ describe("an alert email", () => {
     expect(e.subject).toBe(`${bill.title}, and 1 more`);
     expect(e.fingerprints).toEqual([fingerprint(U, bill.id), fingerprint(U, rise.id)]);
     expect(e.summary).toBeNull();
-    expect(e.asOf).toBe("2026-10-04");
+    expect(e.asOf).toEqual({ day: "2026-10-04", by: "visit" });
   });
 
   it("sends each piece once: what was already sent is left out, and nothing new means no email", () => {

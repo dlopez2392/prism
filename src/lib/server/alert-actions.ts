@@ -23,13 +23,14 @@ export async function saveAlertEmails(_prev: PlanFormState, form: FormData): Pro
   const on = form.get("on") === "on";
   const kinds = [...new Set(form.getAll("kinds").filter(isAlertChoice))];
   const amounts = form.get("amounts") === "on";
+  const morning = form.get("refresh") === "on";
   if (on && kinds.length === 0) {
     const message = "Choose at least one kind of alert, or turn the emails off.";
     return { status: "error", message, fields: { kinds: message } };
   }
   try {
     // Off saves only that: the kinds and amounts stay as chosen for when they're turned back on.
-    await saveAlertSettings(account, on ? { on, kinds, amounts } : { on });
+    await saveAlertSettings(account, on ? { on, kinds, amounts, refresh: morning } : { on });
   } catch {
     return { status: "error", message: "We couldn't save that just now. Try again in a minute." };
   }

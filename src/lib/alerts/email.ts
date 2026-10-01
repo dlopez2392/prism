@@ -23,7 +23,13 @@ const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").rep
 
 function footerWords(email: Email): string[] {
   return [
-    ...(email.asOf ? [`Bills, prices and figures are as of your visit to ${BRAND.product} on ${dayDate(email.asOf)}; a bank's warning is as it reached ${BRAND.product}.`] : []),
+    ...(email.asOf
+      ? [
+          email.asOf.by === "morning"
+            ? `Bills, prices and figures are from ${BRAND.product}'s check of your banks on ${dayDate(email.asOf.day)}; a bank's warning is as it reached ${BRAND.product}.`
+            : `Bills, prices and figures are as of your visit to ${BRAND.product} on ${dayDate(email.asOf.day)}; a bank's warning is as it reached ${BRAND.product}.`,
+        ]
+      : []),
     `You asked ${BRAND.product} for these emails. Choose what they cover on your Account page, or stop them with one click.`,
   ];
 }

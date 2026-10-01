@@ -2,10 +2,11 @@
 //
 // One run of the alert email job: ask the database who is due (alerts_due,
 // which answers only to the job's secret), open each snapshot with the vault
-// key, work out what's new (plan.ts), send it (send.ts), and record what went
-// (alerts_sent), so it goes once. People are taken one at a time and the run
-// stops at its deadline; whoever is left is first in line tomorrow, since
-// nothing of theirs was recorded as sent.
+// key, check their banks again first where they allowed it and the snapshot
+// is old (refresh.ts), work out what's new (plan.ts), send it (send.ts), and
+// record what went (alerts_sent), so it goes once. People are taken one at a
+// time and the run stops at its deadline; whoever is left is first in line
+// tomorrow, since nothing of theirs was recorded as sent.
 //
 // It logs counts only, never an address, a name or an amount.
 
@@ -15,6 +16,7 @@ import { validSnapshot } from "@/lib/finance/alert-snapshot";
 import { openPacked, type VaultKey } from "@/lib/server/vault";
 import { renderEmail } from "./email";
 import { emailFor, isAlertChoice, type BankFlag, type Recipient } from "./plan";
+import { morningCheck } from "./refresh";
 import { sendAlertEmail, unsubscribeLinks, type AlertsConfig } from "./send";
 
 /** The few database calls the job makes, all through the anon key and the secret. */
@@ -27,11 +29,40 @@ type DueRow = {
   kinds: unknown;
   amounts: boolean;
   sealed: string | null;
+  snapshot_at: string | null;
   banks: unknown;
   sent: unknown;
+  /** They allowed the morning check (and have no Coinbase linked). */
+  refresh: boolean;
 };
 
-export type JobReport = { due: number; sent: number; quiet: number; failed: number; refused: number; unopened: number; later: number; stopped: boolean };
+export type JobReport = {
+  due: number;
+  sent: number;
+  quiet: number;
+  failed: number;
+  refused: number;
+  unopened: number;
+  /** Morning checks that left a new snapshot, and ones that didn't finish (the last snapshot stood). */
+  refreshed: number;
+  unrefreshed: number;
+  later: number;
+  stopped: boolean;
+};
+
+/** A snapshot younger than this is today's already (a visit, or a check that ran): no need to read the banks again. */
+export const REFRESH_AFTER_MS = 12 * 60 * 60_000;
+/** The longest one person's morning check may take; Plaid's own timeout is longer. */
+export const REFRESH_LIMIT_MS = 15_000;
+
+/** A morning check, or null if it doesn't finish in time (it may still land; the email goes from what's known). */
+function withinLimit<T>(work: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+}
 
 const ATTENTION = new Set(["sign-in", "disconnecting", "revoked"]);
 const time = (x: unknown): string | null => (typeof x === "string" && Number.isFinite(Date.parse(x)) ? x : null);
@@ -71,7 +102,7 @@ export async function runAlertJob(
   const { data, error } = await db.rpc("alerts_due", { p_secret: config.secret });
   if (error || !Array.isArray(data)) throw new Error("The database didn't say who is due an alert email.");
   const rows = data as DueRow[];
-  const report: JobReport = { due: rows.length, sent: 0, quiet: 0, failed: 0, refused: 0, unopened: 0, later: 0, stopped: false };
+  const report: JobReport = { due: rows.length, sent: 0, quiet: 0, failed: 0, refused: 0, unopened: 0, refreshed: 0, unrefreshed: 0, later: 0, stopped: false };
 
   for (const [i, row] of rows.entries()) {
     if (report.stopped || Date.now() > deadline) {
@@ -80,6 +111,19 @@ export async function runAlertJob(
     }
     const { r, unopened } = recipient(row, key);
     if (unopened) report.unopened++;
+    const old = !row.snapshot_at || now.getTime() - Date.parse(row.snapshot_at) > REFRESH_AFTER_MS;
+    // Only with time to finish it and still send: a check that can't fit waits for tomorrow.
+    if (row.refresh === true && (old || unopened) && Date.now() + REFRESH_LIMIT_MS < deadline) {
+      try {
+        const fresh = await withinLimit(morningCheck(db, config, key, r.userId, now), REFRESH_LIMIT_MS);
+        if (fresh) {
+          r.snapshot = fresh;
+          report.refreshed++;
+        } else report.unrefreshed++;
+      } catch {
+        report.unrefreshed++;
+      }
+    }
     const email = emailFor(r, now);
     if (!email) {
       report.quiet++;
