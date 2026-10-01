@@ -32,8 +32,6 @@ type DueRow = {
   snapshot_at: string | null;
   banks: unknown;
   sent: unknown;
-  /** They allowed the morning check (and have no Coinbase linked). */
-  refresh: boolean;
 };
 
 export type JobReport = {
@@ -55,11 +53,13 @@ export const REFRESH_AFTER_MS = 12 * 60 * 60_000;
 /** The longest one person's morning check may take; Plaid's own timeout is longer. */
 export const REFRESH_LIMIT_MS = 15_000;
 
-/** A morning check, or null if it doesn't finish in time (it may still land; the email goes from what's known). */
-function withinLimit<T>(work: Promise<T>, ms: number): Promise<T | null> {
+const LATE = Symbol("late");
+
+/** A morning check, or LATE if it doesn't finish in time (it may still land; the email goes from what's known). */
+function withinLimit<T>(work: Promise<T>, ms: number): Promise<T | typeof LATE> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), ms);
+  const late = new Promise<typeof LATE>((resolve) => {
+    timer = setTimeout(() => resolve(LATE), ms);
   });
   return Promise.race([work, late]).finally(() => clearTimeout(timer));
 }
@@ -112,14 +112,16 @@ export async function runAlertJob(
     const { r, unopened } = recipient(row, key);
     if (unopened) report.unopened++;
     const old = !row.snapshot_at || now.getTime() - Date.parse(row.snapshot_at) > REFRESH_AFTER_MS;
-    // Only with time to finish it and still send: a check that can't fit waits for tomorrow.
-    if (row.refresh === true && (old || unopened) && Date.now() + REFRESH_LIMIT_MS < deadline) {
+    // Only with time to finish it and still send: a check that can't fit waits for tomorrow. Whether
+    // their banks may be read at all is the database's call: alerts_sources hands over nothing otherwise.
+    if ((old || unopened) && Date.now() + REFRESH_LIMIT_MS < deadline) {
       try {
         const fresh = await withinLimit(morningCheck(db, config, key, r.userId, now), REFRESH_LIMIT_MS);
-        if (fresh) {
+        if (fresh === LATE) report.unrefreshed++;
+        else if (fresh) {
           r.snapshot = fresh;
           report.refreshed++;
-        } else report.unrefreshed++;
+        }
       } catch {
         report.unrefreshed++;
       }

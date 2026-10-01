@@ -124,7 +124,7 @@ describe("the alert email job", () => {
 
   describe("the morning check", () => {
     const morning: AlertSnapshot = { ...snap, by: "morning", at: "2026-10-06T13:00:00.000Z", today: "2026-10-06" };
-    const oldSnap = { refresh: true, snapshot_at: "2026-10-04T18:00:00.000Z" };
+    const oldSnap = { snapshot_at: "2026-10-04T18:00:00.000Z" };
     afterEach(() => {
       morningCheck.mockReset();
       morningCheck.mockResolvedValue(null);
@@ -141,10 +141,16 @@ describe("the alert email job", () => {
       expect(html).toMatch(/check of your banks on Tue, Oct 6/);
     });
 
-    it("leaves the banks alone for someone who didn't allow it, or whose snapshot is recent", async () => {
-      await runAlertJob(fakeDb([row({ refresh: false, snapshot_at: "2026-10-01T00:00:00.000Z" })]), config, key, { now: TUESDAY, fetchImpl: resend() });
-      await runAlertJob(fakeDb([row({ refresh: true, snapshot_at: "2026-10-06T08:00:00.000Z" })]), config, key, { now: TUESDAY, fetchImpl: resend() });
+    it("leaves the banks alone when the snapshot is recent", async () => {
+      await runAlertJob(fakeDb([row({ snapshot_at: "2026-10-06T08:00:00.000Z" })]), config, key, { now: TUESDAY, fetchImpl: resend() });
       expect(morningCheck).not.toHaveBeenCalled();
+    });
+
+    it("counts nothing when the database hands nothing over (they didn't allow it), and emails from the last snapshot", async () => {
+      morningCheck.mockResolvedValue(null);
+      const db = fakeDb([row(oldSnap)]);
+      expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl: resend() })).toMatchObject({ refreshed: 0, unrefreshed: 0, sent: 1 });
+      expect(morningCheck).toHaveBeenCalledTimes(1);
     });
 
     it("still emails from the last snapshot when the check fails, and counts it", async () => {

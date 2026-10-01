@@ -1153,12 +1153,6 @@ describe("the morning check", () => {
     expect(JSON.stringify(mine)).not.toMatch(/home/);
     expect(await sources(N)).toBeNull();
     expect(await sources(O)).toBeNull();
-    const due = await job(`select user_id, refresh from public.alerts_due($1) where user_id in ($2, $3, $4) order by user_id`, [SECRET, M, N, O]);
-    expect(due).toEqual([
-      { user_id: M, refresh: true },
-      { user_id: N, refresh: false },
-      { user_id: O, refresh: false },
-    ]);
   });
 
   it("keeps a bank's new copy only over the version read, stamped now, and only when allowed", async () => {

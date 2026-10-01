@@ -14,35 +14,14 @@
 --     transactions (accounts/get, transactions/sync), nothing else;
 --   - writing back exactly two things: a bank's sealed copy, over the very
 --     version it read (as a visit does), and the person's sealed snapshot.
+--
+-- The database alone decides whose banks may be read: the job asks
+-- alerts_sources for anyone whose snapshot is old, and gets null back for
+-- anyone who didn't allow it.
 
 alter table public.profiles add column alert_refresh boolean not null default true;
 comment on column public.profiles.alert_refresh is
   'With alert emails on: whether the job may read this person''s banks each morning before deciding what to send.';
-
--- alerts_due now also says whose banks the job may read this morning.
-drop function public.alerts_due(text);
-create function public.alerts_due(p_secret text)
-returns table (user_id uuid, email text, time_zone text, kinds text[], amounts boolean, sealed text, snapshot_at timestamptz, banks jsonb, sent text[], refresh boolean)
-language plpgsql security definer set search_path = '' as $$
-begin
-  if not public.alert_job_allowed(p_secret) then
-    raise exception 'not allowed' using errcode = '42501';
-  end if;
-  -- Every daily run keeps the delivery log to its 120 days, whether or not anything is sent.
-  delete from public.alert_deliveries d where d.sent_at < now() - interval '120 days';
-  return query
-    select p.user_id, u.email::text, p.time_zone, p.alert_kinds, p.alert_amounts, s.sealed, s.updated_at,
-      coalesce((
-        select jsonb_agg(jsonb_build_object('id', i.item_id, 'name', coalesce(i.institution_name, 'Your bank'), 'attention', i.attention, 'since', i.attention_at, 'disconnect_at', i.disconnect_at))
-        from public.plaid_items i where i.user_id = p.user_id and i.attention is not null
-      ), '[]'::jsonb),
-      coalesce((select array_agg(d.fingerprint) from public.alert_deliveries d where d.user_id = p.user_id), array[]::text[]),
-      p.alert_refresh and not exists (select 1 from public.coinbase_links c where c.user_id = p.user_id)
-    from public.profiles p
-    join auth.users u on u.id = p.user_id
-    left join public.alert_snapshots s on s.user_id = p.user_id
-    where p.alert_email and u.email is not null;
-end $$;
 
 -- May the job read this person's banks now?
 create function public.alert_refresh_allowed(p_user_id uuid) returns boolean
@@ -133,15 +112,12 @@ begin
   return n = 1;
 end $$;
 
-revoke all on function public.alerts_due(text) from public, authenticated;
 revoke all on function public.alerts_sources(text, uuid) from public, authenticated;
 revoke all on function public.alerts_save_sync(text, uuid, text, text, integer, timestamptz) from public, authenticated;
 revoke all on function public.alerts_save_snapshot(text, uuid, text) from public, authenticated;
-grant execute on function public.alerts_due(text) to anon;
 grant execute on function public.alerts_sources(text, uuid) to anon;
 grant execute on function public.alerts_save_sync(text, uuid, text, text, integer, timestamptz) to anon;
 grant execute on function public.alerts_save_snapshot(text, uuid, text) to anon;
-comment on function public.alerts_due(text) is 'Alert email job only (answers to its secret): what each opted-in person''s email needs, and whether their banks may be read this morning.';
 comment on function public.alerts_sources(text, uuid) is 'Alert email job only: a person''s sealed sources for the morning check, when they allowed it and have no Coinbase linked.';
 comment on function public.alerts_save_sync(text, uuid, text, text, integer, timestamptz) is 'Alert email job only: a bank''s new sealed copy, over the version it was read from.';
 comment on function public.alerts_save_snapshot(text, uuid, text) is 'Alert email job only: the person''s alert snapshot, rebuilt from the morning check.';
