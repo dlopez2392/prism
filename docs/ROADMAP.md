@@ -144,7 +144,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
 9. **Alerts.** **In the app built (2026-10-01):** a Heads up on Overview for a
    bank that has stopped updating or will within the week, and a bill before
    payday the account won't cover; price rises stay among the insights.
-   **Next:** opt-in email alerts and a Monday summary, sent by a daily job
-   that reaches the database only through functions answering to a secret
-   held in Vercel (no service-role key), from a sealed snapshot each visit
-   leaves; then a daily bank refresh so alerts don't wait on a visit.
+   **Email built (2026-10-01):** opt-in alert emails and a Monday summary
+   (Account page), sent by a daily Vercel Cron job that reaches the database
+   only through functions answering to `CRON_SECRET` (no service-role key),
+   from a sealed snapshot each visit leaves; Resend, one-click unsubscribe,
+   no tracking. Off until the owner sets `RESEND_API_KEY`, `CRON_SECRET` and
+   the secret's fingerprint (README, "Alert emails"). **Next:** a daily bank
+   refresh so alerts don't wait on a visit.

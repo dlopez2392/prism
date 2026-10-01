@@ -31,6 +31,10 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: "",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
+      RESEND_API_KEY: "",
+      CRON_SECRET: "",
+      ALERTS_FROM: "",
+      ALERTS_SITE_URL: "",
       // Vercel's preview builds run this suite with VERCEL_ENV=preview.
       VERCEL_ENV: "",
       // Replacement vault keys are read by pattern (vaultKey() in src/lib/server/vault.ts),

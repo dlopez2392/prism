@@ -1009,3 +1009,118 @@ describe("home values from RentCast, inside the cap", () => {
     await rows(`insert into public.app_limits (name, value) values ('home_value_lookups_31_days', 45)`);
   });
 });
+
+describe("alert emails", () => {
+  const [P, Q, R] = ["a1000000-0000-4000-8000-0000000000a1", "a1000000-0000-4000-8000-0000000000a2", "a1000000-0000-4000-8000-0000000000a3"];
+  const SECRET = "s".repeat(44);
+  const print = (n: number) => createHash("sha256").update(`print-${n}`).digest("hex");
+  const sealed = "z1." + "a".repeat(40);
+  const job = <T = Record<string, unknown>>(sql: string, params: unknown[] = []) => as("anon", null, () => rows(sql, params) as Promise<T[]>);
+  const snapshotOf = (who: string, claims: Record<string, unknown> = {}) =>
+    as("authenticated", who, () => rows(`insert into public.alert_snapshots (user_id, sealed) values ($1, $2) on conflict (user_id) do update set sealed = excluded.sealed returning user_id`, [who, sealed]), claims);
+
+  beforeAll(async () => {
+    await rows(`insert into auth.users (id, email) values ($1, 'p@x.test'), ($2, 'q@x.test'), ($3, 'r@x.test')`, [P, Q, R]);
+    // The operator stores the secret's sha256 once, from the SQL editor.
+    await rows(`insert into public.job_keys (name, sha256) values ('alerts', $1)`, [createHash("sha256").update(SECRET).digest("hex")]);
+    await as("authenticated", P, () => rows(`update public.profiles set alert_email = true, alert_kinds = array['bank', 'weekly'] where user_id = $1`, [P]));
+    await rows(`insert into public.plaid_items (user_id, item_id, sealed_token, institution_name, attention, attention_at) values ($1, 'item-p', $2, 'First Bank', 'sign-in', now()), ($1, 'item-ok', $2, 'Second Bank', null, null)`, [P, SEALED]);
+  });
+
+  it("answers only the job's secret, whose hash no API role can read or change", async () => {
+    for (const secret of ["wrong".repeat(10), "short", "", SECRET.slice(1)]) expect(await as("anon", null, () => refused(`select * from public.alerts_due($1)`, [secret]))).toBe(true);
+    expect(await as("anon", null, () => refused(`select public.alerts_stop($1, $2)`, ["wrong".repeat(10), P]))).toBe(true);
+    // A signed-in person can't call the job's functions at all, even holding the secret, nor ask whether a guess is right.
+    expect(await as("authenticated", P, () => refused(`select * from public.alerts_due($1)`, [SECRET]))).toBe(true);
+    expect(await as("anon", null, () => refused(`select public.alert_job_allowed($1)`, [SECRET]))).toBe(true);
+    for (const [role, who] of [["anon", null], ["authenticated", P]] as const) {
+      for (const table of ["job_keys", "alert_deliveries"]) {
+        expect(await as(role, who, () => refused(`select * from public.${table}`))).toBe(true);
+        expect(await as(role, who, () => refused(`delete from public.${table}`))).toBe(true);
+      }
+      expect(await as(role, who, () => refused(`insert into public.job_keys (name, sha256) values ('alerts', $1) on conflict (name) do update set sha256 = excluded.sha256`, ["0".repeat(64)]))).toBe(true);
+    }
+  });
+
+  it("lists only people who turned emails on: their address, choices, snapshot, banks needing them and what was sent", async () => {
+    await snapshotOf(P);
+    const due = await job(`select * from public.alerts_due($1)`, [SECRET]);
+    expect(due.map((r) => r.user_id)).toEqual([P]);
+    expect(due[0]).toMatchObject({ email: "p@x.test", kinds: ["bank", "weekly"], amounts: true, sealed, sent: [] });
+    expect(due[0]!.banks).toEqual([expect.objectContaining({ id: "item-p", name: "First Bank", attention: "sign-in", disconnect_at: null })]);
+  });
+
+  it("records what was sent once, only for someone with emails on, at most fifty at a time, and keeps it 120 days", async () => {
+    await job(`select public.alerts_sent($1, $2, $3)`, [SECRET, P, [print(1), print(1), "not-a-fingerprint"]]);
+    await job(`select public.alerts_sent($1, $2, $3)`, [SECRET, P, [print(1), print(2)]]);
+    await job(`select public.alerts_sent($1, $2, $3)`, [SECRET, Q, [print(3)]]);
+    expect(await as("anon", null, () => refused(`select public.alerts_sent($1, $2, $3)`, [SECRET, P, Array.from({ length: 51 }, (_, n) => print(100 + n))]))).toBe(true);
+    expect(await rows(`select user_id, fingerprint from public.alert_deliveries order by fingerprint`)).toEqual(
+      [print(1), print(2)].sort().map((fingerprint) => ({ user_id: P, fingerprint })),
+    );
+    const [due] = await job(`select sent from public.alerts_due($1)`, [SECRET]);
+    expect([...(due!.sent as string[])].sort()).toEqual([print(1), print(2)].sort());
+    // The daily run forgets anything older than 120 days, whether or not it sends.
+    await rows(`update public.alert_deliveries set sent_at = now() - interval '121 days' where fingerprint = $1`, [print(1)]);
+    await job(`select user_id from public.alerts_due($1)`, [SECRET]);
+    expect(await rows(`select fingerprint from public.alert_deliveries`)).toEqual([{ fingerprint: print(2) }]);
+  });
+
+  it("keeps a snapshot only while emails are on, as ciphertext, written by the person alone", async () => {
+    // Q's emails are off: nothing to keep one for.
+    expect(await snapshotOf(Q).then(() => false, () => true)).toBe(true);
+    expect(await as("authenticated", Q, () => refused(`insert into public.alert_snapshots (user_id, sealed) values ($1, $2)`, [P, sealed]))).toBe(true);
+    expect(await as("authenticated", P, () => refused(`insert into public.alert_snapshots (user_id, sealed) values ($1, 'Oak Street Rent $1,800')`, [P]))).toBe(true);
+    expect(await as("authenticated", Q, () => rows(`select * from public.alert_snapshots`))).toEqual([]);
+    expect(await as("anon", null, () => refused(`select * from public.alert_snapshots`))).toBe(true);
+    // Only choices Prism offers.
+    expect(await as("authenticated", P, () => refused(`update public.profiles set alert_kinds = array['bank', 'everything'] where user_id = $1`, [P]))).toBe(true);
+  });
+
+  it("is out of a connected app's reach, and a session short of the second step's", async () => {
+    await as(
+      "authenticated",
+      P,
+      async () => {
+        expect(await rows(`select * from public.alert_snapshots`)).toEqual([]);
+        expect(await refused(`insert into public.alert_snapshots (user_id, sealed) values ($1, $2) on conflict (user_id) do update set sealed = excluded.sealed`, [P, sealed])).toBe(true);
+        expect(await rows(`update public.profiles set alert_email = false where user_id = $1 returning user_id`, [P])).toEqual([]);
+      },
+      CONNECTED_APP,
+    );
+    const [F, EMAIL_ONLY, PASSED] = ["a2000000-0000-4000-8000-000000000001", "a2000000-0000-4000-8000-000000000002", "a2000000-0000-4000-8000-000000000003"];
+    await rows(`insert into auth.mfa_factors (id, user_id, status) values ($1, $2, 'verified')`, [F, P]);
+    await rows(`insert into auth.sessions (id, user_id, aal, factor_id) values ($1, $3, 'aal1', null), ($2, $3, 'aal2', $4)`, [EMAIL_ONLY, PASSED, P, F]);
+    await as("authenticated", P, () => rows(`update public.profiles set totp_factor_id = $2 where user_id = $1`, [P, F]), { session_id: PASSED, aal: "aal2" });
+    expect(await as("authenticated", P, () => rows(`select * from public.alert_snapshots`), { session_id: EMAIL_ONLY, aal: "aal1" })).toEqual([]);
+    expect(await snapshotOf(P, { session_id: EMAIL_ONLY, aal: "aal1" }).then(() => false, () => true)).toBe(true);
+    expect(await as("authenticated", P, () => rows(`select user_id from public.alert_snapshots`), { session_id: PASSED, aal: "aal2" })).toEqual([{ user_id: P }]);
+    await rows(`update public.profiles set totp_factor_id = null where user_id = $1`, [P]);
+  });
+
+  it("never reaches a household", async () => {
+    const [def] = await rows(`select pg_get_functiondef('public.household_shared_money()'::regprocedure) as d`);
+    expect(String(def!.d)).not.toMatch(/alert/);
+  });
+
+  it("stops with the unsubscribe link: off at once, and the snapshot gone with it, and nobody else's", async () => {
+    await as("authenticated", R, () => rows(`update public.profiles set alert_email = true where user_id = $1`, [R]));
+    await snapshotOf(R);
+    await job(`select public.alerts_stop($1, $2)`, [SECRET, P]);
+    expect(await rows(`select user_id, alert_email from public.profiles where user_id in ($1, $2) order by user_id`, [P, R])).toEqual([
+      { user_id: P, alert_email: false },
+      { user_id: R, alert_email: true },
+    ]);
+    expect(await rows(`select user_id from public.alert_snapshots where user_id in ($1, $2)`, [P, R])).toEqual([{ user_id: R }]);
+    expect((await job(`select user_id from public.alerts_due($1)`, [SECRET])).map((r) => r.user_id)).toEqual([R]);
+    // Turning them off from the Account page does the same; the choices wait for next time.
+    await as("authenticated", R, () => rows(`update public.profiles set alert_email = false where user_id = $1`, [R]));
+    expect(await rows(`select user_id from public.alert_snapshots where user_id = $1`, [R])).toEqual([]);
+    expect(await rows(`select alert_kinds from public.profiles where user_id = $1`, [P])).toEqual([{ alert_kinds: ["bank", "weekly"] }]);
+  });
+
+  it("goes with the person's account", async () => {
+    await rows(`delete from auth.users where id in ($1, $2, $3)`, [P, Q, R]);
+    expect(await rows(`select count(*)::int as n from public.alert_deliveries`)).toEqual([{ n: 0 }]);
+  });
+});

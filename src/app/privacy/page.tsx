@@ -19,6 +19,7 @@ import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
 import { POLICY_UPDATED, PRIVACY_CONTACT, providers, STORED_ON_DEVICE } from "@/lib/privacy";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { chainEnabled } from "@/lib/crypto/balances";
+import { alertsConfig } from "@/lib/alerts/send";
 
 export const metadata: Metadata = {
   title: "Privacy policy",
@@ -34,6 +35,7 @@ const SHORT_VERSION: { icon: LucideIcon; text: string }[] = [
 ];
 
 export default function PrivacyPage() {
+  const alerts = alertsConfig() !== null;
   const mail = <a href={`mailto:${PRIVACY_CONTACT}`} className={link}>{PRIVACY_CONTACT}</a>;
   return (
     <div className="mx-auto max-w-3xl">
@@ -109,6 +111,13 @@ export default function PrivacyPage() {
             </li>
             <li>Categories you fix, such as &ldquo;everything at this shop is groceries&rdquo;, so Prism files your purchases where you put them. They name the shops, so they&apos;re stored encrypted, like your transactions.</li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
+            {alerts ? (
+              <li>
+                If you turn on alert emails: what you chose them to cover; what your last visit found worth one, such as a bill that may not be covered, and
+                the week&apos;s figures for your Monday summary, stored encrypted; and a fingerprint of each alert sent, so none is sent twice. A fingerprint is a
+                scrambled code that names no bank, shop or amount.
+              </li>
+            ) : null}
             <li>Which AI apps you&apos;ve allowed to read your money, if any.</li>
           </Bullets>
           <p className="font-semibold text-ink-1">Technical details</p>
@@ -123,6 +132,7 @@ export default function PrivacyPage() {
             <li>To show you your money: balances, spending, budgets, goals, bills and insights.</li>
             <li>To keep your connections up to date, and to tell you when one needs attention.</li>
             <li>To sign you in and send your sign-in codes.</li>
+            {alerts ? <li>To email you alerts and a Monday summary, if you turn them on.</li> : null}
             <li>To answer questions from AI apps you&apos;ve approved, read-only.</li>
             <li>To keep {BRAND.product} secure, prevent abuse, and fix problems.</li>
           </Bullets>
@@ -132,7 +142,7 @@ export default function PrivacyPage() {
         <Section id="share" title="Who else sees it">
           <p>Only the companies that run {BRAND.product} for us, and only what each one needs:</p>
           <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-ctl border border-line">
-            {providers(homeValuesEnabled(), chainEnabled("ethereum")).map((p) => (
+            {providers(homeValuesEnabled(), chainEnabled("ethereum"), alerts).map((p) => (
               <li key={p.name} className="flex flex-col gap-1 bg-surface-2 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
                 <span className="w-24 shrink-0 font-semibold text-ink-1">{p.name}</span>
                 <span className="min-w-0 flex-1">
@@ -196,6 +206,12 @@ export default function PrivacyPage() {
             <li>History you import stays until you remove it on Connections, or delete your account.</li>
             {homeValuesEnabled() ? <li>A home&apos;s address stays until you turn off its estimates, remove the home, or delete your account.</li> : null}
             <li>A wallet&apos;s address or extended public key stays until you remove the wallet on Connections, or delete your account.</li>
+            {alerts ? (
+              <li>
+                What&apos;s kept for your alert emails is deleted the moment you turn them off. The fingerprints of alerts already sent are deleted after 120
+                days.
+              </li>
+            ) : null}
             <li>
               When you delete your account, we disconnect every bank and Coinbase link first, then erase your account and everything in it. Encrypted database
               backups roll off shortly after.
@@ -222,6 +238,7 @@ export default function PrivacyPage() {
               .
             </li>
             <li>Change your name, and turn the calendar feed off, whenever you like.</li>
+            {alerts ? <li>Turn alert emails on or off, and choose what they cover, on the Account page, or stop them with the link in any of them.</li> : null}
             <li>
               Delete your account for good on the{" "}
               <Link href="/account" className={link}>

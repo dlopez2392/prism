@@ -36,7 +36,22 @@ import { coinbaseNeedsSignIn, mapCoinbase, sharedCoinbase, validCoinbaseValue } 
 import { COINBASE_COOKIE, isExpired, readLink } from "./coinbase-store";
 import { currentAccount, type Account } from "@/lib/supabase/server";
 import { supabaseEnv } from "@/lib/supabase/config";
-import { liveCoinbaseToken, loadAccount, saveAccountPlaidSync, saveWalletReadings, saveAccountTimeZone, saveCoinbaseValue, saveFeedSnapshot, type AccountSources, clearBankAttention } from "./account-store";
+import {
+  clearBankAttention,
+  forgetAlertSnapshot,
+  liveCoinbaseToken,
+  loadAccount,
+  saveAccountPlaidSync,
+  saveAccountTimeZone,
+  saveAlertSnapshot,
+  saveCoinbaseValue,
+  saveFeedSnapshot,
+  saveWalletReadings,
+  type AccountSources,
+  type AlertSettings,
+} from "./account-store";
+import { alertSnapshot } from "@/lib/finance/alert-snapshot";
+import { analyze } from "@/lib/finance/model";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { loadHouseholdPlan, loadShares, loadSharedMoney, type HouseholdPlan, type SharedMoneyRow } from "./household-store";
 import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
@@ -52,7 +67,7 @@ export type Loaded = FinanceData & {
   /** Accounts are switched on for this deployment. */
   accountsEnabled: boolean;
   /** The signed-in person, or null on a device-only visit. */
-  account: { email: string | null; firstName: string | null; calendarFeed: boolean } | null;
+  account: { email: string | null; firstName: string | null; calendarFeed: boolean; alerts: AlertSettings | null } | null;
   /** Signed in, with money or plans still sitting on this device from before: what they are. */
   carryover: string[];
   /** What the signed-in person added by hand, as they entered it, for the editor on Net worth. */
@@ -152,6 +167,8 @@ export type Sources = {
   timeZone: string | null;
   /** Each bank's stored sync, and whether a new one may be saved (never for a connected app). Null on a device-only visit. */
   plaidSync: PlaidSync | null;
+  /** Their alert email choices and snapshot's age. Null on a device-only visit. */
+  alerts: AccountSources["alerts"] | null;
 };
 
 /** Where a bank's sync starts from, and where a newer one goes — `save` is null when nothing may be written. */
@@ -240,6 +257,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
       timeZone: a.timeZone,
+      alerts: a.alerts,
       plaidSync: {
         stored: a.plaidSync,
         // After the response: the page already has the new transactions; the saved copy is for next time.
@@ -284,6 +302,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     timeZone: null,
     // A device keeps no sync: its banks are read in full each time, as before accounts.
     plaidSync: null,
+    alerts: null,
   };
 }
 
@@ -458,7 +477,14 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     localHour,
     planEdited,
     accountsEnabled: supabaseEnv() !== null,
-    account: src.account ? { email: src.account.email, firstName: src.firstName, calendarFeed: src.feedUpdatedAt !== null } : null,
+    account: src.account
+      ? {
+          email: src.account.email,
+          firstName: src.firstName,
+          calendarFeed: src.feedUpdatedAt !== null,
+          alerts: src.alerts ? { on: src.alerts.on, kinds: src.alerts.kinds, amounts: src.alerts.amounts } : null,
+        }
+      : null,
     carryover: carryoverOf(jar, src.account !== null),
     manual: src.manual,
     homeValues: src.homeValues,
@@ -469,6 +495,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     inHousehold: src.inHousehold,
     householdPlan: null,
   };
+  if (src.account) rememberAlerts(src.account, src.alerts, isLive(src) ? personal : null);
   return { loaded: personal, base, src, today };
 });
 
@@ -544,6 +571,31 @@ function rememberCoinbase(account: Account, shared: { balance: number | null; at
   after(() => saveCoinbaseValue(account, Math.max(0, live.balance), key).catch(() => undefined));
 }
 const COINBASE_COPY_EVERY = 10 * 60_000;
+
+/**
+ * What this visit found worth an alert, left for the email job (which can't
+ * read anyone's money itself): after the response, only for someone who
+ * turned emails on, from their own money (never the household's or the
+ * demo's), and at most every quarter hour unless the last one was sealed
+ * under an older vault key. Once nothing of theirs is live, the last one goes.
+ */
+function rememberAlerts(account: Account, alerts: Sources["alerts"], money: FinanceData | null): void {
+  if (!alerts?.on) return;
+  const key = safeVaultKey();
+  if (!key) return;
+  if (!money) {
+    if (alerts.takenAt) after(() => forgetAlertSnapshot(account).catch(() => undefined));
+    return;
+  }
+  if (alerts.takenAt && !alerts.stale && Date.now() - Date.parse(alerts.takenAt) < ALERT_SNAPSHOT_EVERY) return;
+  after(() =>
+    saveAlertSnapshot(account, alertSnapshot(analyze(money), new Date().toISOString()), key).catch((e: unknown) =>
+      // No figure in the message: only that the job will use the last one.
+      console.error("Prism: a visit's alert snapshot wasn't kept:", e instanceof Error ? e.name : "unknown error"),
+    ),
+  );
+}
+const ALERT_SNAPSHOT_EVERY = 15 * 60_000;
 
 function rememberZone(account: Account, stored: string | null, seen: string | undefined): void {
   const zone = validZone(seen);
