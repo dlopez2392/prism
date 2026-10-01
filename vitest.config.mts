@@ -31,6 +31,8 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: "",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
+      // Vercel's preview builds run this suite with VERCEL_ENV=preview.
+      VERCEL_ENV: "",
       // Replacement vault keys are read by pattern (vaultKey() in src/lib/server/vault.ts),
       // so pin whichever numbers this environment has: PRISM_VAULT_KEY_2, _3 …
       ...Object.fromEntries(

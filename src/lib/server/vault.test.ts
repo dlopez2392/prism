@@ -42,6 +42,14 @@ describe("vaultKey", () => {
     expect(vaultKey({ PRISM_VAULT_KEY: key.toString("base64") })?.current.key).toEqual(key);
   });
 
+  it("is never available on a Vercel preview, which runs unmerged code, even when one is set", () => {
+    const set = { PRISM_VAULT_KEY: key.toString("base64"), PRISM_VAULT_KEY_2: Buffer.alloc(32, 7).toString("base64") };
+    expect(vaultKey({ ...set, VERCEL_ENV: "preview" })).toBeNull();
+    expect(vaultKey({ PLAID_SECRET: "sandbox-secret", VERCEL_ENV: "preview" })).toBeNull();
+    expect(vaultKey({ ...set, VERCEL_ENV: "production" })?.all).toHaveLength(2);
+    expect(vaultKey({ ...set, VERCEL_ENV: "development" })?.all).toHaveLength(2);
+  });
+
   it("derives a sandbox-only key from the Plaid secret", () => {
     const a = vaultKey({ PLAID_SECRET: "sandbox-secret" })?.current.key;
     expect(a).toHaveLength(32);

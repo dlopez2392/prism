@@ -12,6 +12,7 @@
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { gunzipSync, gzipSync } from "node:zlib";
+import { isPreviewDeployment } from "@/lib/deployment";
 import type { Env } from "@/lib/plaid/client";
 
 export const VAULT_COOKIE = "prism-vault";
@@ -61,9 +62,11 @@ const KEY_VAR = /^PRISM_VAULT_KEY(?:_([2-9]|[1-9][0-9]))?$/;
  *
  * At least one is required in production. In the Plaid sandbox only, a key
  * derived from PLAID_SECRET is accepted so a first-time developer can link a
- * test bank with two env vars.
+ * test bank with two env vars. A Vercel preview never has one, even if it is
+ * given one by mistake: it runs unmerged code (deployment.ts).
  */
 export function vaultKey(env: Env = process.env): Keyring | null {
+  if (isPreviewDeployment(env)) return null;
   const found: { n: number; name: string; entry: KeyEntry }[] = [];
   for (const [name, value] of Object.entries(env)) {
     const m = KEY_VAR.exec(name);
