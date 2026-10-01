@@ -242,6 +242,25 @@ On the Account page, a signed-in person downloads everything Prism shows them
   text cell that starts like a formula gets a leading apostrophe, so a
   merchant name can't run in a spreadsheet.
 
+## Is production working?
+
+- **After every production deploy, and every six hours**, GitHub Actions
+  checks the live site from the outside (`.github/workflows/production-check.yml`,
+  `src/lib/ops/production-check.ts`): the pages, the protective headers, the
+  doors that must stay shut (the alert job, downloads, the AI connector),
+  `/api/health`, and the certificate. When anything fails it opens an issue
+  labelled `production-check`, which GitHub emails to you; when everything
+  passes again it closes it. It holds no secret.
+- **The repository is public**, and so are its issues and logs, so a
+  protective check that fails is reported there only as "a protective
+  check". The first step is the same whichever it is: roll back the latest
+  deploy in Vercel. Then run the check privately to see which:
+  `node src/lib/ops/production-check.ts` (Node 22; nothing to install).
+- **`/api/health`** says which release is live, whether the database
+  answers, and when the daily alert job last ran and whether that run
+  finished (`job_runs`, written only by the job through `job_ran`). A
+  morning without the job (26 hours) fails the check.
+
 ## Link Coinbase (read-only)
 
 1. On the Coinbase Developer Platform, create an OAuth client and register

@@ -1,0 +1,67 @@
+name: Production check
+
+# Is production working? After every production deploy (Vercel reports it to
+# GitHub), and every six hours, check the live site from the outside
+# (src/lib/ops/production-check.ts): pages, protective headers, the doors that
+# must stay shut, /api/health (the database, the live release, the alert job's
+# last run) and the certificate. When anything fails, open an issue labelled
+# production-check, which GitHub emails to the owner; when everything passes
+# again, close it. No secrets: it reads only what anyone on the internet can.
+
+on:
+  deployment_status:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    # A deploy's own status fires this too; only a production deploy that finished is checked.
+    if: github.event_name != 'deployment_status' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Node runs the TypeScript file as it is: nothing to install or build.
+      - name: Check https://prism.bis-rgv.com
+        id: check
+        continue-on-error: true
+        env:
+          COMMIT: ${{ github.event.deployment.sha }}
+        # --public: this repository's issues and logs are public, so a door found open is never described here.
+        run: node src/lib/ops/production-check.ts --base https://prism.bis-rgv.com --commit "$COMMIT" --report report.md --summary "$GITHUB_STEP_SUMMARY" --public
+      - name: Open or update the issue
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "" >> report.md
+          echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> report.md
+          gh label create production-check --color B60205 --description "Prism's production check is failing" 2>/dev/null || true
+          open=$(gh issue list --label production-check --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body-file report.md
+          else
+            gh issue create --title "Production check failing" --label production-check --body-file report.md
+          fi
+          exit 1
+      - name: Close the issue once it passes again
+        if: steps.check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open=$(gh issue list --label production-check --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue close "$open" --comment "Passing again: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi

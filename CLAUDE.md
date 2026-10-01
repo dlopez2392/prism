@@ -226,6 +226,15 @@
   `cashflow.ts` counts, starts where the records do, and compares with the
   year before only when Prism holds that whole span. Printing is always light:
   the dark tokens live under `@media screen` in `tokens.css`.
+- Production check (`.github/workflows/production-check.yml`,
+  `src/lib/ops/production-check.ts`, run by Node as TypeScript with no
+  install, so it imports only Node's own modules): after each production
+  deploy and every six hours; a failure opens a `production-check` issue.
+  The repo is PUBLIC: run it with `--public` there, so a failing protective
+  check (`sensitive`) is never named or described in an issue or a log. A new
+  door that must stay shut gets a check here, marked sensitive. `/api/health`
+  (`src/lib/server/health.ts`) must stay free of anything about anyone; the
+  alert job records each run through `job_ran` (counts only, one row a job).
 - Bank redirects (OAuth banks): `/connections/return` is the address
   allow-listed with Plaid (`RETURN_PATH`), so never move or rename it. It
   resumes Link with the SAME Link token, kept in the httpOnly

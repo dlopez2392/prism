@@ -1302,3 +1302,33 @@ describe("alerts on a phone", () => {
     expect(await rows(`select count(*)::int as n from public.push_subscriptions`)).toEqual([{ n: 0 }]);
   });
 });
+
+describe("whether the scheduled jobs ran", () => {
+  const SECRET = "j".repeat(44);
+  const ran = (ok: boolean, report: unknown = { due: 2, sent: 1 }, secret = SECRET) =>
+    as("anon", null, () => rows(`select public.job_ran($1, 'alerts', $2, $3)`, [secret, ok, JSON.stringify(report)]));
+
+  beforeAll(async () => {
+    await rows(`insert into public.job_keys (name, sha256) values ('alerts', $1) on conflict (name) do update set sha256 = excluded.sha256`, [createHash("sha256").update(SECRET).digest("hex")]);
+  });
+
+  it("records a run only for the job's secret, one row a job, replaced each time", async () => {
+    expect(await ran(true, {}, "x".repeat(44)).then(() => false, () => true)).toBe(true);
+    expect(await as("authenticated", A, () => refused(`select public.job_ran($1, 'alerts', true, '{}')`, [SECRET]))).toBe(true);
+    await ran(false);
+    await ran(true, { due: 3, sent: 3 });
+    expect(await rows(`select name, ok, report from public.job_runs`)).toEqual([{ name: "alerts", ok: true, report: { due: 3, sent: 3 } }]);
+    // A report is counts, kept small: never a list of people.
+    expect(await ran(true, { people: "x".repeat(5000) }).then(() => false, () => true)).toBe(true);
+    expect(await ran(true, ["not", "an", "object"]).then(() => false, () => true)).toBe(true);
+  });
+
+  it("tells anyone when each job last ran and whether it finished, and nothing it counted", async () => {
+    for (const [role, who] of [["anon", null], ["authenticated", A]] as const) {
+      const health = await as(role, who, () => rows(`select * from public.job_health()`));
+      expect(health).toEqual([{ name: "alerts", ran_at: expect.any(Date), ok: true }]);
+      expect(await as(role, who, () => refused(`select * from public.job_runs`))).toBe(true);
+      expect(await as(role, who, () => refused(`update public.job_runs set ok = true`))).toBe(true);
+    }
+  });
+});

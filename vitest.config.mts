@@ -37,6 +37,7 @@ export default defineConfig({
       ALERTS_SITE_URL: "",
       // Vercel's preview builds run this suite with VERCEL_ENV=preview.
       VERCEL_ENV: "",
+      VERCEL_GIT_COMMIT_SHA: "",
       // Replacement vault keys are read by pattern (vaultKey() in src/lib/server/vault.ts),
       // so pin whichever numbers this environment has: PRISM_VAULT_KEY_2, _3 …
       ...Object.fromEntries(

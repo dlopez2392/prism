@@ -169,3 +169,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     of the year before when Prism holds it, printable as a PDF. Next, if
     people ask for it: a tax-season view (deductible categories, charitable
     giving, 1099 interest) and the year sent as a January email.
+11. **Knowing when production breaks.** **Built (2026-10-01):** a production
+    check after every deploy and every six hours, from the outside, that
+    opens a GitHub issue when anything fails (and closes it when fixed),
+    without describing an open door in public; `/api/health` with the live
+    release, the database and the alert job's last run. Next, if it's ever
+    needed: error tracking inside the app (Sentry), which would be a new
+    company handling data and so a privacy-policy change first.

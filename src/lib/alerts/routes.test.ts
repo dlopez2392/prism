@@ -60,6 +60,37 @@ describe("the daily job's door", () => {
     expect(rpc).toHaveBeenCalledWith("alerts_due", { p_secret: SECRET });
   });
 
+  it("records each run for the health check: finished, with its counts", async () => {
+    configure();
+    await runJob(`Bearer ${SECRET}`);
+    expect(rpc).toHaveBeenLastCalledWith("job_ran", { p_secret: SECRET, p_name: "alerts", p_ok: true, p_report: expect.objectContaining({ due: 0, sent: 0, stopped: false }) });
+  });
+
+  it("records a run Resend stopped (it refused the key) as not finished", async () => {
+    configure();
+    const bank = { id: "item-1", name: "First Bank", attention: "sign-in", since: new Date().toISOString(), disconnect_at: null };
+    const due = [{ user_id: U, email: "a@x.test", time_zone: "America/Chicago", kinds: ["bank"], amounts: true, sealed: null, snapshot_at: null, banks: [bank], sent: [] }];
+    rpc.mockImplementation(async (fn: string) => (fn === "alerts_due" ? { data: due, error: null } : { data: null, error: null }));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 403 })));
+    try {
+      const res = await runJob(`Bearer ${SECRET}`);
+      expect(await res.json()).toMatchObject({ stopped: true });
+      expect(rpc).toHaveBeenLastCalledWith("job_ran", { p_secret: SECRET, p_name: "alerts", p_ok: false, p_report: expect.objectContaining({ stopped: true }) });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("records a run that couldn't start as not finished, and never a record for a caller without the secret", async () => {
+    configure();
+    rpc.mockImplementation(async (fn: string) => (fn === "alerts_due" ? { data: null, error: { message: "no" } } : { data: null, error: null }));
+    await runJob(`Bearer ${SECRET}`);
+    expect(rpc).toHaveBeenLastCalledWith("job_ran", { p_secret: SECRET, p_name: "alerts", p_ok: false, p_report: { error: "not_run" } });
+    rpc.mockClear();
+    await runJob(`Bearer ${"x".repeat(44)}`);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it("reports a database that won't answer, with no detail", async () => {
     configure();
     rpc.mockResolvedValue({ data: null, error: { message: "permission denied for function alerts_due" } });
