@@ -286,6 +286,13 @@ keys the deployment serves the demo household.
 Any Next.js host works. On Vercel: import the repository, keep the detected
 Next.js settings, and add the environment variables from `.env.example`.
 
+**Previews are demo-only.** Every branch and pull request (Dependabot's
+included) gets a Vercel preview, built from code that hasn't been merged. A
+preview never reaches production's data: it has no database and no vault key
+(`src/lib/deployment.ts`), and serves the demo household. Keep
+`PRISM_VAULT_KEY` and every secret **Production only** in Vercel; the app
+refuses a vault key on a preview anyway, should one be ticked by mistake.
+
 ## Replacing the vault key
 
 `PRISM_VAULT_KEY` seals every bank and Coinbase token, every synced
@@ -304,7 +311,7 @@ the old one. The highest number seals; every number opens.
      `$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)`
 2. **Add it** in Vercel → Settings → Environment Variables as
    `PRISM_VAULT_KEY_2` (the next number after your highest, up to `_99`),
-   for Production, marked **Sensitive**. Leave the old one where it is.
+   for Production only (never Preview), marked **Sensitive**. Leave the old one where it is.
 3. **Redeploy** production. Every new seal now uses the new key and names
    it, and each person's older seals move to it right after their next visit
    (`reseal` in `src/lib/server/account-store.ts`). A connected AI app never

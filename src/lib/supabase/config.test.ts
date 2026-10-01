@@ -8,6 +8,13 @@ describe("supabaseEnv", () => {
     expect(supabaseEnv({ NEXT_PUBLIC_SUPABASE_URL: "x.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "k" })).toBeNull();
   });
 
+  it("is off on a Vercel preview, which never reaches production's database, and on in production", () => {
+    const set = { NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "k" };
+    expect(supabaseEnv({ ...set, VERCEL_ENV: "preview" })).toBeNull();
+    expect(supabaseEnv({ ...set, VERCEL_ENV: "production" })).toEqual({ url: "https://x.supabase.co", key: "k" });
+    expect(supabaseEnv(set)).not.toBeNull();
+  });
+
   it("trims, drops a trailing slash, and accepts the older anon-key name", () => {
     expect(supabaseEnv({ NEXT_PUBLIC_SUPABASE_URL: " https://x.supabase.co/ ", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: " sb_publishable_1 " })).toEqual({
       url: "https://x.supabase.co",
