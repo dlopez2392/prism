@@ -162,3 +162,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    (RFC 8291/8292 in `node:crypto`, no new dependency; VAPID key derived from
    `CRON_SECRET`). Next, if people ask for it: notifications without the
    emails (a channel choice per person), and offline reading.
+10. **Your data, and your year.** **Built (2026-10-01):** "Download your data"
+    on the Account page (a zip of spreadsheets and one JSON file, or just the
+    transactions, which Prism's own importer reads back) and **Your year**
+    (`/year`): one calendar year on one page, compared with the same stretch
+    of the year before when Prism holds it, printable as a PDF. Next, if
+    people ask for it: a tax-season view (deductible categories, charitable
+    giving, 1099 interest) and the year sent as a January email.

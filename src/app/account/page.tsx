@@ -4,10 +4,12 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { BellRing, CalendarClock, Landmark, PiggyBank, Smartphone, Target, Wallet, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { BellRing, CalendarClock, Download, Landmark, PiggyBank, Smartphone, Target, Wallet, type LucideIcon } from "lucide-react";
 import { AlertEmails } from "@/components/alert-emails";
 import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { DeleteAccount } from "@/components/delete-account";
+import { buttonGhost, buttonPrimary } from "@/components/dialog";
 import { HouseholdCard } from "@/components/household";
 import { NameForm } from "@/components/name-form";
 import { PhoneAlerts } from "@/components/phone-alerts";
@@ -152,8 +154,42 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         </Card>
       </section>
 
+      <section id="data" className="scroll-mt-6">
+        <Card className="p-5 sm:p-6">
+          <CardHeader
+            title="Download your data"
+            subtitle="Everything Prism shows you, yours to keep: spreadsheets of every transaction, account and month-end balance, your budgets and goals, and one file with all of it. Nothing in it can open your accounts."
+          />
+          {data.source === "demo" ? (
+            <p className="mt-4 rounded-ctl bg-surface-2 p-3 text-sm text-ink-2">
+              Once you link a bank or import your history on{" "}
+              <Link href="/connections" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+                Connections
+              </Link>
+              , you can download all of it here.
+            </p>
+          ) : (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <a href="/account/export/everything.zip" className={buttonPrimary}>
+                <Download aria-hidden className="size-4" />
+                Download everything
+              </a>
+              <a href="/account/export/transactions.csv" className={buttonGhost}>
+                Transactions only
+              </a>
+              <Link href="/year" className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
+                See your year on one page
+              </Link>
+            </div>
+          )}
+        </Card>
+      </section>
+
       <Card className="p-5 sm:p-6">
-        <CardHeader title="Delete your account" subtitle="Every bank link is removed at the bank, Coinbase access is revoked, and your budgets, goals and calendar link are erased. This can't be undone." />
+        <CardHeader
+          title="Delete your account"
+          subtitle="Every bank link is removed at the bank, Coinbase access is revoked, and your budgets, goals and calendar link are erased. This can't be undone, so download your data first if you want a copy."
+        />
         <DeleteAccount email={email} />
       </Card>
     </div>

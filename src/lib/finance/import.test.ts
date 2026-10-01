@@ -111,6 +111,9 @@ describe("dates, amounts and categories", () => {
     expect(categoryFrom("Finance Charge", -5)).toBe("bills");
     // Nothing Prism knows: the direction of the money decides.
     expect(categoryFrom("Uncategorized", 5)).toBe("income");
+    // Except Prism's own "Other", which stays Other either way (its export reads back as it went out).
+    expect(categoryFrom("Other", 5)).toBe("other");
+    expect(categoryFrom("Other income", 5)).toBe("income");
     expect(categoryFrom("", -5)).toBe("other");
   });
 });

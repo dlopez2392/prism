@@ -58,7 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="mx-auto flex max-w-[1480px]">
           <Sidebar householdName={data.household.name} sourceLabel={sourceLabel} account={accountNav} />
           <div className="min-w-0 flex-1">
-            <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-line bg-surface-0/75 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+            <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-line bg-surface-0/75 px-4 backdrop-blur-xl sm:px-6 lg:px-8 print:hidden">
               <Link href="/" className="flex items-center gap-2 lg:hidden">
                 <PrismMark className="size-7" />
                 <span className="text-lg font-extrabold tracking-tight">{BRAND.product}</span>

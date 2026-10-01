@@ -144,6 +144,15 @@ body {
   .chart-draw { stroke-dasharray: none; stroke-dashoffset: 0; }
 }
 
+/* On paper, every chart is already drawn: printing never catches a bar part way through growing in. */
+@media print {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .chart-draw { stroke-dasharray: none; stroke-dashoffset: 0; }
+}
+
 @media (forced-colors: active) {
   .bg-prism { background: Canvas; border: 1px solid CanvasText; }
   .text-prism { color: CanvasText; background: none; }
