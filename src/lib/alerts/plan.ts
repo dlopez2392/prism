@@ -52,8 +52,8 @@ export type Email = {
   subject: string;
   items: EmailItem[];
   summary: Summary | null;
-  /** The day the snapshot behind its figures was taken, when any figure came from one. */
-  asOf: ISODate | null;
+  /** When, and by whom, the snapshot behind its figures was taken, when any figure came from one. */
+  asOf: { day: ISODate; by: AlertSnapshot["by"] } | null;
   /** To record once it's sent. */
   fingerprints: string[];
 };
@@ -206,5 +206,5 @@ export function emailFor(r: Recipient, now: Date): Email | null {
   const [first] = items;
   const subject = first ? clip(items.length > 1 ? `${first.title}, and ${items.length - 1} more` : first.title) : `Your week in ${BRAND.product}`;
   const fromSnapshot = chosen.some((c) => c.fromSnapshot) || (summary !== null && summary.note === null);
-  return { subject, items, summary, asOf: fromSnapshot && snap ? snap.today : null, fingerprints: prints };
+  return { subject, items, summary, asOf: fromSnapshot && snap ? { day: snap.today, by: snap.by } : null, fingerprints: prints };
 }

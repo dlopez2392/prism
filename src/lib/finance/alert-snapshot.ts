@@ -33,8 +33,10 @@ export type Upcoming = { name: string; date: ISODate; amount: Cents };
 
 export type AlertSnapshot = {
   v: 1;
-  /** When the visit took it (ISO time). */
+  /** When it was taken (ISO time). */
   at: string;
+  /** Who took it: the person's own visit, or the alert job's morning check of their banks. */
+  by: "visit" | "morning";
   /** The visit's own day. */
   today: ISODate;
   /** Bills short and price rises: a bank's warnings come fresher from the database itself. */
@@ -48,13 +50,14 @@ const UPCOMING_DAYS = 14;
 const MAX_UPCOMING = 20;
 const MAX_ALERTS = 20;
 
-export function alertSnapshot(a: Analysis, at: string): AlertSnapshot {
+export function alertSnapshot(a: Analysis, at: string, by: AlertSnapshot["by"] = "visit"): AlertSnapshot {
   const txns = a.data.transactions;
   const t = a.today;
   const nw = a.netWorth;
   return {
     v: 1,
     at,
+    by,
     today: t,
     alerts: alertsFor(a)
       .filter((x) => x.kind !== "bank")
@@ -106,6 +109,8 @@ export function validSnapshot(x: unknown): AlertSnapshot | null {
   return {
     v: 1,
     at: s.at,
+    // Snapshots from before the morning check were all a visit's.
+    by: s.by === "morning" ? "morning" : "visit",
     today: s.today,
     alerts: alerts as Alert[],
     weekly: { from: w.from, to: w.to, spent: w.spent, spentBefore: w.spentBefore, month: w.month ? { spent: w.month.spent, limit: w.month.limit } : null, netWorth: w.netWorth, netWorthLastMonth: w.netWorthLastMonth ?? null },

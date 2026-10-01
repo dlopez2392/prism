@@ -118,6 +118,13 @@ export default function PrivacyPage() {
                 scrambled code that names no bank, shop or amount.
               </li>
             ) : null}
+            {alerts ? (
+              <li>
+                If you also leave &ldquo;Check my banks each morning&rdquo; on, {BRAND.product} reads your banks&apos; balances and new transactions once each morning,
+                even when you haven&apos;t opened it, so an alert email speaks for that day. It keeps them encrypted like the rest, and never does this with Coinbase
+                connected. Turn it off on the Account page and only your own visits read your banks again.
+              </li>
+            ) : null}
             <li>Which AI apps you&apos;ve allowed to read your money, if any.</li>
           </Bullets>
           <p className="font-semibold text-ink-1">Technical details</p>

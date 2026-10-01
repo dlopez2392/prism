@@ -36,6 +36,7 @@ type ProfileRow = {
   alert_email?: boolean;
   alert_kinds?: unknown;
   alert_amounts?: boolean;
+  alert_refresh?: boolean;
   updated_at: string;
 };
 type AlertSnapshotRow = { sealed: string; updated_at: string };
@@ -58,7 +59,7 @@ type FeedRow = { updated_at: string; sealed_token: string };
 type ImportPartRow = { import_id: string; part: number; sealed: string; created_at: string };
 export type CoinbaseRecord = { tokens: TokenSet; version: number; linkedAt: string };
 /** What a person chose for alert emails (Account page). */
-export type AlertSettings = { on: boolean; kinds: AlertChoice[]; amounts: boolean };
+export type AlertSettings = { on: boolean; kinds: AlertChoice[]; amounts: boolean; refresh: boolean };
 
 export type AccountSources = {
   firstName: string | null;
@@ -116,7 +117,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const [profile, plaid, coinbase, feed, household, coinbaseShare, imported, alertSnapshot] = await Promise.all([
     db
       .from("profiles")
-      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, alert_email, alert_kinds, alert_amounts, updated_at")
+      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, alert_email, alert_kinds, alert_amounts, alert_refresh, updated_at")
       .eq("user_id", account.userId)
       .maybeSingle<ProfileRow>(),
     db
@@ -305,9 +306,9 @@ function staleSeals(account: Account, key: VaultKey | null) {
 }
 
 /** Their alert email choices as stored: off, every kind, with amounts, until they say otherwise. */
-function alertSettings(row: Pick<ProfileRow, "alert_email" | "alert_kinds" | "alert_amounts"> | null): AlertSettings {
+function alertSettings(row: Pick<ProfileRow, "alert_email" | "alert_kinds" | "alert_amounts" | "alert_refresh"> | null): AlertSettings {
   const kinds = Array.isArray(row?.alert_kinds) ? row.alert_kinds.filter(isAlertChoice) : [...ALERT_CHOICES];
-  return { on: row?.alert_email === true, kinds, amounts: row?.alert_amounts !== false };
+  return { on: row?.alert_email === true, kinds, amounts: row?.alert_amounts !== false, refresh: row?.alert_refresh !== false };
 }
 
 async function upsertProfile(account: Account, patch: Record<string, unknown>): Promise<void> {
@@ -384,7 +385,10 @@ export function saveAccountManualItemsAndHomes(account: Account, items: ManualIt
 
 /** Alert email choices, already checked by `saveAlertEmails`; off alone keeps the rest. Turning them off deletes the job's snapshot too (a trigger). */
 export function saveAlertSettings(account: Account, settings: AlertSettings | { on: false }) {
-  return upsertProfile(account, "kinds" in settings ? { alert_email: settings.on, alert_kinds: settings.kinds, alert_amounts: settings.amounts } : { alert_email: false });
+  return upsertProfile(
+    account,
+    "kinds" in settings ? { alert_email: settings.on, alert_kinds: settings.kinds, alert_amounts: settings.amounts, alert_refresh: settings.refresh } : { alert_email: false },
+  );
 }
 
 /**
@@ -424,7 +428,7 @@ export async function addAccountPlaidItem(account: Account, item: VaultItem, key
  * it ran still reads as news next time. True when this copy landed.
  */
 /** Under the column's own limit, with room to spare; a copy bigger than this isn't kept (the next visit syncs again). */
-const SEALED_SYNC_MAX = 15_000_000;
+export const SEALED_SYNC_MAX = 15_000_000;
 
 export async function saveAccountPlaidSync(account: Account, itemId: string, state: SyncState, key: VaultKey, fromVersion: number, startedAt: string): Promise<boolean> {
   const sealed = sealPacked(state, key);
@@ -441,7 +445,7 @@ export async function saveAccountPlaidSync(account: Account, itemId: string, sta
 }
 
 /** A bank's warning as stored: one the database would accept, or none. */
-function bankAttention(r: Pick<PlaidRow, "attention" | "disconnect_at">): BankAttention | null {
+export function bankAttention(r: Pick<PlaidRow, "attention" | "disconnect_at">): BankAttention | null {
   if (r.attention === "sign-in" || r.attention === "revoked") return { state: r.attention, disconnectAt: null };
   if (r.attention === "disconnecting" && r.disconnect_at && Number.isFinite(Date.parse(r.disconnect_at))) return { state: "disconnecting", disconnectAt: r.disconnect_at };
   return null;

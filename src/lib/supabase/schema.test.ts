@@ -1124,3 +1124,66 @@ describe("alert emails", () => {
     expect(await rows(`select count(*)::int as n from public.alert_deliveries`)).toEqual([{ n: 0 }]);
   });
 });
+
+describe("the morning check", () => {
+  const [M, N, O] = ["a3000000-0000-4000-8000-0000000000a1", "a3000000-0000-4000-8000-0000000000a2", "a3000000-0000-4000-8000-0000000000a3"];
+  const SECRET = "m".repeat(44);
+  const job = (sql: string, params: unknown[] = []) => as("anon", null, () => rows(sql, params));
+  const sources = async (who: string) => (await job(`select public.alerts_sources($1, $2) as s`, [SECRET, who]))[0]!.s as Record<string, unknown> | null;
+  const saveSync = (who: string, from: number, at = "now()") =>
+    job(`select public.alerts_save_sync($1, $2, 'item-m', $3, $4, ${at}) as ok`, [SECRET, who, "z1." + "n".repeat(40), from]).then((r) => r[0]!.ok);
+
+  beforeAll(async () => {
+    await rows(`insert into auth.users (id, email) values ($1, 'm@x.test'), ($2, 'n@x.test'), ($3, 'o@x.test')`, [M, N, O]);
+    await rows(`insert into public.job_keys (name, sha256) values ('alerts', $1) on conflict (name) do update set sha256 = excluded.sha256`, [createHash("sha256").update(SECRET).digest("hex")]);
+    // M allows the check; N turned it off; O has Coinbase linked.
+    await rows(`update public.profiles set alert_email = true, sealed_home_values = $2 where user_id in ($1, $3, $4)`, [M, "z1." + "h".repeat(40), N, O]);
+    await rows(`update public.profiles set alert_refresh = false where user_id = $1`, [N]);
+    await rows(`insert into public.coinbase_links (user_id, sealed_tokens, expires_at) values ($1, $2, now())`, [O, SEALED]);
+    for (const who of [M, N, O]) await rows(`insert into public.plaid_items (user_id, item_id, sealed_token, sync_version) values ($1, 'item-m', $2, 4)`, [who, SEALED]);
+  });
+
+  it("hands a person's sealed sources only to the job's secret, only when they allowed it, and never with Coinbase linked", async () => {
+    expect(await as("anon", null, () => refused(`select public.alerts_sources($1, $2)`, ["x".repeat(44), M]))).toBe(true);
+    expect(await as("authenticated", M, () => refused(`select public.alerts_sources($1, $2)`, [SECRET, M]))).toBe(true);
+    expect(await as("anon", null, () => refused(`select public.alert_refresh_allowed($1)`, [M]))).toBe(true);
+    const mine = await sources(M);
+    expect(mine).toMatchObject({ banks: [expect.objectContaining({ item_id: "item-m", sealed_token: SEALED, sync_version: 4 })], imports: [] });
+    // Never a home's address: a morning check doesn't need one.
+    expect(JSON.stringify(mine)).not.toMatch(/home/);
+    expect(await sources(N)).toBeNull();
+    expect(await sources(O)).toBeNull();
+  });
+
+  it("keeps a bank's new copy only over the version read, stamped now, and only when allowed", async () => {
+    expect(await saveSync(M, 3)).toBe(false);
+    expect(await as("anon", null, () => refused(`select public.alerts_save_sync($1, $2, 'item-m', $3, 4, now() - interval '1 day')`, [SECRET, M, "z1." + "n".repeat(40)]))).toBe(true);
+    expect(await saveSync(N, 4)).toBe(false);
+    expect(await saveSync(O, 4)).toBe(false);
+    expect(await saveSync(M, 4)).toBe(true);
+    expect(await rows(`select user_id, sync_version from public.plaid_items where item_id = 'item-m' order by user_id`)).toEqual([
+      { user_id: M, sync_version: 5 },
+      { user_id: N, sync_version: 4 },
+      { user_id: O, sync_version: 4 },
+    ]);
+    // The same version can't land twice: a second save from 4 finds 5.
+    expect(await saveSync(M, 4)).toBe(false);
+  });
+
+  it("keeps the morning's snapshot only when allowed", async () => {
+    const save = (who: string) => job(`select public.alerts_save_snapshot($1, $2, $3) as ok`, [SECRET, who, "z1." + "s".repeat(40)]).then((r) => r[0]!.ok);
+    expect(await save(M)).toBe(true);
+    expect(await save(N)).toBe(false);
+    expect(await save(O)).toBe(false);
+    expect(await rows(`select user_id from public.alert_snapshots where user_id in ($1, $2, $3)`, [M, N, O])).toEqual([{ user_id: M }]);
+    // Turning the emails off still deletes it.
+    await rows(`update public.profiles set alert_email = false where user_id = $1`, [M]);
+    expect(await rows(`select user_id from public.alert_snapshots where user_id = $1`, [M])).toEqual([]);
+    expect(await save(M)).toBe(false);
+  });
+
+  it("goes with the person's account", async () => {
+    await rows(`delete from auth.users where id in ($1, $2, $3)`, [M, N, O]);
+    expect(await rows(`select count(*)::int as n from public.plaid_items where item_id = 'item-m'`)).toEqual([{ n: 0 }]);
+  });
+});

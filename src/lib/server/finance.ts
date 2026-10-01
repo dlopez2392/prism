@@ -177,6 +177,8 @@ type PlaidSync = {
   save: ((itemId: string, state: SyncState, fromVersion: number, startedAt: string) => void) | null;
   /** Where a bank's warning is cleared once Plaid answers (sign-in, revoked only) — null when nothing may be written. */
   clear: ((itemId: string) => void) | null;
+  /** The morning check (alert emails): balances and new transactions only, never holdings or a card's terms. */
+  minimal?: boolean;
 };
 
 /**
@@ -184,9 +186,15 @@ type PlaidSync = {
  * wallet after the response — `save` and `scan` are null when nothing may be
  * written (a device, a connected app), and whole wallets then show their last reading.
  */
-type WalletSource = { list: Wallet[]; save: ((fresh: Fresh) => void) | null; scan: ((wallets: Wallet[]) => void) | null };
+type WalletSource = {
+  list: Wallet[];
+  save: ((fresh: Fresh) => void) | null;
+  scan: ((wallets: Wallet[]) => void) | null;
+  /** The morning check: wallets as last read, asking no one (mempool.space and Alchemy hear from Prism only while it's in use). */
+  offline?: boolean;
+};
 
-type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets">;
+export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets">;
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -348,7 +356,7 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
   const [banks, crypto, read] = await Promise.all([
     config && src.items.length ? loadPlaid(config, src.items, today, src.plaidSync, src.categories) : Promise.resolve(emptyLive(today, config !== null)),
     src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed)) : Promise.resolve(null),
-    readWallets(src.wallets.list),
+    src.wallets.offline ? Promise.resolve({ wallets: src.wallets.list, fresh: new Map() as Fresh, later: [] as Wallet[] }) : readWallets(src.wallets.list),
   ]);
   if (read.fresh.size) src.wallets.save?.(read.fresh);
   if (read.later.length) src.wallets.scan?.(read.later);
@@ -482,7 +490,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
           email: src.account.email,
           firstName: src.firstName,
           calendarFeed: src.feedUpdatedAt !== null,
-          alerts: src.alerts ? { on: src.alerts.on, kinds: src.alerts.kinds, amounts: src.alerts.amounts } : null,
+          alerts: src.alerts ? { on: src.alerts.on, kinds: src.alerts.kinds, amounts: src.alerts.amounts, refresh: src.alerts.refresh } : null,
         }
       : null,
     carryover: carryoverOf(jar, src.account !== null),
@@ -650,6 +658,17 @@ export async function agentFinance(account: Account): Promise<AgentData> {
   };
 }
 
+/**
+ * The person's own money for the alert job's morning check, from sources it
+ * opened itself (src/lib/alerts/refresh.ts), drawn exactly as a visit draws
+ * it, plan and all. Null when nothing of theirs is live: the example
+ * household is never anyone's alert.
+ */
+export async function morningFinance(src: Money, plan: Plan, today: ISODate): Promise<FinanceData | null> {
+  if (!isLive(src)) return null;
+  return applyPlan((await moneyFor(src, today)).money, plan);
+}
+
 const FEED_STALE_MS = 6 * 60 * 60_000;
 
 async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live): Promise<void> {
@@ -762,7 +781,7 @@ async function bankFor(
   // A card's or a loan's terms: billed per bank from the first read, so only when switched on, only for a bank that
   // holds one, at most daily, and never for a connected app (it can't keep what it reads, so it would read again).
   let liabilities = copy?.liabilities ?? null;
-  const mayRead = sync === null || sync.save !== null;
+  const mayRead = (sync === null || sync.save !== null) && !sync?.minimal;
   if (mayRead && liabilitiesEnabled() && holdsDebt(next.accounts ?? []) && liabilitiesStale(liabilities)) {
     try {
       liabilities = { at: startedAt, list: await getLiabilities(config, item.accessToken) };
@@ -817,7 +836,7 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
         if (signIn) problems.push(`${name} needs you to sign in again — showing it as of the last sync.`);
         else if (bank.fromCopy) problems.push(`${name} couldn't be updated just now — showing it as of the last sync.`);
         // Holdings aren't kept in the copy, and a bank waiting on a sign-in would only refuse again.
-        if (!signIn && bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
+        if (!signIn && !sync?.minimal && bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
           try {
             const h = await getHoldings(config, item.accessToken);
             holdings.push(...mapHoldings(h.holdings, h.securities));

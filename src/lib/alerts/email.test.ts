@@ -12,7 +12,7 @@ const email: Email = {
   subject: "Tom & Jerry's <Diner> may not be covered on Thu, Oct 8",
   items: [{ title: "Tom & Jerry's <Diner> may not be covered on Thu, Oct 8", detail: `It's due before payday. <script>alert("x")</script>`, href: "/future", urgent: true }],
   summary: { title: "Your week", lines: [{ label: "Spent", value: "$840 from Sep 27 to Oct 3, $40 more than the week before" }], note: null },
-  asOf: "2026-10-04",
+  asOf: { day: "2026-10-04", by: "visit" },
   fingerprints: [],
 };
 

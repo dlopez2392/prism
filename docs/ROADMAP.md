@@ -149,5 +149,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
    only through functions answering to `CRON_SECRET` (no service-role key),
    from a sealed snapshot each visit leaves; Resend, one-click unsubscribe,
    no tracking. Off until the owner sets `RESEND_API_KEY`, `CRON_SECRET` and
-   the secret's fingerprint (README, "Alert emails"). **Next:** a daily bank
-   refresh so alerts don't wait on a visit.
+   the secret's fingerprint (README, "Alert emails"). **Switched on in
+   production (2026-10-01).** **Morning check built (2026-10-01,
+   owner-approved):** with "Check my banks each morning" on (and no Coinbase
+   linked), the job reads the person's banks before deciding what to send, so
+   alerts don't wait on a visit: sealed sources through a secret-gated
+   function, balances and new transactions only, writing back only the bank's
+   copy (version-guarded) and the snapshot.

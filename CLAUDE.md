@@ -188,9 +188,17 @@
   or the household view), kept only while their emails are on. Each alert is
   sent once by fingerprint (sha256 of person + alert id); a quiet Monday
   still sends its summary, saying so. Emails carry no images or tracking and
-  one-click unsubscribe (HMAC of `CRON_SECRET`). Never give the job a
-  service-role key, never let it write anything but delivery fingerprints and
-  the off switch, and keep amounts out of an email whose owner turned them off.
+  one-click unsubscribe (HMAC of `CRON_SECRET`). The MORNING CHECK
+  (`src/lib/alerts/refresh.ts`, migration `alert_refresh`, owner-approved
+  2026-10-01) is the one place Prism reads a bank without its owner present:
+  only with `profiles.alert_refresh` on, never with Coinbase linked (its
+  refresh token is single-use), sealed sources only through
+  `alerts_sources`, Plaid asked for balances and new transactions only
+  (`PlaidSync.minimal`: no holdings, no liabilities), wallets never re-read
+  (`WalletSource.offline`), and the only writes a bank's sealed copy over the
+  version read (`alerts_save_sync`) and the snapshot. Never give the job a
+  service-role key, never widen what it reads or writes beyond that, and keep
+  amounts out of an email whose owner turned them off.
 - Bank redirects (OAuth banks): `/connections/return` is the address
   allow-listed with Plaid (`RETURN_PATH`), so never move or rename it. It
   resumes Link with the SAME Link token, kept in the httpOnly

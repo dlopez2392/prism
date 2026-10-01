@@ -87,7 +87,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           <Card className="p-5 sm:p-6">
             <CardHeader
               title="Alert emails"
-              subtitle="A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and a short summary on Mondays. Bills and figures are as of your last visit, and each email says when that was. No tracking, and one click stops them."
+              subtitle="A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and a short summary on Mondays. Bills and figures are as of your last visit, or this morning's check of your banks if you allow it, and each email says which. No tracking, and one click stops them."
             />
             <AlertEmails settings={alerts} email={email} />
           </Card>

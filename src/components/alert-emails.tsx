@@ -14,7 +14,7 @@ import { BRAND } from "@/lib/brand";
 import { IDLE } from "@/lib/finance/plan";
 import { saveAlertEmails } from "@/lib/server/alert-actions";
 
-export type AlertEmailSettings = { on: boolean; kinds: AlertChoice[]; amounts: boolean };
+export type AlertEmailSettings = { on: boolean; kinds: AlertChoice[]; amounts: boolean; refresh: boolean };
 
 const box = "mt-0.5 size-4 shrink-0 accent-button";
 
@@ -58,6 +58,16 @@ export function AlertEmails({ settings, email }: { settings: AlertEmailSettings;
           </p>
         ) : null}
         <label className="flex items-start gap-2.5 border-t border-line pt-3 text-sm text-ink-1">
+          <input type="checkbox" name="refresh" defaultChecked={settings.refresh} className={box} />
+          <span>
+            Check my banks each morning
+            <span className="block text-xs text-ink-3">
+              So an email speaks for today, not your last visit. Before sending, {BRAND.product} reads your banks&apos; balances and new transactions, nothing more, and keeps them
+              encrypted as usual. Not with Coinbase connected.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2.5 text-sm text-ink-1">
           <input type="checkbox" name="amounts" defaultChecked={settings.amounts} className={box} />
           <span>
             Show dollar amounts
