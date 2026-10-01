@@ -16,7 +16,7 @@ import { Bullets, legalLink as link, Section, ShortVersion } from "@/components/
 import { Card, PageHeader } from "@/components/ui";
 import { BRAND } from "@/lib/brand";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
-import { POLICY_UPDATED, PRIVACY_CONTACT, providers, STORED_ON_DEVICE } from "@/lib/privacy";
+import { POLICY_UPDATED, PRIVACY_CONTACT, providers, PUSH_SERVICES, STORED_ON_DEVICE } from "@/lib/privacy";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { chainEnabled } from "@/lib/crypto/balances";
 import { alertsConfig } from "@/lib/alerts/send";
@@ -120,6 +120,13 @@ export default function PrivacyPage() {
             ) : null}
             {alerts ? (
               <li>
+                If you turn on alerts on a phone or other device: what its browser gives {BRAND.product} to reach it (an address at its notification service,
+                and the keys to encrypt messages for it), stored encrypted, and which kind of device it is, such as &ldquo;iPhone&rdquo;, so you can tell your
+                devices apart.
+              </li>
+            ) : null}
+            {alerts ? (
+              <li>
                 If you also leave &ldquo;Check my banks each morning&rdquo; on, {BRAND.product} reads your banks&apos; balances and new transactions once each morning,
                 even when you haven&apos;t opened it, so an alert email speaks for that day. It keeps them encrypted like the rest, and never does this with Coinbase
                 connected. Turn it off on the Account page and only your own visits read your banks again.
@@ -139,7 +146,7 @@ export default function PrivacyPage() {
             <li>To show you your money: balances, spending, budgets, goals, bills and insights.</li>
             <li>To keep your connections up to date, and to tell you when one needs attention.</li>
             <li>To sign you in and send your sign-in codes.</li>
-            {alerts ? <li>To email you alerts and a Monday summary, if you turn them on.</li> : null}
+            {alerts ? <li>To email you alerts and a Monday summary, and send the same alerts to your devices, if you turn them on.</li> : null}
             <li>To answer questions from AI apps you&apos;ve approved, read-only.</li>
             <li>To keep {BRAND.product} secure, prevent abuse, and fix problems.</li>
           </Bullets>
@@ -184,6 +191,23 @@ export default function PrivacyPage() {
               <span className="font-semibold text-ink-1">Your calendar app</span>, if you subscribe to the bills feed. It reads your upcoming bills and paydays,
               and amounts only if you choose to include them.
             </li>
+            {alerts ? (
+              <li>
+                <span className="font-semibold text-ink-1">Your browser&apos;s notification service</span>, if you turn on alerts on a device. It carries each
+                alert to that device, and it&apos;s run by the company that makes your browser:{" "}
+                {PUSH_SERVICES.map((p, i) => (
+                  <span key={p.name}>
+                    {i ? "; " : null}
+                    <a href={p.policy} className={link} target="_blank" rel="noopener noreferrer">
+                      {p.name}
+                    </a>{" "}
+                    for {p.does.replace(/\.$/, "")}
+                  </span>
+                ))}
+                . Each alert is encrypted for your device before it leaves {BRAND.product}, so the service can&apos;t read it: it sees only that a message went
+                to your device, how big it was, and when.
+              </li>
+            ) : null}
           </Bullets>
           <p>
             We may also share information when the law requires it, to protect someone&apos;s safety, or if {BRAND.companyShort} is ever merged or sold. In that
@@ -215,8 +239,9 @@ export default function PrivacyPage() {
             <li>A wallet&apos;s address or extended public key stays until you remove the wallet on Connections, or delete your account.</li>
             {alerts ? (
               <li>
-                What&apos;s kept for your alert emails is deleted the moment you turn them off. The fingerprints of alerts already sent are deleted after 120
-                days.
+                What&apos;s kept for your alert emails, and every device you get alerts on, is deleted the moment you turn them off. A device is also deleted
+                when you stop alerts on it, or when its notification service says it no longer exists. The fingerprints of alerts already sent are deleted
+                after 120 days.
               </li>
             ) : null}
             <li>
@@ -245,7 +270,12 @@ export default function PrivacyPage() {
               .
             </li>
             <li>Change your name, and turn the calendar feed off, whenever you like.</li>
-            {alerts ? <li>Turn alert emails on or off, and choose what they cover, on the Account page, or stop them with the link in any of them.</li> : null}
+            {alerts ? (
+              <li>
+                Turn alert emails on or off, and choose what they cover, on the Account page, or stop them with the link in any of them. Turn alerts on or
+                off for each of your devices there too.
+              </li>
+            ) : null}
             <li>
               Delete your account for good on the{" "}
               <Link href="/account" className={link}>

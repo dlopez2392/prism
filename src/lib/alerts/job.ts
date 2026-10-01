@@ -4,20 +4,24 @@
 // which answers only to the job's secret), open each snapshot with the vault
 // key, check their banks again first where they allowed it and the snapshot
 // is old (refresh.ts), work out what's new (plan.ts), send it (send.ts), and
-// record what went (alerts_sent), so it goes once. People are taken one at a
-// time and the run stops at its deadline; whoever is left is first in line
-// tomorrow, since nothing of theirs was recorded as sent.
+// record what went (alerts_sent), so it goes once. The same news then goes to
+// each device the person lets Prism notify (push_due, webpush.ts), encrypted
+// for that device; one its push service says is gone is forgotten
+// (push_forget). People are taken one at a time and the run stops at its
+// deadline; whoever is left is first in line tomorrow, since nothing of theirs
+// was recorded as sent.
 //
 // It logs counts only, never an address, a name or an amount.
 
 import "server-only";
 import { createHash } from "node:crypto";
 import { validSnapshot } from "@/lib/finance/alert-snapshot";
-import { openPacked, type VaultKey } from "@/lib/server/vault";
+import { openJson, openPacked, type VaultKey } from "@/lib/server/vault";
 import { renderEmail } from "./email";
-import { emailFor, isAlertChoice, type BankFlag, type Recipient } from "./plan";
+import { emailFor, isAlertChoice, phoneAlertFor, type BankFlag, type PhoneAlert, type Recipient } from "./plan";
 import { morningCheck } from "./refresh";
 import { sendAlertEmail, unsubscribeLinks, type AlertsConfig } from "./send";
+import { PUSH_SUBJECT, sendPush, validSubscription, vapidKeys, type VapidKeys } from "./webpush";
 
 /** The few database calls the job makes, all through the anon key and the secret. */
 export type JobDb = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> };
@@ -44,9 +48,15 @@ export type JobReport = {
   /** Morning checks that left a new snapshot, and ones that didn't finish (the last snapshot stood). */
   refreshed: number;
   unrefreshed: number;
+  /** Notifications handed to a device's push service; ones that didn't go; devices forgotten as gone. */
+  pushed: number;
+  pushFailed: number;
+  forgotten: number;
   later: number;
   stopped: boolean;
 };
+
+type DeviceRow = { user_id: string; id: string; sealed: string };
 
 /** A snapshot younger than this is today's already (a visit, or a check that ran): no need to read the banks again. */
 export const REFRESH_AFTER_MS = 12 * 60 * 60_000;
@@ -76,6 +86,44 @@ function banksOf(x: unknown): BankFlag[] {
   );
 }
 
+/** Everyone's devices, listed once a run, on its first sent email; none when the database won't say. */
+async function devicesOf(db: JobDb, config: AlertsConfig): Promise<Map<string, DeviceRow[]>> {
+  const byPerson = new Map<string, DeviceRow[]>();
+  const { data, error } = await db.rpc("push_due", { p_secret: config.secret });
+  if (error || !Array.isArray(data)) {
+    console.error("Prism: the alert job couldn't list the devices to notify; emails still go.");
+    return byPerson;
+  }
+  for (const d of data as DeviceRow[]) {
+    if (typeof d?.user_id !== "string" || typeof d.id !== "string" || typeof d.sealed !== "string") continue;
+    byPerson.set(d.user_id, [...(byPerson.get(d.user_id) ?? []), d]);
+  }
+  return byPerson;
+}
+
+/**
+ * The email's news on each of one person's devices, at once. A device is
+ * forgotten when no key in the ring opens it, when it subscribed to a VAPID
+ * key that has since been replaced (no push service would take it), or when
+ * its push service says it's gone.
+ */
+async function notify(db: JobDb, config: AlertsConfig, key: VaultKey, vapid: VapidKeys, devices: DeviceRow[], alert: PhoneAlert, report: JobReport, fetchImpl: typeof fetch) {
+  await Promise.all(
+    devices.map(async (d) => {
+      const opened = openJson(d.sealed, key) as { vapid?: unknown } | null;
+      const sub = validSubscription(opened);
+      const current = opened?.vapid === undefined || opened.vapid === vapid.publicKey;
+      const result = sub && current ? await sendPush(sub, alert, vapid, PUSH_SUBJECT, fetchImpl) : "gone";
+      if (result === "sent") report.pushed++;
+      else if (result === "failed") report.pushFailed++;
+      else {
+        const forgot = await db.rpc("push_forget", { p_secret: config.secret, p_user_id: d.user_id, p_id: d.id });
+        if (!forgot.error) report.forgotten++;
+      }
+    }),
+  );
+}
+
 function recipient(row: DueRow, key: VaultKey): { r: Recipient; unopened: boolean } {
   const snapshot = row.sealed ? validSnapshot(openPacked(row.sealed, key)) : null;
   return {
@@ -102,7 +150,24 @@ export async function runAlertJob(
   const { data, error } = await db.rpc("alerts_due", { p_secret: config.secret });
   if (error || !Array.isArray(data)) throw new Error("The database didn't say who is due an alert email.");
   const rows = data as DueRow[];
-  const report: JobReport = { due: rows.length, sent: 0, quiet: 0, failed: 0, refused: 0, unopened: 0, refreshed: 0, unrefreshed: 0, later: 0, stopped: false };
+  const report: JobReport = {
+    due: rows.length,
+    sent: 0,
+    quiet: 0,
+    failed: 0,
+    refused: 0,
+    unopened: 0,
+    refreshed: 0,
+    unrefreshed: 0,
+    pushed: 0,
+    pushFailed: 0,
+    forgotten: 0,
+    later: 0,
+    stopped: false,
+  };
+  // Asked for only once there's news to send, so a quiet morning makes no extra call.
+  let devices: Map<string, DeviceRow[]> | null = null;
+  let vapid: VapidKeys | null = null;
 
   for (const [i, row] of rows.entries()) {
     if (report.stopped || Date.now() > deadline) {
@@ -149,6 +214,12 @@ export async function runAlertJob(
     const recorded = await db.rpc("alerts_sent", { p_secret: config.secret, p_user_id: r.userId, p_fingerprints: email.fingerprints });
     // Sent but not recorded: Resend's idempotency covers a retry today; tomorrow it would go again.
     if (recorded.error) console.error("Prism: an alert email went out but wasn't recorded as sent.");
+    devices ??= await devicesOf(db, config);
+    const theirs = devices.get(r.userId);
+    if (theirs?.length) {
+      vapid ??= vapidKeys(config.secret);
+      await notify(db, config, key, vapid, theirs, phoneAlertFor(email), report, fetchImpl);
+    }
   }
   return report;
 }

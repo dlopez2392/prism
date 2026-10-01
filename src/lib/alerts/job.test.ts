@@ -6,7 +6,9 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
-import { sealPacked } from "@/lib/server/vault";
+import { sealJson, sealPacked } from "@/lib/server/vault";
+import { decryptAsPhone, phoneKeys } from "./test-helpers";
+import { vapidKeys } from "./webpush";
 
 vi.mock("server-only", () => ({}));
 const morningCheck = vi.fn<(...args: unknown[]) => Promise<AlertSnapshot | null>>(async () => null);
@@ -55,13 +57,14 @@ const row = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function fakeDb(due: unknown[], { failRecord = false } = {}) {
+function fakeDb(due: unknown[], { failRecord = false, devices = [] as unknown[] | null } = {}) {
   const calls: [string, Record<string, unknown>][] = [];
   return {
     calls,
     rpc: async (fn: string, args: Record<string, unknown>) => {
       calls.push([fn, args]);
       if (fn === "alerts_due") return { data: due, error: null };
+      if (fn === "push_due") return devices ? { data: devices, error: null } : { data: null, error: { message: "no" } };
       return { data: null, error: failRecord ? { message: "no" } : null };
     },
   };
@@ -74,12 +77,13 @@ describe("the alert email job", () => {
     const db = fakeDb([row(), row({ user_id: V, email: "b@x.test", kinds: ["bank"] })]);
     const fetchImpl = resend();
     const report = await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl });
-    expect(report).toEqual({ due: 2, sent: 1, quiet: 1, failed: 0, refused: 0, unopened: 0, refreshed: 0, unrefreshed: 0, later: 0, stopped: false });
+    expect(report).toEqual({ due: 2, sent: 1, quiet: 1, failed: 0, refused: 0, unopened: 0, refreshed: 0, unrefreshed: 0, pushed: 0, pushFailed: 0, forgotten: 0, later: 0, stopped: false });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body)).to).toEqual(["a@x.test"]);
     expect(db.calls).toEqual([
       ["alerts_due", { p_secret: config.secret }],
       ["alerts_sent", { p_secret: config.secret, p_user_id: U, p_fingerprints: [fingerprint(U, "price-rise:s1:1599")] }],
+      ["push_due", { p_secret: config.secret }],
     ]);
   });
 
@@ -120,6 +124,89 @@ describe("the alert email job", () => {
   it("fails loudly when the database won't say who is due", async () => {
     const db = { rpc: async () => ({ data: null, error: { message: "not allowed" } }) };
     await expect(runAlertJob(db, config, key, { now: TUESDAY, fetchImpl: resend() })).rejects.toThrow(/didn't say who is due/);
+  });
+
+  describe("on a phone", () => {
+    const phone = phoneKeys();
+    const FCM = "https://fcm.googleapis.com/fcm/send/device-1";
+    const APPLE = "https://web.push.apple.com/device-2";
+    const VAPID = vapidKeys(config.secret).publicKey;
+    const device = (id: string, endpoint: string, sealedWith = key, user = U, vapid = VAPID) => ({
+      user_id: user,
+      id,
+      sealed: sealJson({ endpoint, p256dh: phone.p256dh, auth: phone.auth, vapid }, sealedWith),
+    });
+    /** Resend answers 200; each push service answers as told. */
+    const services = (answers: Record<string, number> = {}) =>
+      vi.fn(async (url: RequestInfo | URL) => new Response("{}", { status: answers[String(url)] ?? (String(url).includes("resend") ? 200 : 201) }));
+    const pushes = (fetchImpl: ReturnType<typeof services>) =>
+      (fetchImpl.mock.calls as unknown as [string, RequestInit][]).filter(([url]) => !url.includes("resend"));
+
+    it("sends the email's news to each of the person's devices, encrypted for that device, after the email", async () => {
+      const db = fakeDb([row()], { devices: [device("d1", FCM), device("d2", APPLE)] });
+      const fetchImpl = services();
+      expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ sent: 1, pushed: 2, pushFailed: 0, forgotten: 0 });
+      expect(String(fetchImpl.mock.calls[0]![0])).toMatch(/resend/);
+      const sent = pushes(fetchImpl);
+      expect(sent.map(([url]) => url).sort()).toEqual([APPLE, FCM].sort());
+      for (const [, init] of sent) {
+        expect(init.headers).toMatchObject({ "Content-Encoding": "aes128gcm", Authorization: expect.stringMatching(/^vapid t=/) });
+        const read = JSON.parse(decryptAsPhone(Buffer.from(init.body as Uint8Array), phone.privateKey, phone.authSecret).toString());
+        expect(read).toEqual({ title: "StreamCo went up to $15.99", body: "It was $12.99.", url: "/cash-flow" });
+      }
+    });
+
+    it("keeps an amount off the phone when the person turned amounts off", async () => {
+      const fetchImpl = services();
+      await runAlertJob(fakeDb([row({ amounts: false })], { devices: [device("d1", FCM)] }), config, key, { now: TUESDAY, fetchImpl });
+      const init = pushes(fetchImpl)[0]![1];
+      const read = decryptAsPhone(Buffer.from(init.body as Uint8Array), phone.privateKey, phone.authSecret).toString();
+      expect(JSON.parse(read)).toEqual({ title: "StreamCo raised its price", body: "Its latest charge was higher.", url: "/cash-flow" });
+    });
+
+    it("forgets a device its push service says is gone, and one no key opens, and only those", async () => {
+      const db = fakeDb([row()], { devices: [device("gone", FCM), device("lost", APPLE, randomBytes(32)), device("ok", "https://updates.push.services.mozilla.com/wpush/v2/x")] });
+      const fetchImpl = services({ [FCM]: 410 });
+      expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ pushed: 1, forgotten: 2, pushFailed: 0 });
+      expect(db.calls.filter(([fn]) => fn === "push_forget").map(([, a]) => a.p_id).sort()).toEqual(["gone", "lost"]);
+      expect(db.calls.find(([fn]) => fn === "push_forget")![1]).toMatchObject({ p_secret: config.secret, p_user_id: U });
+      // The device no key opens was never sent anything.
+      expect(pushes(fetchImpl).map(([url]) => url)).not.toContain(APPLE);
+    });
+
+    it("forgets, without sending, a device made for a VAPID key that has since been replaced", async () => {
+      const stale = vapidKeys("an-older-secret".padEnd(44, "o")).publicKey;
+      const db = fakeDb([row()], { devices: [device("old", FCM, key, U, stale), device("new", APPLE)] });
+      const fetchImpl = services();
+      expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ pushed: 1, forgotten: 1 });
+      expect(pushes(fetchImpl).map(([url]) => url)).toEqual([APPLE]);
+      expect(db.calls.filter(([fn]) => fn === "push_forget").map(([, a]) => a.p_id)).toEqual(["old"]);
+    });
+
+    it("counts a push service that fails, keeps the device, and still counts the email as sent", async () => {
+      const db = fakeDb([row()], { devices: [device("d1", FCM)] });
+      expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl: services({ [FCM]: 503 }) })).toMatchObject({ sent: 1, pushed: 0, pushFailed: 1, forgotten: 0 });
+      expect(db.calls.map(([fn]) => fn)).not.toContain("push_forget");
+    });
+
+    it("sends nothing to a phone when the email didn't go, and never asks for devices on a quiet morning", async () => {
+      const failed = fakeDb([row()], { devices: [device("d1", FCM)] });
+      const fetchImpl = services({ "https://api.resend.com/emails": 500 });
+      expect(await runAlertJob(failed, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ failed: 1, pushed: 0 });
+      expect(pushes(fetchImpl)).toEqual([]);
+      const quiet = fakeDb([row({ kinds: ["bank"] })], { devices: [device("d1", FCM)] });
+      await runAlertJob(quiet, config, key, { now: TUESDAY, fetchImpl: services() });
+      expect(quiet.calls.map(([fn]) => fn)).toEqual(["alerts_due"]);
+    });
+
+    it("asks for the devices once a run, and still emails everyone when the database won't list them", async () => {
+      const db = fakeDb([row(), row({ user_id: V, email: "b@x.test" })], { devices: [device("d1", FCM), device("d2", APPLE, key, V)] });
+      const fetchImpl = services();
+      expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ sent: 2, pushed: 2 });
+      expect(db.calls.filter(([fn]) => fn === "push_due")).toHaveLength(1);
+      const refused = fakeDb([row(), row({ user_id: V, email: "b@x.test" })], { devices: null });
+      expect(await runAlertJob(refused, config, key, { now: TUESDAY, fetchImpl: services() })).toMatchObject({ sent: 2, pushed: 0 });
+    });
   });
 
   describe("the morning check", () => {

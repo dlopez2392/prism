@@ -481,6 +481,9 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealPacked({ v: 1, wallets: [] }, ring(newKey)),
     ]);
     await rows(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, gen_random_uuid(), 0, $2)`, [D, sealPacked({ v: 1, transactions: [] }, ring(oldKey))]);
+    // A device is kept only while alerts are on.
+    await rows(`update public.profiles set alert_email = true where user_id = $1`, [D]);
+    await rows(`insert into public.push_subscriptions (user_id, endpoint_hash, sealed, device) values ($1, $2, $3, 'iPhone')`, [D, "e".repeat(64), sealJson({ endpoint: "e" }, ring(newKey))]);
     const after = await census();
     const delta = (what: string, id: string) => (after.get(`${what} ${id}`) ?? 0) - (before.get(`${what} ${id}`) ?? 0);
     expect([
@@ -496,7 +499,8 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       delta("home addresses", o),
       delta("wallets", n),
       delta("imported history", o),
-    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+      delta("phone notifications", n),
+    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
     for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
     await rows(`delete from auth.users where id = $1`, [D]);
   });
@@ -1185,5 +1189,116 @@ describe("the morning check", () => {
   it("goes with the person's account", async () => {
     await rows(`delete from auth.users where id in ($1, $2, $3)`, [M, N, O]);
     expect(await rows(`select count(*)::int as n from public.plaid_items where item_id = 'item-m'`)).toEqual([{ n: 0 }]);
+  });
+});
+
+describe("alerts on a phone", () => {
+  const [S, T, U] = ["a4000000-0000-4000-8000-0000000000a1", "a4000000-0000-4000-8000-0000000000a2", "a4000000-0000-4000-8000-0000000000a3"];
+  const SECRET = "p".repeat(44);
+  const sealed = "x".repeat(60);
+  const hash = (n: number) => createHash("sha256").update(`endpoint-${n}`).digest("hex");
+  const job = (sql: string, params: unknown[] = []) => as("anon", null, () => rows(sql, params));
+  const save = (who: string, n: number, claims: Record<string, unknown> = {}) =>
+    as(
+      "authenticated",
+      who,
+      () =>
+        rows(
+          `insert into public.push_subscriptions (user_id, endpoint_hash, sealed, device) values ($1, $2, $3, 'iPhone')
+           on conflict (user_id, endpoint_hash) do update set sealed = excluded.sealed, device = excluded.device returning id`,
+          [who, hash(n), sealed],
+        ),
+      claims,
+    );
+  const devices = async (who: string) => (await rows(`select endpoint_hash from public.push_subscriptions where user_id = $1 order by endpoint_hash`, [who])).length;
+
+  beforeAll(async () => {
+    await rows(`insert into auth.users (id, email) values ($1, 's@x.test'), ($2, 't@x.test'), ($3, 'u@x.test')`, [S, T, U]);
+    await rows(`insert into public.job_keys (name, sha256) values ('alerts', $1) on conflict (name) do update set sha256 = excluded.sha256`, [createHash("sha256").update(SECRET).digest("hex")]);
+    // S and U have alerts on; T doesn't.
+    await rows(`update public.profiles set alert_email = true where user_id in ($1, $2)`, [S, U]);
+  });
+
+  it("keeps a device only while the person's alerts are on, as ciphertext, theirs alone", async () => {
+    expect(await save(T, 1).then(() => false, () => true)).toBe(true);
+    expect(await save(S, 1)).toHaveLength(1);
+    // Saving the same device again replaces it rather than adding one.
+    expect(await save(S, 1)).toHaveLength(1);
+    expect(await devices(S)).toBe(1);
+    expect(await as("authenticated", T, () => refused(`insert into public.push_subscriptions (user_id, endpoint_hash, sealed, device) values ($1, $2, $3, 'Mac')`, [S, hash(9), sealed]))).toBe(true);
+    expect(await as("authenticated", S, () => refused(`insert into public.push_subscriptions (user_id, endpoint_hash, sealed, device) values ($1, $2, 'https://fcm.googleapis.com/x', 'Mac')`, [S, hash(9)]))).toBe(true);
+    expect(await as("authenticated", S, () => refused(`insert into public.push_subscriptions (user_id, endpoint_hash, sealed, device) values ($1, $2, $3, 'My phone')`, [S, hash(9), sealed]))).toBe(true);
+    expect(await as("authenticated", T, () => rows(`select * from public.push_subscriptions`))).toEqual([]);
+    expect(await as("authenticated", T, () => rows(`delete from public.push_subscriptions returning id`))).toEqual([]);
+    expect(await as("anon", null, () => refused(`select * from public.push_subscriptions`))).toBe(true);
+  });
+
+  it("keeps five devices at most, and saving one of them again is never a sixth", async () => {
+    for (const n of [2, 3, 4, 5]) await save(S, n);
+    expect(await devices(S)).toBe(5);
+    expect(await save(S, 6).then(() => false, () => true)).toBe(true);
+    expect(await save(S, 3)).toHaveLength(1);
+    expect(await devices(S)).toBe(5);
+    await as("authenticated", S, () => rows(`delete from public.push_subscriptions where endpoint_hash = $1`, [hash(5)]));
+    expect(await save(S, 6)).toHaveLength(1);
+  });
+
+  it("is out of a connected app's reach, and a session short of the second step's", async () => {
+    await as(
+      "authenticated",
+      S,
+      async () => {
+        expect(await rows(`select * from public.push_subscriptions`)).toEqual([]);
+        expect(await rows(`delete from public.push_subscriptions returning id`)).toEqual([]);
+      },
+      CONNECTED_APP,
+    );
+    expect(await save(S, 7, CONNECTED_APP).then(() => false, () => true)).toBe(true);
+    const [F, EMAIL_ONLY, PASSED] = ["a4100000-0000-4000-8000-000000000001", "a4100000-0000-4000-8000-000000000002", "a4100000-0000-4000-8000-000000000003"];
+    await rows(`insert into auth.mfa_factors (id, user_id, status) values ($1, $2, 'verified')`, [F, S]);
+    await rows(`insert into auth.sessions (id, user_id, aal, factor_id) values ($1, $3, 'aal1', null), ($2, $3, 'aal2', $4)`, [EMAIL_ONLY, PASSED, S, F]);
+    await as("authenticated", S, () => rows(`update public.profiles set totp_factor_id = $2 where user_id = $1`, [S, F]), { session_id: PASSED, aal: "aal2" });
+    expect(await as("authenticated", S, () => rows(`select * from public.push_subscriptions`), { session_id: EMAIL_ONLY, aal: "aal1" })).toEqual([]);
+    expect(await save(S, 7, { session_id: EMAIL_ONLY, aal: "aal1" }).then(() => false, () => true)).toBe(true);
+    expect(await as("authenticated", S, () => rows(`select id from public.push_subscriptions`), { session_id: PASSED, aal: "aal2" })).toHaveLength(5);
+    await rows(`update public.profiles set totp_factor_id = null where user_id = $1`, [S]);
+  });
+
+  it("hands the job sealed devices only for its secret, only for people with alerts on, and forgets only the one it names", async () => {
+    expect(await as("anon", null, () => refused(`select * from public.push_due($1)`, ["x".repeat(44)]))).toBe(true);
+    expect(await as("authenticated", S, () => refused(`select * from public.push_due($1)`, [SECRET]))).toBe(true);
+    await save(U, 1);
+    const due = await job(`select user_id, id, sealed from public.push_due($1)`, [SECRET]);
+    expect(new Set(due.map((r) => r.user_id))).toEqual(new Set([S, U]));
+    expect(due.every((r) => r.sealed === sealed)).toBe(true);
+    const [u] = due.filter((r) => r.user_id === U);
+    // The wrong person's id forgets nothing; the right one forgets that device alone.
+    await job(`select public.push_forget($1, $2, $3)`, [SECRET, S, u!.id]);
+    expect(await devices(U)).toBe(1);
+    expect(await as("anon", null, () => refused(`select public.push_forget($1, $2, $3)`, ["x".repeat(44), U, u!.id]))).toBe(true);
+    await job(`select public.push_forget($1, $2, $3)`, [SECRET, U, u!.id]);
+    expect(await devices(U)).toBe(0);
+  });
+
+  it("forgets every device the moment alerts are turned off, and nobody else's", async () => {
+    await save(U, 2);
+    await as("authenticated", S, () => rows(`update public.profiles set alert_email = false where user_id = $1`, [S]));
+    expect(await devices(S)).toBe(0);
+    expect(await devices(U)).toBe(1);
+    expect((await job(`select user_id from public.push_due($1)`, [SECRET])).map((r) => r.user_id)).toEqual([U]);
+    // Even a device that somehow outlived the switch (written past every policy) is never handed to the job.
+    await rows(`insert into public.push_subscriptions (user_id, endpoint_hash, sealed, device) values ($1, $2, $3, 'Mac')`, [T, hash(8), sealed]);
+    expect((await job(`select user_id from public.push_due($1)`, [SECRET])).map((r) => r.user_id)).toEqual([U]);
+    await rows(`delete from public.push_subscriptions where user_id = $1`, [T]);
+  });
+
+  it("never reaches a household", async () => {
+    const [def] = await rows(`select pg_get_functiondef('public.household_shared_money()'::regprocedure) as d`);
+    expect(String(def!.d)).not.toMatch(/push/);
+  });
+
+  it("goes with the person's account", async () => {
+    await rows(`delete from auth.users where id in ($1, $2, $3)`, [S, T, U]);
+    expect(await rows(`select count(*)::int as n from public.push_subscriptions`)).toEqual([{ n: 0 }]);
   });
 });

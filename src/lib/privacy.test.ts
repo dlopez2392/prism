@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { PRIVACY_CONTACT, PROVIDERS, STORED_ON_DEVICE } from "./privacy";
+import { PRIVACY_CONTACT, PROVIDERS, PUSH_SERVICES, STORED_ON_DEVICE } from "./privacy";
 
 const SRC = path.resolve(import.meta.dirname, "..");
 
@@ -78,7 +78,26 @@ describe("the privacy policy", () => {
 
   it("names the companies that handle people's data, with their own policies, and a way to reach us", () => {
     expect(PROVIDERS.map((p) => p.name)).toEqual(expect.arrayContaining(["Plaid", "Supabase", "Vercel", "Resend"]));
-    for (const p of PROVIDERS) expect(p.policy, p.name).toMatch(/^https:\/\//);
+    for (const p of [...PROVIDERS, ...PUSH_SERVICES]) expect(p.policy, p.name).toMatch(/^https:\/\//);
     expect(PRIVACY_CONTACT).toMatch(/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/);
+  });
+});
+
+describe("the push services the policy names", () => {
+  it("are every service a device's alerts can be sent to, and no other", async () => {
+    const { PUSH_HOSTS } = await import("./alerts/webpush");
+    const known: Record<string, string> = {
+      "fcm.googleapis.com": "Google",
+      "updates.push.services.mozilla.com": "Mozilla",
+      "web.push.apple.com": "Apple",
+      "wns2-par02p.notify.windows.com": "Microsoft",
+    };
+    // Each allowed host is one of these companies'; a new one fails here until the policy names it.
+    const named = PUSH_HOSTS.map((h) => {
+      const hits = Object.keys(known).filter((host) => h.test(host));
+      expect(hits, String(h)).toHaveLength(1);
+      return known[hits[0]!]!;
+    });
+    expect(PUSH_SERVICES.map((p) => p.name).sort()).toEqual([...new Set(named)].sort());
   });
 });

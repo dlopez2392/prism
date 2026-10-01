@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import type { Alert } from "@/lib/finance/alerts";
 import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
-import { emailFor, fingerprint, localDay, type Recipient } from "./plan";
+import { emailFor, fingerprint, localDay, phoneAlertFor, type Recipient } from "./plan";
 
 const U = "11111111-1111-4111-8111-111111111111";
 // Monday Oct 5 2026, 13:00 UTC: 8 AM in Chicago, still Monday there.
@@ -167,5 +167,39 @@ describe("a person's own day", () => {
     expect(localDay("America/Chicago", new Date("2026-10-05T03:00:00Z"))).toBe("2026-10-04");
     expect(localDay(null, new Date("2026-10-05T03:00:00Z"))).toBe("2026-10-05");
     expect(localDay("Mars/Olympus", new Date("2026-10-05T03:00:00Z"))).toBe("2026-10-05");
+  });
+});
+
+describe("the same news on a phone", () => {
+  it("leads with the most urgent item in the email's own words, counts the rest, and opens where the email's link does", () => {
+    const e = emailFor(person(), MONDAY)!;
+    expect(phoneAlertFor(e)).toEqual({
+      title: "Oak Street Rent ($1,800) may not be covered on Thu, Oct 8",
+      body: "It's due before your paycheck on Fri, Oct 9, and Everyday Checking is on track to be $1,300 short after it. And 2 more in today's email.",
+      url: "/future",
+    });
+  });
+
+  it("never shows an amount the person turned off", () => {
+    const quiet = phoneAlertFor(emailFor(person({ amounts: false }), MONDAY)!);
+    expect(JSON.stringify(quiet)).not.toMatch(/\$|\d,\d{3}/);
+    expect(quiet.title).toBe("Oak Street Rent may not be covered on Thu, Oct 8");
+  });
+
+  it("sends a Monday with nothing else as the week's first line, or its note", () => {
+    expect(phoneAlertFor(emailFor(person({ kinds: ["weekly"] }), MONDAY)!)).toEqual({
+      title: "Your week in Prism",
+      body: "Spent: $840 from Sep 27 to Oct 3, $40 more than the week before",
+      url: "/",
+    });
+    const stale = phoneAlertFor(emailFor(person({ kinds: ["weekly"], snapshot: null }), MONDAY)!);
+    expect(stale.body).toMatch(/hasn't looked at your accounts lately/);
+  });
+
+  it("fits a lock screen", () => {
+    const long = { ...bill, id: "bill-short:x:2026-10-08", title: "T".repeat(300), detail: "D".repeat(400) };
+    const p = phoneAlertFor(emailFor(person({ snapshot: snapshot({ alerts: [long] }), kinds: ["bill-short"] }), TUESDAY)!);
+    expect(p.title.length).toBeLessThanOrEqual(120);
+    expect(p.body.length).toBeLessThanOrEqual(240);
   });
 });

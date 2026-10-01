@@ -7,7 +7,7 @@ import { ThemeToggle, THEME_SCRIPT } from "@/components/theme-toggle";
 import { ConnectBank } from "@/components/connect-bank";
 import { ViewSwitch } from "@/components/household";
 import { BisMark } from "@/components/bis-mark";
-import { BRAND } from "@/lib/brand";
+import { BRAND, PAGE_COLORS } from "@/lib/brand";
 import { getFinance } from "@/lib/server/finance";
 import { awaitingSecondStep } from "@/lib/supabase/server";
 import { TriangleAlert } from "lucide-react";
@@ -28,12 +28,14 @@ export const metadata: Metadata = {
   authors: [{ name: BRAND.company }],
   creator: BRAND.company,
   publisher: BRAND.company,
+  // Opened from a phone's Home Screen, Prism runs as its own app (manifest.ts).
+  appleWebApp: { capable: true, title: BRAND.product, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f3fb" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0b1a" },
+    { media: "(prefers-color-scheme: light)", color: PAGE_COLORS.light },
+    { media: "(prefers-color-scheme: dark)", color: PAGE_COLORS.dark },
   ],
 };
 

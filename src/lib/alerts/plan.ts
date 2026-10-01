@@ -208,3 +208,26 @@ export function emailFor(r: Recipient, now: Date): Email | null {
   const fromSnapshot = chosen.some((c) => c.fromSnapshot) || (summary !== null && summary.note === null);
   return { subject, items, summary, asOf: fromSnapshot && snap ? { day: snap.today, by: snap.by } : null, fingerprints: prints };
 }
+
+/** What a phone shows with the email: a title, a line, and where tapping it goes. */
+export type PhoneAlert = { title: string; body: string; url: string };
+
+const BODY_MAX = 240;
+
+/**
+ * The email, as one notification for each device the person lets Prism
+ * notify. The first (most urgent) item leads, in the same words as the email,
+ * so a phone never shows an amount the person turned off; the rest are
+ * counted, and they're in the email. Only ever a path on Prism to open.
+ */
+export function phoneAlertFor(email: Email): PhoneAlert {
+  const [first, ...rest] = email.items;
+  const fit = (s: string) => (s.length <= BODY_MAX ? s : `${s.slice(0, BODY_MAX - 1).trimEnd()}…`);
+  if (first) {
+    const more = rest.length + (email.summary ? 1 : 0);
+    return { title: clip(first.title), body: fit(more ? `${first.detail} And ${more} more in today's email.` : first.detail), url: first.href };
+  }
+  const s = email.summary;
+  const line = s?.note ?? (s?.lines[0] ? `${s.lines[0].label}: ${s.lines[0].value}` : `Open ${BRAND.product} for this week's figures.`);
+  return { title: `${s?.title ?? "Your week"} in ${BRAND.product}`, body: fit(line), url: "/" };
+}

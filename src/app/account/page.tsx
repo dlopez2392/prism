@@ -4,20 +4,23 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { BellRing, CalendarClock, Landmark, PiggyBank, Target, Wallet, type LucideIcon } from "lucide-react";
+import { BellRing, CalendarClock, Landmark, PiggyBank, Smartphone, Target, Wallet, type LucideIcon } from "lucide-react";
 import { AlertEmails } from "@/components/alert-emails";
 import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { DeleteAccount } from "@/components/delete-account";
 import { HouseholdCard } from "@/components/household";
 import { NameForm } from "@/components/name-form";
+import { PhoneAlerts } from "@/components/phone-alerts";
 import { SignOutButton } from "@/components/sign-in-form";
 import { TwoStepSettings } from "@/components/two-step";
 import { Card, CardHeader, PageHeader, StatusPill } from "@/components/ui";
 import { alertsConfig } from "@/lib/alerts/send";
+import { vapidKeys } from "@/lib/alerts/webpush";
 import { signOut } from "@/lib/server/auth-actions";
 import { connectingEnabled, MCP_PATH } from "@/lib/server/connected-apps";
 import { getPersonalFinance } from "@/lib/server/finance";
 import { loadHousehold, type Household } from "@/lib/server/household-store";
+import { myDevices, type MyDevice } from "@/lib/server/phones";
 import { requestOrigin } from "@/lib/server/origin";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
@@ -30,16 +33,18 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const email = data.account.email ?? "your account";
   const firstName = data.account.firstName;
   const welcome = (await searchParams).welcome === "1" && !firstName;
-  const [endpoint, enabled, apps, twoStepFactor, household] = await Promise.all([
+  // Offered only where the job can run: Resend and the job's secret are set (never on a preview).
+  const config = alertsConfig();
+  const alerts = config ? data.account.alerts : null;
+  const [endpoint, enabled, apps, twoStepFactor, household, devices] = await Promise.all([
     requestOrigin().then((o) => `${o}${MCP_PATH}`),
     connectingEnabled(supabaseEnv()!),
     connectedApps(),
     registeredFactor(),
     myHousehold(),
+    alerts ? phoneDevices() : Promise.resolve(null),
   ]);
   const banks = data.institutions.filter((i) => i.source === "plaid").length;
-  // Offered only where the job can run: Resend and the job's secret are set (never on a preview).
-  const alerts = alertsConfig() ? data.account.alerts : null;
   const coinbase = data.institutions.some((i) => i.source === "coinbase");
 
   const rows: { icon: LucideIcon; label: string; value: string; on: boolean }[] = [
@@ -49,6 +54,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     { icon: PiggyBank, label: "Goals", value: data.goals.length ? `${data.goals.length} ${data.goals.length === 1 ? "goal" : "goals"}` : "None yet", on: data.goals.length > 0 },
     { icon: CalendarClock, label: "Calendar link", value: data.account.calendarFeed ? "On" : "Off — turn it on from Future", on: data.account.calendarFeed },
     ...(alerts ? [{ icon: BellRing, label: "Alert emails", value: alerts.on ? "On" : "Off — turn them on below", on: alerts.on }] : []),
+    ...(alerts && devices
+      ? [{ icon: Smartphone, label: "Alerts on devices", value: devices.length ? `${devices.length} ${devices.length === 1 ? "device" : "devices"}` : "None yet", on: devices.length > 0 }]
+      : []),
   ];
 
   return (
@@ -90,6 +98,18 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
               subtitle="A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and a short summary on Mondays. Bills and figures are as of your last visit, or this morning's check of your banks if you allow it, and each email says which. No tracking, and one click stops them."
             />
             <AlertEmails settings={alerts} email={email} />
+          </Card>
+        </section>
+      ) : null}
+
+      {alerts && config ? (
+        <section id="phone" className="scroll-mt-6">
+          <Card className="p-5 sm:p-6">
+            <CardHeader
+              title="Alerts on your phone"
+              subtitle="The same alerts as your emails, as a notification, the moment each email goes. Each one is encrypted for your device, so the service that delivers it can't read it."
+            />
+            <PhoneAlerts vapidKey={vapidKeys(config.secret).publicKey} devices={devices} alertsOn={alerts.on} />
           </Card>
         </section>
       ) : null}
@@ -138,6 +158,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       </Card>
     </div>
   );
+}
+
+/** The devices this person gets alerts on, oldest first — or null when they can't be listed right now. */
+async function phoneDevices(): Promise<MyDevice[] | null> {
+  const account = await currentAccount();
+  return account ? myDevices(account) : null;
 }
 
 /** Their household; null when they're in none, undefined when it can't be read right now. */

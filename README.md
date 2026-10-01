@@ -190,6 +190,22 @@ anyone's money as itself:
   one-click) and a link to `/alerts/unsubscribe`, both signed for that person
   with an HMAC of `CRON_SECRET`; opening the link changes nothing until its
   button is pressed. No images, no tracking.
+- **The same news on a phone.** Prism installs to a Home Screen
+  (`src/app/manifest.ts`), and "Alerts on your phone" on the Account page
+  turns on Web Push for the device in hand (an iPhone only once Prism is on
+  its Home Screen: iOS 16.4+). The moment an email goes, the job sends each of
+  that person's devices (`push_due`, at most five) the email's first item in
+  the email's own words, so an amount the person turned off never reaches a
+  lock screen. Each message is encrypted for that one device (RFC 8291) and
+  signed with Prism's VAPID key (RFC 8292), both with `node:crypto` alone
+  (`src/lib/alerts/webpush.ts`), and goes only to Apple's, Google's,
+  Mozilla's or Microsoft's push service. The VAPID key is derived from
+  `CRON_SECRET` (HKDF), so there's nothing extra to set; replacing the secret
+  replaces the key, and each device is turned on again from the Account page.
+  Subscriptions are sealed (`push_subscriptions`), kept only while alert
+  emails are on, and forgotten when a push service says one is gone
+  (`push_forget`). The service worker (`public/sw.js`) only shows
+  notifications and opens Prism: it caches nothing.
 
 **Switching it on** (owner, once):
 
@@ -202,7 +218,8 @@ anyone's money as itself:
    **Sensitive**). The secret itself never goes in chat or a document.
 3. In Supabase → SQL editor, store the fingerprint (the 64 characters printed):
    `insert into job_keys (name, sha256) values ('alerts', '<fingerprint>') on conflict (name) do update set sha256 = excluded.sha256;`
-4. Redeploy production. The Account page then offers **Alert emails**.
+4. Redeploy production. The Account page then offers **Alert emails**, and
+   **Alerts on your phone** with them.
 
 Replacing the secret is the same three steps with a new one; the old one
 stops working the moment the fingerprint changes. The job sends to people
@@ -405,7 +422,10 @@ the old one. The highest number seals; every number opens.
    census shows only the new id. Anything it still sealed stops opening,
    and those people reconnect, as they would have without this tool. An
    alert snapshot isn't resealed but retaken on its owner's next visit; one
-   left under the old key only means their next email carries no figures. After a
+   left under the old key only means their next email carries no figures. A
+   device getting phone notifications isn't resealed either: one left under
+   the old key is forgotten by the next morning's job, and its owner turns
+   notifications on again from the Account page on that device. After a
    suspected exposure, rotate the Plaid and Coinbase secrets FIRST (a stolen
    token is useless without them), then retire the old key within 30 days.
 
@@ -435,6 +455,8 @@ select what, key_id, count(*) from (
   select 'imported history', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from imported_history
   union all
   select 'alert snapshot', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from alert_snapshots
+  union all
+  select 'phone notifications', case when sealed like 'j2.%' then substr(sealed, 4, 8) else 'unnamed' end from push_subscriptions
 ) seals group by what, key_id order by what, key_id;
 ```
 
