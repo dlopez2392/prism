@@ -97,8 +97,16 @@ export type Transaction = {
   bankCategory?: CategoryId;
   /** Income only, when the bank says what kind (finance/income.ts reads the name otherwise). */
   incomeKind?: IncomeKind;
+  /** Who a Venmo, PayPal or Cash App payment was for, from the person's own file of that app (finance/p2p.ts). */
+  p2p?: P2pNote;
   pending: boolean;
 };
+
+export type P2pApp = "venmo" | "paypal" | "cashapp";
+/** "To Alex", "From Alex", or money moved between the app and the bank. */
+export type P2pDirection = "to" | "from" | "transfer";
+/** What a bank line gains: which app, who it was for, what they wrote, and the day the app recorded it. */
+export type P2pNote = { app: P2pApp; dir: P2pDirection; name: string; note: string | null; date: ISODate };
 
 export type Budget = {
   category: SpendCategoryId;

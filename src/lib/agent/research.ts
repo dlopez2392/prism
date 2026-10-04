@@ -22,6 +22,7 @@ import { categoryTotals, inRange, isSpending, monthlyCashFlow, topMerchants } fr
 import { CATEGORIES, SPEND_CATEGORIES } from "@/lib/finance/categories";
 import { addMonths, daysInMonth, monthKey, startOfMonth } from "@/lib/finance/dates";
 import { money } from "@/lib/finance/format";
+import { p2pLabel } from "@/lib/finance/p2p";
 import { normalizeMerchant } from "@/lib/finance/recurring";
 import type { Account, Cents, ISODate, SpendCategoryId, Transaction } from "@/lib/finance/types";
 import { ledgerHash, monthWindow, type LedgerNarrowing } from "@/lib/finance/view";
@@ -227,12 +228,14 @@ function library(d: AgentData, site: string): Entry[] {
     });
   }
   for (const [key, m] of merchants(d)) {
+    // Venmo, PayPal and Cash App lines name who they were for, so "alex" finds the payments to Alex.
+    const people = [...new Set(m.txns.flatMap((t) => (t.p2p && t.p2p.dir !== "transfer" ? words(t.p2p.name) : [])))].slice(0, 200);
     entries.push({
       id: `merchant:${key}`,
       title: `${m.name}: the last ${RECENT_MONTHS} months`,
       url: url(ledgerPath({ find: key })),
       kind: "merchant",
-      words: words(key),
+      words: [...words(key), ...people],
     });
   }
   return entries;
@@ -341,7 +344,9 @@ const newestFirst = (a: Transaction, b: Transaction) => (a.date < b.date ? 1 : a
 
 /** One transaction as a line a model can cite: when, who, how much, what, from where, and its id. */
 function line(t: Transaction, accounts: Map<string, Account>): string {
-  return `- ${t.date} | ${t.merchant} | ${money(t.amount)} | ${CATEGORIES[t.category]?.label ?? t.category} | ${accountLabel(accounts.get(t.accountId))}${t.pending ? " | pending" : ""} | id ${t.id}`;
+  // A payment's name and note were written by other people: quoted, as what they said, never as instructions.
+  const paid = t.p2p ? ` | ${p2pLabel(t.p2p)}${t.p2p.note ? `, note "${t.p2p.note.replace(/"/g, "'")}"` : ""}` : "";
+  return `- ${t.date} | ${t.merchant}${paid} | ${money(t.amount)} | ${CATEGORIES[t.category]?.label ?? t.category} | ${accountLabel(accounts.get(t.accountId))}${t.pending ? " | pending" : ""} | id ${t.id}`;
 }
 
 function ledger(title: string, txns: Transaction[], accounts: Map<string, Account>): string[] {

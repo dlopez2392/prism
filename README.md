@@ -263,8 +263,14 @@ On the Account page, a signed-in person downloads everything Prism shows them
 
 ## Link Coinbase (read-only)
 
-1. On the Coinbase Developer Platform, create an OAuth client and register
-   the redirect URI `https://<your-domain>/api/coinbase/callback`.
+**Waiting on Coinbase (October 2026):** Coinbase has paused new OAuth
+clients ("New OAuth client creation is temporarily disabled", limited to
+approved partners). Request access from a CDP Portal account first; the code
+needs no change once a client exists.
+
+1. On the Coinbase Developer Platform (API Keys → OAuth), create an OAuth
+   client and register the redirect URI
+   `https://<your-domain>/api/coinbase/callback`.
 2. Set `COINBASE_CLIENT_ID`, `COINBASE_CLIENT_SECRET` and `PRISM_VAULT_KEY`.
 3. **Connect Coinbase** appears on Connections. Prism asks only for
    `wallet:accounts:read` (plus `offline_access` to stay connected) and never
@@ -273,6 +279,32 @@ On the Account page, a signed-in person downloads everything Prism shows them
 Coinbase refresh tokens can be used once, so `src/proxy.ts` refreshes a link
 shortly before its hour is up and stores the new pair in the same response.
 It runs only for browsers holding a Coinbase link.
+
+## Venmo, PayPal and Cash App
+
+None of the three lets another app read an account, so a bank shows only
+"Venmo −$45.00". On **Connections → Venmo, PayPal and Cash App**
+(`/connections/payments`) a signed-in person adds each app's own activity
+file (Venmo's monthly statement CSV, PayPal's activity download, Cash App's
+Export CSV). Prism reads the files **in the browser and never uploads them**
+(`src/lib/finance/p2p.ts`), matches each payment to the bank line it caused
+(same app, an amount the bank would show for it, the bank dated a day before
+to five days after, closest dates first), and keeps only the matches: the
+bank transaction's id, who it was to or from, and the note.
+
+- The server trusts no match: each must name one of the person's OWN lines
+  from that app, in the window, going the right way (`validP2pMatch`), and
+  the rest are dropped and counted (`src/lib/server/p2p-actions.ts`).
+- Kept sealed in `profiles.sealed_p2p_notes` (the profile's policies govern
+  it; no household function names it), applied where money is assembled
+  (`moneyFor`), so the ledger, its search, the downloads and connected apps
+  all show "To Alex Kim · pizza". The morning alert job never reads them.
+- Names and notes are written by OTHER people, so they're cleaned of control
+  and invisible characters, length-capped, written as words in spreadsheets
+  (formula guard), and the MCP instructions tell connected apps to treat them
+  as data, never instructions.
+- Payments that stayed in the app's own balance never reached the bank; the
+  review says how many, and Prism doesn't count them yet.
 
 ## Crypto wallets you hold yourself
 
@@ -498,6 +530,8 @@ select what, key_id, count(*) from (
   select 'home addresses', case when sealed_home_values like 'z2.%' then substr(sealed_home_values, 4, 8) else 'unnamed' end from profiles where sealed_home_values is not null
   union all
   select 'wallets', case when sealed_wallets like 'z2.%' then substr(sealed_wallets, 4, 8) else 'unnamed' end from profiles where sealed_wallets is not null
+  union all
+  select 'payment notes', case when sealed_p2p_notes like 'z2.%' then substr(sealed_p2p_notes, 4, 8) else 'unnamed' end from profiles where sealed_p2p_notes is not null
   union all
   select 'imported history', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from imported_history
   union all

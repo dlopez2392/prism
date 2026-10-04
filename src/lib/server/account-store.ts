@@ -13,6 +13,7 @@ import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/li
 import { assembleImports, type ImportedHistory, type LockedImport } from "@/lib/finance/import";
 import { storedHomeValues, validHomeValues, type HomeValuation } from "@/lib/finance/home-value";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
+import { NO_P2P_NOTES, validP2pNotes, type P2pNotes } from "@/lib/finance/p2p";
 import { storedWallets, validWallets, walletStale, type Reading, type Script, type Wallet } from "@/lib/crypto/wallets";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
 import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
@@ -33,6 +34,7 @@ type ProfileRow = {
   sealed_manual_items: string | null;
   sealed_home_values: string | null;
   sealed_wallets: string | null;
+  sealed_p2p_notes?: string | null;
   alert_email?: boolean;
   alert_kinds?: unknown;
   alert_amounts?: boolean;
@@ -73,6 +75,8 @@ export type AccountSources = {
   homeValues: HomeValuation[];
   /** Crypto wallets added by public address, with their last readings; never shared with a household. */
   wallets: Wallet[];
+  /** Who their Venmo, PayPal and Cash App payments were for, by bank transaction; never shared with a household. */
+  p2pNotes: P2pNotes;
   /** History they imported from a file, finished imports only — empty unless asked for. */
   imports: ImportedHistory[];
   /** Imports no key in the ring opens, so they can be removed; none when there's no key at all. */
@@ -117,7 +121,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const [profile, plaid, coinbase, feed, household, coinbaseShare, imported, alertSnapshot] = await Promise.all([
     db
       .from("profiles")
-      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, alert_email, alert_kinds, alert_amounts, alert_refresh, updated_at")
+      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, sealed_p2p_notes, alert_email, alert_kinds, alert_amounts, alert_refresh, updated_at")
       .eq("user_id", account.userId)
       .maybeSingle<ProfileRow>(),
     db
@@ -167,7 +171,9 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const rawManual = key && profile.data?.sealed_manual_items ? openPacked(profile.data.sealed_manual_items, key) : null;
   const rawHomes = key && profile.data?.sealed_home_values ? openPacked(profile.data.sealed_home_values, key) : null;
   const rawWallets = key && profile.data?.sealed_wallets ? openPacked(profile.data.sealed_wallets, key) : null;
-  if (profile.data) stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual, sealed_home_values: rawHomes, sealed_wallets: rawWallets });
+  const rawP2p = key && profile.data?.sealed_p2p_notes ? openPacked(profile.data.sealed_p2p_notes, key) : null;
+  if (profile.data)
+    stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual, sealed_home_values: rawHomes, sealed_wallets: rawWallets, sealed_p2p_notes: rawP2p });
   // A part that won't open under any key in the ring counts as missing, and its import as unfinished.
   const parts = (imported.data ?? []).map((r) => {
     const opened = key ? openPacked(r.sealed, key) : null;
@@ -185,6 +191,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     manual: rawManual === null ? [] : validManualItems(rawManual),
     homeValues: rawHomes === null ? [] : validHomeValues(rawHomes),
     wallets: rawWallets === null ? [] : validWallets(rawWallets),
+    p2pNotes: rawP2p === null ? NO_P2P_NOTES : validP2pNotes(rawP2p),
     imports,
     // Without a key nothing opens, so none is known to be locked for good: none is offered for removal.
     lockedImports: key ? locked : [],
@@ -256,10 +263,10 @@ function staleSeals(account: Account, key: VaultKey | null) {
      * too big to send as a filter. One write, because a second guarded by
      * the same updated_at would always find it moved by the first.
      */
-    profile(row: ProfileRow, opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values" | "sealed_wallets">) {
+    profile(row: ProfileRow, opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values" | "sealed_wallets" | "sealed_p2p_notes">) {
       const k = key!;
       const patch: Record<string, string> = {};
-      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets"] as const) {
+      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets", "sealed_p2p_notes"] as const) {
         if (opened[column] !== null && due(row[column])) patch[column] = sealPacked(opened[column], k);
       }
       if (Object.keys(patch).length === 0) return;
@@ -348,6 +355,18 @@ export async function loadAccountCategoryRules(account: Account, key: VaultKey):
 /** Sealed like the transactions they rename: merchant names are bank data. Null when there are none left. */
 export function saveAccountCategoryRules(account: Account, rules: CategoryRules, key: VaultKey) {
   return upsertProfile(account, { sealed_category_rules: hasRules(rules) ? sealPacked(rules, key) : null });
+}
+
+/** Their payment notes, read strictly before a save, like category fixes: a failed read never passes for "none". */
+export async function loadAccountP2pNotes(account: Account, key: VaultKey): Promise<P2pNotes> {
+  const { data, error } = await account.supabase.from("profiles").select("sealed_p2p_notes").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_p2p_notes">>();
+  if (error) throw new Error("Couldn't read your payment notes.");
+  return data?.sealed_p2p_notes ? validP2pNotes(openPacked(data.sealed_p2p_notes, key)) : NO_P2P_NOTES;
+}
+
+/** Sealed: other people's names and notes about the person's money. Null when there are none left. */
+export function saveAccountP2pNotes(account: Account, notes: P2pNotes, key: VaultKey) {
+  return upsertProfile(account, { sealed_p2p_notes: Object.keys(notes.notes).length ? sealPacked(notes, key) : null });
 }
 
 /** What they own or owe, read strictly before a save, like category fixes: a failed read never passes for "nothing". */

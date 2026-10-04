@@ -16,6 +16,7 @@ import { CategoryFixDialog } from "@/components/category-fixer";
 import { CategoryIcon } from "@/components/category-icon";
 import { CATEGORIES } from "@/lib/finance/categories";
 import { money, shortDate } from "@/lib/finance/format";
+import { p2pLabel } from "@/lib/finance/p2p";
 import { normalizeMerchant } from "@/lib/finance/recurring";
 import type { CategoryId, Transaction } from "@/lib/finance/types";
 import { readLedgerHash } from "@/lib/finance/view";
@@ -66,7 +67,12 @@ export function TransactionsTable({
       (t) =>
         (category === "all" || t.category === category) &&
         // The name as Prism groups it too (store numbers dropped, spaces collapsed): what a ledger link carries.
-        (q === "" || t.merchant.toLowerCase().includes(q) || normalizeMerchant(t.merchant).includes(q) || money(t.amount).includes(q)),
+        // And who a Venmo, PayPal or Cash App payment was for, and their note: "alex", "pizza".
+        (q === "" ||
+          t.merchant.toLowerCase().includes(q) ||
+          normalizeMerchant(t.merchant).includes(q) ||
+          money(t.amount).includes(q) ||
+          (t.p2p !== undefined && `${t.p2p.name} ${t.p2p.note ?? ""}`.toLowerCase().includes(q))),
     );
     return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   }, [transactions, category, q]);
@@ -93,7 +99,7 @@ export function TransactionsTable({
               setQuery(e.target.value);
               setShown(PAGE);
             }}
-            placeholder="Search a merchant or amount"
+            placeholder="Search a merchant, person or amount"
             className="h-10 w-full rounded-ctl border border-line bg-surface-2 pr-3 pl-9 text-sm text-ink-1 placeholder:text-ink-3 focus:border-[var(--focus)]"
           />
         </label>
@@ -148,6 +154,12 @@ export function TransactionsTable({
                 <CategoryIcon category={t.category} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold text-ink-1">{t.merchant}</div>
+                  {t.p2p ? (
+                    <div className="truncate text-xs text-ink-2">
+                      {p2pLabel(t.p2p)}
+                      {t.p2p.note ? ` · ${t.p2p.note}` : ""}
+                    </div>
+                  ) : null}
                   <div className="truncate text-xs text-ink-3">
                     {CATEGORIES[t.category].label}
                     {t.bankCategory ? " (changed by you)" : ""} · {accountNames[t.accountId] ?? "Account"}
@@ -169,7 +181,7 @@ export function TransactionsTable({
                   <button
                     type="button"
                     onClick={() => fix(t)}
-                    aria-label={`Change category for ${t.merchant}, ${money(t.amount)} on ${shortDate(t.date)}. Now ${CATEGORIES[t.category].label}${t.bankCategory ? ", changed by you" : ""}.`}
+                    aria-label={`Change category for ${t.merchant}${t.p2p ? `, ${p2pLabel(t.p2p)}` : ""}, ${money(t.amount)} on ${shortDate(t.date)}. Now ${CATEGORIES[t.category].label}${t.bankCategory ? ", changed by you" : ""}.`}
                     className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-ctl px-2 py-2.5 text-left transition-colors duration-150 hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
                   >
                     {content}

@@ -274,3 +274,22 @@ describe("get_income", () => {
   });
 });
 
+
+describe("Venmo, PayPal and Cash App payments", () => {
+  const withNote = (): AgentData => {
+    const data = live();
+    const t = data.transactions.find((x) => x.amount < 0 && x.date >= addDays(TODAY, -20))!;
+    Object.assign(t, { merchant: "Venmo", p2p: { app: "venmo", dir: "to", name: "Alex Kim", note: "pizza", date: t.date } });
+    return data;
+  };
+
+  it("cite who a payment was for and the note, and are found by either", () => {
+    const data = withNote();
+    const byName = searchTransactions(data, { query: "alex" });
+    expect(byName.transactions).toHaveLength(1);
+    expect(byName.transactions[0]).toMatchObject({ merchant: "Venmo", payment: { app: "Venmo", who: "To Alex Kim", note: "pizza" } });
+    expect(searchTransactions(data, { query: "pizza" }).transactions).toHaveLength(1);
+    // A transaction without one says nothing about payments.
+    expect(searchTransactions(data, { limit: 100 }).transactions.filter((t) => "payment" in t)).toHaveLength(1);
+  });
+});

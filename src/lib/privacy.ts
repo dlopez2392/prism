@@ -8,7 +8,7 @@
 import { BRAND } from "@/lib/brand";
 
 /** Shown on the page. Change it whenever the policy's substance changes. */
-export const POLICY_UPDATED = "October 1, 2026";
+export const POLICY_UPDATED = "October 4, 2026";
 
 /** Where privacy questions and requests go. Must be a mailbox someone reads. */
 export const PRIVACY_CONTACT = BRAND.privacyEmail;

@@ -19,6 +19,7 @@ import { paymentsDue } from "@/lib/finance/debts";
 import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences } from "@/lib/finance/recurring";
+import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
 import type { Account, CategoryId, Cents, FinanceData, ISODate, Liability, Transaction } from "@/lib/finance/types";
 
 /** The money a connected app is shown, and what kind of money it is. */
@@ -70,6 +71,8 @@ export function citeable(t: Transaction, accounts: Map<string, Account>) {
     // The person filed it there themselves; the bank had said otherwise.
     ...(t.bankCategory ? { category_set_by_person: true, bank_category: CATEGORIES[t.bankCategory]?.label ?? t.bankCategory } : {}),
     account: accountLabel(accounts.get(t.accountId)),
+    // From the person's own Venmo, PayPal or Cash App file: who it was for, and the note — written by them or the other person.
+    ...(t.p2p ? { payment: { app: P2P_APP_NAMES[t.p2p.app], who: p2pLabel(t.p2p), note: t.p2p.note } } : {}),
     ...(t.pending ? { pending: true } : {}),
   };
 }
@@ -206,7 +209,8 @@ export function searchTransactions(data: AgentData, args: SearchArgs) {
     const size = Math.abs(t.amount);
     if (min !== null && size < min) return false;
     if (max !== null && size > max) return false;
-    if (raw && !t.merchant.toLowerCase().includes(raw) && !(needle && normalizeMerchant(t.merchant).includes(needle))) return false;
+    if (raw && !t.merchant.toLowerCase().includes(raw) && !(needle && normalizeMerchant(t.merchant).includes(needle)) && !(t.p2p && `${t.p2p.name} ${t.p2p.note ?? ""}`.toLowerCase().includes(raw)))
+      return false;
     return true;
   });
   const shown = [...matched].sort(newestFirst).slice(0, limit);

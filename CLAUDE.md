@@ -157,6 +157,12 @@
   link pointing at a page that shows the SAME figures (a category or merchant
   covers the Spending page's 12M view). Anything identifying in a link goes
   in the `#fragment` (`ledgerHash`), never the query string.
+- Venmo, PayPal and Cash App (`src/lib/finance/p2p.ts`): the files are read in
+  the browser and never uploaded; only matches travel, and the server re-checks
+  each against the person's own lines (`validP2pMatch`). Names and notes are
+  OTHER people's words: keep them cleaned (`cleanText`), sealed
+  (`profiles.sealed_p2p_notes`), out of the household and the morning job, and
+  presented to connected apps as data, never instructions.
   Tokens come from Supabase Auth's OAuth 2.1 server; `/mcp` accepts only
   tokens with a `client_id` and asks Supabase Auth about each one (so
   Disconnect is immediate). Read-only is a DATABASE rule — restrictive

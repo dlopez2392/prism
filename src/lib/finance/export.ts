@@ -20,6 +20,7 @@ import { categoryLabel } from "./categories";
 import { INCOME_LABELS } from "./income";
 import type { ManualItem } from "./manual";
 import { MANUAL_KINDS } from "./manual";
+import { P2P_APP_NAMES, p2pLabel } from "./p2p";
 import type { Account, Budget, Cents, FinanceData, Goal, Holding, ISODate, Institution, Transaction } from "./types";
 import { lastMonths } from "./dates";
 
@@ -89,9 +90,12 @@ export function transactionsCsv(data: Money, year?: number): string {
         t.pending ? "Pending" : "Posted",
         t.bankCategory ? categoryLabel(t.bankCategory) : "",
         t.category === "income" && t.incomeKind ? INCOME_LABELS[t.incomeKind] : "",
+        // Venmo, PayPal and Cash App: who it was for, and what they wrote. Last, so Prism's importer reads the file as before.
+        t.p2p ? p2pLabel(t.p2p) : "",
+        t.p2p?.note ?? "",
       ];
     });
-  return csv(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income"], rows);
+  return csv(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note"], rows);
 }
 
 /** Each account as it stands today. */
@@ -190,6 +194,7 @@ export function everythingJson(data: FinanceData, extras: Extras, profile: Profi
       category: categoryLabel(t.category),
       ...(t.bankCategory ? { banks_category: categoryLabel(t.bankCategory) } : {}),
       ...(t.category === "income" && t.incomeKind ? { kind_of_income: INCOME_LABELS[t.incomeKind] } : {}),
+      ...(t.p2p ? { payment: { app: P2P_APP_NAMES[t.p2p.app], who: p2pLabel(t.p2p), note: t.p2p.note } } : {}),
       account_id: t.accountId,
       pending: t.pending,
     })),
