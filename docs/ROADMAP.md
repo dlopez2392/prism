@@ -166,9 +166,9 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     on the Account page (a zip of spreadsheets and one JSON file, or just the
     transactions, which Prism's own importer reads back) and **Your year**
     (`/year`): one calendar year on one page, compared with the same stretch
-    of the year before when Prism holds it, printable as a PDF. Next, if
-    people ask for it: a tax-season view (deductible categories, charitable
-    giving, 1099 interest) and the year sent as a January email.
+    of the year before when Prism holds it, printable as a PDF. The
+    tax-season view shipped as item 14. Next, if people ask for it: the year
+    sent as a January email.
 11. **Knowing when production breaks.** **Built (2026-10-01):** a production
     check after every deploy and every six hours, from the outside, that
     opens a GitHub issue when anything fails (and closes it when fixed),
@@ -190,3 +190,38 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     kept (who, and the note), sealed. Next, if people ask for it: payments
     paid from an app's own balance, which never reach a bank, as an account of
     their own.
+14. **Your taxes.** **Built (2026-10-04):** `/taxes` sorts a year into what a
+    US tax return asks about (pay, interest, dividends, benefits, other money
+    and refunds in; gifts to charity, medical, taxes paid, mortgage, student
+    loans, childcare and tuition out), each with the form that holds the
+    official figure and the transactions behind it. Found by the bank's own
+    category first (unless the person re-filed the line), then by name, with
+    campaign gifts left out of charity. Printable, downloadable for a tax
+    preparer, and answered to Claude and ChatGPT (`get_tax_summary`, the
+    `taxes:<year>` research document). It finds and never advises. Next, if
+    people ask for it: marking a line in or out of a section by hand, and
+    the official figures from the forms themselves (a W-2 or 1099 a person
+    uploads).
+15. **Ask Prism, a chat inside the app.** **Planned, deferred by the owner
+    (2026-10-04: "keep that plan for later").** A chat button in Prism that
+    answers questions about the person's own money with the same read-only
+    tools the AI connector has, so it can never disagree with the screens or
+    change anything. The plan as agreed, so it can start without being
+    re-decided:
+    - **Signed-in people only**, never the demo household's visitors.
+    - **A daily cap per person** of about 30 questions, kept in the database.
+    - **A $25-a-month spending cap** set in the Anthropic Console, so the
+      bill can never run past it whatever the app does.
+    - **The model:** Claude's most capable (Opus) tier, about 5¢ a question
+      at the prices of 2026-09-25; the Sonnet tier would roughly halve that.
+      The owner chooses at build time.
+    - **Before it ships:** the API key goes straight into Vercel (Production,
+      marked Sensitive), and the privacy policy names Anthropic as a company
+      that handles people's data, because questions and the figures behind
+      them are sent to it.
+16. **Next, in the owner's order (2026-10-04):** a **"Can I afford it?"
+    planner** (a purchase, a car payment or a raise tested against the
+    forecast's lowest balance and the goals); **splitting a transaction**
+    across categories, with **tags** ("Vacation 2026", "To be reimbursed")
+    and who owes you; and **browser tests in CI** (Playwright on the example
+    household), each its own pull request.

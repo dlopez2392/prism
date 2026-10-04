@@ -85,7 +85,7 @@ export async function runChecks(base: string, opts: Options = {}): Promise<Check
     home?.status === 200,
   );
 
-  for (const path of ["/privacy", "/terms", "/sign-in", "/year"]) {
+  for (const path of ["/privacy", "/terms", "/sign-in", "/year", "/taxes"]) {
     const r = await get(path);
     add(`Page ${path}`, r?.status === 200, r?.status === 200 ? "200" : status(r), "Open the page; Vercel → prism → Logs shows the error for that path.");
   }

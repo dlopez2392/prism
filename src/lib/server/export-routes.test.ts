@@ -22,6 +22,7 @@ vi.mock("@/lib/server/finance", () => ({ getPersonalFinance: () => getPersonalFi
 
 const { GET: transactions } = await import("@/app/account/export/transactions.csv/route");
 const { GET: everything } = await import("@/app/account/export/everything.zip/route");
+const { GET: taxes } = await import("@/app/account/export/taxes.csv/route");
 
 const SITE = "https://prism.bis-rgv.com";
 const get = (route: (req: Request) => Promise<Response>, path: string) => route(new Request(`${SITE}${path}`));
@@ -47,7 +48,7 @@ describe("downloading your data", () => {
 
   it("sends someone signed out to sign in first, reading nothing", async () => {
     signedIn.current = null;
-    for (const route of [transactions, everything]) {
+    for (const route of [transactions, everything, taxes]) {
       const res = await get(route, "/account/export/x");
       expect(res.status).toBe(303);
       expect(new URL(res.headers.get("location")!).pathname + new URL(res.headers.get("location")!).search).toBe("/sign-in?next=/account");
@@ -57,7 +58,7 @@ describe("downloading your data", () => {
 
   it("never hands over the demo household as someone's own", async () => {
     setOwn({ source: "demo" });
-    for (const route of [transactions, everything]) {
+    for (const route of [transactions, everything, taxes]) {
       const res = await get(route, "/account/export/x");
       expect(res.status).toBe(404);
       expect(await res.text()).toMatch(/Nothing of yours to download yet/);
@@ -95,10 +96,26 @@ describe("downloading your data", () => {
     expect(files.get("everything.json")!).not.toMatch(/"(token|sealed|secret|password)/i);
   });
 
+  it("sends a year's taxes for whoever does the return: the year asked for, else the one a person most likely means", async () => {
+    const res = await get(taxes, "/account/export/taxes.csv?year=2025");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(res.headers.get("content-disposition")).toBe(`attachment; filename="prism-taxes-2025.csv"`);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    const rows = parseCsv(await res.text(), 100_000);
+    expect(rows[0]).toEqual(["Section", "Date", "Merchant", "Paid to or from", "Amount", "Account", "Form"]);
+    expect(rows.slice(1).every((r) => r[1] === "" || r[1]!.startsWith("2025-"))).toBe(true);
+    expect(rows.some((r) => r[0] === "Interest")).toBe(true);
+    // October: the April deadline has passed, so this year.
+    const junk = await get(taxes, "/account/export/taxes.csv?year=../../etc");
+    expect(junk.headers.get("content-disposition")).toContain("prism-taxes-2026.csv");
+  });
+
   it("reads only the person's own money, never the household view", async () => {
     await get(everything, "/account/export/everything.zip");
     await get(transactions, "/account/export/transactions.csv");
-    expect(getPersonalFinance).toHaveBeenCalledTimes(2);
+    await get(taxes, "/account/export/taxes.csv");
+    expect(getPersonalFinance).toHaveBeenCalledTimes(3);
     expect(getFinance).not.toHaveBeenCalled();
   });
 });

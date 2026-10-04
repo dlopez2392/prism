@@ -180,6 +180,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
               <Link href="/year" className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
                 See your year on one page
               </Link>
+              <Link href="/taxes" className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
+                Your tax summary
+              </Link>
             </div>
           )}
         </Card>

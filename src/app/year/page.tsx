@@ -282,6 +282,9 @@ export default async function YearPage({ searchParams }: { searchParams: Promise
           </a>
         ) : null}
         <PrintButton />
+        <Link href={`/taxes?y=${year}`} className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
+          See {year} for your taxes
+        </Link>
         <span className="text-xs text-ink-3">Information, not financial or tax advice. {r.transactions.toLocaleString("en-US")} transactions counted.</span>
       </div>
     </div>

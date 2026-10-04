@@ -238,6 +238,17 @@
   `cashflow.ts` counts, starts where the records do, and compares with the
   year before only when Prism holds that whole span. Printing is always light:
   the dark tokens live under `@media screen` in `tokens.css`.
+- Your taxes (`/taxes`, `src/lib/finance/taxes.ts`, `taxes.csv`,
+  `get_tax_summary`, the `taxes:<year>` research document): it FINDS and
+  never advises. Never add up a deduction, estimate a tax or call a figure
+  deductible; every section names the form that holds the official figure.
+  The bank's `taxHint` counts only while the person hasn't re-filed the line
+  (`bankCategory` unset); names match whole words, only in categories where
+  they can mean what they say, and a false friend found in the wild becomes a
+  refusal with a test. A campaign or party is never a gift to charity. A note
+  on an app payment counts only when the person wrote it (`dir: "to"`), and
+  never for gifts. Dated tax rules in the copy (the 2026 gift deduction for
+  people who don't itemize) are gated by year; check them each January.
 - Production check (`.github/workflows/production-check.yml`,
   `src/lib/ops/production-check.ts`, run by Node as TypeScript with no
   install, so it imports only Node's own modules): after each production

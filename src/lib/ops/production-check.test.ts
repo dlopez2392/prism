@@ -19,6 +19,7 @@ const healthy: Record<string, Reply> = {
   "GET /terms": { status: 200 },
   "GET /sign-in": { status: 200 },
   "GET /year": { status: 200 },
+  "GET /taxes": { status: 200 },
   "GET /manifest.webmanifest": { status: 200, body: { name: "Prism" } },
   "GET /sw.js": { status: 200, headers: { "cache-control": "no-cache, no-store, must-revalidate", "content-security-policy": "default-src 'self'; script-src 'self'" } },
   "GET /api/cron/alerts": { status: 401 },
@@ -54,6 +55,7 @@ describe("the production check", () => {
       "Page /terms",
       "Page /sign-in",
       "Page /year",
+      "Page /taxes",
       "Installable app",
       "Alert job locked to its secret",
       "Downloads need sign-in",
@@ -116,11 +118,11 @@ describe("the report", () => {
   it("leads with how many fail, lists every check with its words, and says what to do", async () => {
     const checks = await run({ "GET /api/cron/alerts": { status: 404 } });
     const text = report(checks, { base: BASE, commit: "61ce9173d1", at: NOW });
-    expect(text).toMatch(/^## Production check: 1 of 12 failing/);
+    expect(text).toMatch(/^## Production check: 1 of 13 failing/);
     expect(text).toContain("release 61ce917");
     expect(text).toContain("| ❌ Fail | Alert job locked to its secret | answered 404 |");
     expect(text).toMatch(/### What to do\n\n- \*\*Alert job locked to its secret:\*\* The job isn't configured/);
-    expect(report(await run(), { base: BASE, at: NOW })).toMatch(/^## Production check: all 12 passing/);
+    expect(report(await run(), { base: BASE, at: NOW })).toMatch(/^## Production check: all 13 passing/);
   });
 });
 

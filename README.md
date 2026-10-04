@@ -242,6 +242,41 @@ On the Account page, a signed-in person downloads everything Prism shows them
   text cell that starts like a formula gets a leading apostrophe, so a
   merchant name can't run in a spreadsheet.
 
+## Your taxes
+
+**Taxes** (`/taxes`, built by `src/lib/finance/taxes.ts`) sorts one year into
+what a US tax return asks about. Money in: pay, interest, dividends, benefits
+and pensions, other money (clients, side work) and tax refunds. Money out:
+gifts to charity, medical and dental, taxes paid, mortgage and student-loan
+payments, childcare and tuition. Each section names the form that holds the
+official figure (W-2, 1099-INT, 1098-E…), says in a sentence what it means for
+a return, and lists the transactions behind it; the hero is the forms to watch
+for. It defaults to last year until the April deadline has passed.
+
+How a line is found, most certain first:
+
+- **The bank's own category** (`taxHint`, mapped from Plaid's detailed
+  category in `src/lib/plaid/map.ts`: donations, tax payments, medical but
+  never a vet, childcare, education, mortgage, student loans), unless the
+  person has since moved that line to another category: their word wins.
+- **Its name**, matched as whole words and only in categories where the word
+  can mean what it says, with the names that fool a word list refused
+  (Church's Chicken, a thrift store, a gym, a vet, a vitamin shop, a credit
+  union). For a Venmo, PayPal or Cash App payment the person made, who it
+  went to counts too, and the person's own note does, except for gifts: a
+  note saying "donation" names no charity.
+- Gifts to a campaign or a party are left out of gifts to charity, and the
+  page says so. Pending lines and transfers between the person's own
+  accounts never count.
+
+It finds; it never advises. Nothing adds up a deduction or guesses a tax, and
+the page says plainly that a bank line is what landed, not what a form says.
+**Download for your tax preparer** (`/account/export/taxes.csv?year=2025`)
+writes every line under its section, each section closed by its total, with
+the same protections as every other download. The AI connector answers the
+same summary through `get_tax_summary`, and deep research reads it as the
+document `taxes:<year>`.
+
 ## Is production working?
 
 - **After every production deploy, and every six hours**, GitHub Actions
@@ -402,17 +437,19 @@ Prism is an MCP server at **`/mcp`** (production:
 `https://prism.bis-rgv.com/mcp`). Add it to Claude (Customize → Connectors →
 Add custom connector) or ChatGPT (Settings → Security and login → Developer
 mode, then Plugins → +); the app sends the person to Prism to sign in and
-approve it, and from then on can ask ten read-only questions: `get_overview`,
+approve it, and from then on can ask eleven read-only questions: `get_overview`,
 `list_accounts`, `search_transactions`, `spending_breakdown`, `get_cash_flow`,
-`get_budgets`, `get_goals`, `upcoming_bills`, `get_income`, `get_net_worth`.
+`get_budgets`, `get_goals`, `upcoming_bills`, `get_income`, `get_net_worth`,
+`get_tax_summary`.
 Answers cite the transactions they rest on, carry the person's own "today"
 and time zone, and say `demo: true` when nothing is linked yet.
 
 Two more, `search` and `fetch`, are the pair **ChatGPT's deep research** (and
 its company knowledge) reads a connector through, in exactly the shapes
 OpenAI specifies (`src/lib/agent/research.ts`). They present the person's
-money as documents: the nine summaries, each month and each year, and each
-spending category and merchant of the last twelve months. A document's text
+money as documents: the nine summaries, each month and each year, each
+year's taxes, and each spending category and merchant of the last twelve
+months. A document's text
 cites transaction ids, and its link opens the Prism page showing the same
 figures, so every citation in a report can be checked by clicking it. A
 category or merchant link carries what to look for in its `#fragment`
@@ -556,6 +593,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
 | **Your year** | One calendar year on one page: what came in, what went out, what you kept (against the same stretch the year before when Prism holds it), month by month, where it went by category, the ten places you paid most, net worth from the year's start, pay, subscriptions, and the year in a few lines; honest about where the records start and a year still under way; **print or save as PDF** (always in the light theme) and download that year's transactions |
+| **Taxes** | One year sorted into what a tax return asks about: pay, interest, dividends, benefits, other money and refunds in; gifts to charity, medical, taxes paid, mortgage, student loans, childcare and tuition out; each with its total, the form that holds the official figure and the transactions behind it; what was looked for and not found; **print or save as PDF** and **download for your tax preparer** |
 | **Connections** | Per-institution health (with **Sign in by <date>** a week before a bank's consent runs out), how data is protected, an honest catalogue of every integration and its real access path, **Import history** from a Mint, Monarch or bank CSV (read in the browser, never uploaded), and, in a household, **Shared / Private** for each of the person's accounts (Coinbase included: the household sees its total value as of the owner's last visit) |
 | **Household** | Overview, Cash flow, Spending, Budgets, Future, Goals and Net worth over what every member shared, each account marked with whose it is; shared budgets and goals any member can change, showing who changed them last; invitations and members on the Account page, and a join page for the link |
 
@@ -623,12 +661,13 @@ CI (`.github/workflows/ci.yml`) runs all four on every push.
 Proprietary. © 2026 Bespoke Intelligence Solutions. All rights reserved. The
 source is public for reference only; see [`LICENSE`](./LICENSE).
 
-## Prototype limits (deliberate) and next steps
+## Limits (deliberate) and next steps
 
-- **Storage:** linked-bank tokens live in an AES-256-GCM sealed, httpOnly
-  cookie so the prototype needs no database. Production moves them to a
-  per-user, KMS-encrypted server-side store with sign-in, and persists the
-  `/transactions/sync` cursor so each load fetches only what changed.
+- **Storage:** connecting a bank needs an account. Everything a signed-in
+  person links or saves is sealed with the vault key (AES-256-GCM) and kept
+  in their account, behind row-level security on every table, and the
+  `/transactions/sync` cursor is stored so each load fetches only what
+  changed (see Accounts, and Replacing the vault key).
 - **Signed out**, budgets and goals stay on the device (sealed cookies), and
   so do links made before connecting needed an account; signing in offers to
   move them into the account.
