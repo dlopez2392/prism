@@ -341,6 +341,31 @@ bank transaction's id, who it was to or from, and the note.
 - Payments that stayed in the app's own balance never reached the bank; the
   review says how many, and Prism doesn't count them yet.
 
+## Splits, tags and who owes you
+
+A signed-in person opens any of their own transactions on Spending
+(`src/components/transaction-dialog.tsx`) and, besides its category, can:
+
+- **Split it across categories**: the warehouse run that was groceries and a
+  lamp. The first part is always "the rest", so the parts add up by
+  construction, and the server checks they add up to exactly what the bank
+  says (`checkDetail` in `src/lib/finance/details.ts`). A split becomes its
+  parts (`<id>~1`, `<id>~2`…) before anything is counted, so every total,
+  budget, chart, the tax summary and Claude agree; what looks for repeating
+  bills joins them back first (`wholeLines`), so a split bill still forecasts
+  as one. If the bank's amount later changes (a tip added when it posted), the
+  split is set aside and the line shows whole until it's split again.
+- **Tag it** ("Vacation 2026", "Kitchen redo"). **Your tags** on Spending
+  totals each over the last 12 months and opens the ledger narrowed to it.
+- **Say who owes them for it**, and how much. **Owed to you** lists what's
+  still open, with **Paid back** (and Undo); the ledger shows it on the line.
+
+Kept sealed in `profiles.sealed_txn_details` by the bank's transaction id,
+never shown to a household, and read by the morning check so an alert email
+counts a split bill the way the app does (`alerts_sources` hands it over).
+Exports carry the split, tags and debts as their own columns, after the ones
+Prism's importer reads.
+
 ## Crypto wallets you hold yourself
 
 A signed-in person adds a wallet on Connections by its **public address**:
@@ -570,6 +595,8 @@ select what, key_id, count(*) from (
   union all
   select 'payment notes', case when sealed_p2p_notes like 'z2.%' then substr(sealed_p2p_notes, 4, 8) else 'unnamed' end from profiles where sealed_p2p_notes is not null
   union all
+  select 'splits and tags', case when sealed_txn_details like 'z2.%' then substr(sealed_txn_details, 4, 8) else 'unnamed' end from profiles where sealed_txn_details is not null
+  union all
   select 'imported history', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from imported_history
   union all
   select 'alert snapshot', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from alert_snapshots
@@ -587,7 +614,7 @@ with any key in the ring too, so retiring a key ends those as well.
 |---|---|
 | **Overview** | A **Heads up** for anything to act on now (a bank that has stopped updating or will within the week, a bill before payday the account won't cover), net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
 | **Cash flow** | Income → categories → saved **Sankey**; **your paychecks** (who pays you, how often, what lands, the next payday) and where your income comes from, by kind; money in vs out by month, what you kept each month, savings-rate trend |
-| **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop, kept sealed in their account and applied everywhere, Claude included) |
+| **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, **Owed to you** and **Your tags**, and a searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop), **splits** a purchase across categories, **tags** it and notes **who owes them** for it, all kept sealed in their account and applied everywhere, Claude included |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |

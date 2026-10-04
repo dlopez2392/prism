@@ -228,7 +228,14 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     browser and nothing is saved. Claude and ChatGPT ask the same through
     `can_i_afford`. Next, if people ask for it: drawing the tried line on the
     forecast chart, and "afford it by when?" (the date a purchase would fit).
-17. **Next, in the owner's order (2026-10-04):** **splitting a transaction**
-    across categories, with **tags** ("Vacation 2026", "To be reimbursed")
-    and who owes you; then **browser tests in CI** (Playwright on the example
-    household), each its own pull request.
+17. **Splits, tags and who owes you.** **Built (2026-10-04):** a person
+    splits one of their own purchases across categories (every total,
+    budget, chart, the tax summary and Claude count the parts; a split bill
+    still forecasts as one), tags it to total a trip or a project, and notes
+    who owes them for it, with an **Owed to you** list and **Paid back**.
+    Sealed in their account, never shown to a household, and read by the
+    morning check so alert emails agree. Next, if people ask for it: sharing
+    a request for what's owed (a Venmo or a text link), splits that follow a
+    merchant automatically, and tags a household shares.
+18. **Next, in the owner's order (2026-10-04):** **browser tests in CI**
+    (Playwright on the example household), its own pull request.

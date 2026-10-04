@@ -473,13 +473,14 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealJson({ token: "t" }, ring(newKey)),
       JSON.stringify({ v: 2, sealed: sealJson({ bills: [] }, ring(newKey)) }),
     ]);
-    await rows(`update public.profiles set sealed_category_rules = $2, sealed_manual_items = $3, sealed_home_values = $4, sealed_wallets = $5, sealed_p2p_notes = $6 where user_id = $1`, [
+    await rows(`update public.profiles set sealed_category_rules = $2, sealed_manual_items = $3, sealed_home_values = $4, sealed_wallets = $5, sealed_p2p_notes = $6, sealed_txn_details = $7 where user_id = $1`, [
       D,
       sealPacked({ v: 1, merchants: {}, transactions: {} }, ring(oldKey)),
       sealPacked([], ring(newKey)),
       sealPacked({ v: 1, homes: [] }, ring(oldKey)),
       sealPacked({ v: 1, wallets: [] }, ring(newKey)),
       sealPacked({ v: 1, notes: {} }, ring(oldKey)),
+      sealPacked({ v: 1, lines: {} }, ring(newKey)),
     ]);
     await rows(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, gen_random_uuid(), 0, $2)`, [D, sealPacked({ v: 1, transactions: [] }, ring(oldKey))]);
     // A device is kept only while alerts are on.
@@ -500,15 +501,16 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       delta("home addresses", o),
       delta("wallets", n),
       delta("payment notes", o),
+      delta("splits and tags", n),
       delta("imported history", o),
       delta("phone notifications", n),
-    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
     for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
     await rows(`delete from auth.users where id = $1`, [D]);
   });
 });
 
-describe.each(["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets", "sealed_p2p_notes"])("a person's %s", (column) => {
+describe.each(["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets", "sealed_p2p_notes", "sealed_txn_details"])("a person's %s", (column) => {
   const E = "e0e0e0e0-0000-4000-8000-00000000f1c5";
   const fixes = "z1." + "c".repeat(40);
 
@@ -1144,6 +1146,7 @@ describe("the morning check", () => {
     await rows(`insert into public.job_keys (name, sha256) values ('alerts', $1) on conflict (name) do update set sha256 = excluded.sha256`, [createHash("sha256").update(SECRET).digest("hex")]);
     // M allows the check; N turned it off; O has Coinbase linked.
     await rows(`update public.profiles set alert_email = true, sealed_home_values = $2 where user_id in ($1, $3, $4)`, [M, "z1." + "h".repeat(40), N, O]);
+    await rows(`update public.profiles set sealed_txn_details = $2, sealed_p2p_notes = $3 where user_id = $1`, [M, "z1." + "s".repeat(40), "z1." + "p".repeat(40)]);
     await rows(`update public.profiles set alert_refresh = false where user_id = $1`, [N]);
     await rows(`insert into public.coinbase_links (user_id, sealed_tokens, expires_at) values ($1, $2, now())`, [O, SEALED]);
     for (const who of [M, N, O]) await rows(`insert into public.plaid_items (user_id, item_id, sealed_token, sync_version) values ($1, 'item-m', $2, 4)`, [who, SEALED]);
@@ -1155,8 +1158,10 @@ describe("the morning check", () => {
     expect(await as("anon", null, () => refused(`select public.alert_refresh_allowed($1)`, [M]))).toBe(true);
     const mine = await sources(M);
     expect(mine).toMatchObject({ banks: [expect.objectContaining({ item_id: "item-m", sealed_token: SEALED, sync_version: 4 })], imports: [] });
-    // Never a home's address: a morning check doesn't need one.
-    expect(JSON.stringify(mine)).not.toMatch(/home/);
+    // Their splits, so the email counts a split bill in its parts as the app does.
+    expect(mine).toMatchObject({ sealed_txn_details: "z1." + "s".repeat(40) });
+    // Never a home's address, nor who their payments were for: a morning check needs neither.
+    expect(JSON.stringify(mine)).not.toMatch(/home|p2p/);
     expect(await sources(N)).toBeNull();
     expect(await sources(O)).toBeNull();
   });

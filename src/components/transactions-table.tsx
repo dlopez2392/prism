@@ -4,16 +4,17 @@
 //
 // Every transaction, searchable and filterable by category, newest first.
 // The list arrives with the page; filtering is instant because it is local.
-// With `canFix` (a signed-in account's own money), each row opens "Change
-// category"; a row the person changed says so, in words. A link whose
+// With `canFix` (a signed-in account's own money), each row opens the
+// transaction: its category, or a split, tags and who owes for it
+// (transaction-dialog.tsx); a row the person changed says so, in words. A link whose
 // #fragment names a category or a merchant (a citation from a connected app's
 // research, view.ts ledgerHash) opens the list already narrowed to it.
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { CircleCheck, Search, SearchX } from "lucide-react";
 import clsx from "clsx";
-import { CategoryFixDialog } from "@/components/category-fixer";
 import { CategoryIcon } from "@/components/category-icon";
+import { openedFrom, TransactionDialog, type Opened } from "@/components/transaction-dialog";
 import { CATEGORIES } from "@/lib/finance/categories";
 import { money, shortDate } from "@/lib/finance/format";
 import { p2pLabel } from "@/lib/finance/p2p";
@@ -38,7 +39,7 @@ export function TransactionsTable({
   fixHint?: string | null;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [fixing, setFixing] = useState<Transaction | null>(null);
+  const [fixing, setFixing] = useState<Opened | null>(null);
   const [session, setSession] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -72,7 +73,10 @@ export function TransactionsTable({
           t.merchant.toLowerCase().includes(q) ||
           normalizeMerchant(t.merchant).includes(q) ||
           money(t.amount).includes(q) ||
-          (t.p2p !== undefined && `${t.p2p.name} ${t.p2p.note ?? ""}`.toLowerCase().includes(q))),
+          (t.p2p !== undefined && `${t.p2p.name} ${t.p2p.note ?? ""}`.toLowerCase().includes(q)) ||
+          // The person's own tags, and who owes them: "vacation", "sam".
+          (t.tags ?? []).some((tag) => tag.toLowerCase().includes(q)) ||
+          (t.owed !== undefined && t.owed.who.toLowerCase().includes(q))),
     );
     return out.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   }, [transactions, category, q]);
@@ -80,7 +84,7 @@ export function TransactionsTable({
   const total = rows.reduce((s, t) => s + t.amount, 0);
 
   function fix(t: Transaction) {
-    setFixing(t);
+    setFixing(openedFrom(t, transactions));
     setSession((n) => n + 1);
     setNotice(null);
     dialog.current?.showModal();
@@ -99,7 +103,7 @@ export function TransactionsTable({
               setQuery(e.target.value);
               setShown(PAGE);
             }}
-            placeholder="Search a merchant, person or amount"
+            placeholder="Search a merchant, person, tag or amount"
             className="h-10 w-full rounded-ctl border border-line bg-surface-2 pr-3 pl-9 text-sm text-ink-1 placeholder:text-ink-3 focus:border-[var(--focus)]"
           />
         </label>
@@ -162,9 +166,23 @@ export function TransactionsTable({
                   ) : null}
                   <div className="truncate text-xs text-ink-3">
                     {CATEGORIES[t.category].label}
-                    {t.bankCategory ? " (changed by you)" : ""} · {accountNames[t.accountId] ?? "Account"}
+                    {t.split ? ` · part ${t.split.part} of ${t.split.parts}, split by you` : t.bankCategory ? " (changed by you)" : ""} · {accountNames[t.accountId] ?? "Account"}
                     {t.pending ? " · Pending" : ""}
                   </div>
+                  {t.owed || t.tags?.length ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {t.owed ? (
+                        <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-ink-2">
+                          {t.owed.paid ? `${t.owed.who} paid you back` : `${t.owed.who} owes you ${money(t.owed.amount)}`}
+                        </span>
+                      ) : null}
+                      {(t.tags ?? []).map((tag) => (
+                        <span key={tag} className="rounded-pill bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-ink-1">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="text-right">
                   <div className={clsx("num text-sm font-bold", t.amount > 0 ? "text-good-ink" : "text-ink-1")}>
@@ -181,7 +199,7 @@ export function TransactionsTable({
                   <button
                     type="button"
                     onClick={() => fix(t)}
-                    aria-label={`Change category for ${t.merchant}${t.p2p ? `, ${p2pLabel(t.p2p)}` : ""}, ${money(t.amount)} on ${shortDate(t.date)}. Now ${CATEGORIES[t.category].label}${t.bankCategory ? ", changed by you" : ""}.`}
+                    aria-label={`Open ${t.merchant}${t.p2p ? `, ${p2pLabel(t.p2p)}` : ""}, ${money(t.amount)} on ${shortDate(t.date)}: ${CATEGORIES[t.category].label}${t.split ? `, part ${t.split.part} of ${t.split.parts}` : t.bankCategory ? ", changed by you" : ""}. Change its category, split it, tag it, or note who owes you.`}
                     className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-ctl px-2 py-2.5 text-left transition-colors duration-150 hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
                   >
                     {content}
@@ -203,7 +221,7 @@ export function TransactionsTable({
           Show {Math.min(PAGE, rows.length - shown)} more
         </button>
       ) : null}
-      {canFix ? <CategoryFixDialog dialogRef={dialog} transaction={fixing} session={session} onDone={setNotice} /> : null}
+      {canFix ? <TransactionDialog dialogRef={dialog} opened={fixing} session={session} onDone={setNotice} /> : null}
     </div>
   );
 }

@@ -26,6 +26,8 @@ const shared = { mine: new Map<string, string | null>([["joint", "item-me"]]), f
 const mineImports = { current: [] as unknown[] };
 /** Wallets I added: none unless a test adds some. */
 const mineWallets = { current: [] as unknown[] };
+/** My splits, tags and who owes me: none unless a test adds some. */
+const mineDetails = { current: { v: 1, lines: {} } as unknown };
 vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: "Dana",
@@ -36,6 +38,7 @@ vi.mock("./account-store", () => ({
     imports: mineImports.current,
     lockedImports: [],
     wallets: mineWallets.current,
+    details: mineDetails.current,
     inHousehold: inHousehold.current,
     items: [{ itemId: "item-me", accessToken: "access-me", institutionId: null, institutionName: "Northwind Bank", linkedAt: "2026-09-01" }],
     plaidSync: new Map([["item-me", { state: copy([bank("joint", "Joint Checking", 500), bank("private", "My Savings", 9000)], [spend("m1", "joint", "Corner Café", 12), spend("m2", "private", "Secret Gift", 80)]), version: 1, syncedAt: new Date().toISOString(), changedAt: null }]]),
@@ -215,6 +218,25 @@ describe("the Household view", () => {
     expect(household.institutions.some((i) => i.source === "wallet")).toBe(false);
     shared.mine.delete("wallet-a1b2c3d4e5f6");
     mineWallets.current = [];
+  });
+
+  it("shows the household my lines as the bank sent them: never my splits, tags or who owes me", async () => {
+    mineDetails.current = { v: 1, lines: { m1: { split: [{ category: "food", amount: 700 }, { category: "fun", amount: 500 }], tags: ["Date night"], owed: { who: "Robin", amount: 600, paid: null } } } };
+    const { getFinance } = await import("./finance");
+    const me = await getFinance();
+    expect(me.transactions.filter((t) => t.split?.of === "m1").map((t) => [t.category, t.amount])).toEqual([
+      ["food", -700],
+      ["fun", -500],
+    ]);
+    jar.set("prism-view", "household");
+    vi.resetModules();
+    const household = await (await import("./finance")).getFinance();
+    expect(household.view).toBe("household");
+    // One line, whole, in the bank's category, for every member alike.
+    expect(household.transactions.filter((t) => t.merchant === "Corner Café").map((t) => [t.category, t.amount])).toEqual([["food", -1_200]]);
+    const text = JSON.stringify(household.transactions);
+    for (const mine of ["Date night", "Robin", "split"]) expect(text).not.toContain(mine);
+    mineDetails.current = { v: 1, lines: {} };
   });
 
   it("keeps the personal pages personal, whatever the switch says", async () => {

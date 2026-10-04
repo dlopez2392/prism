@@ -228,6 +228,14 @@ describe("a cited transaction", () => {
     });
   });
 
+  it("carries what the person added: a split's part, their tags, and who owes them", () => {
+    const t = { id: "c1~1", accountId: "a1", date: TODAY, amount: -9_000, merchant: "Costco", category: "food" as const, pending: false, split: { of: "c1", part: 1, parts: 2, total: -15_000 }, tags: ["Party"], owed: { who: "Sam", amount: 7_500, paid: null } };
+    expect(citeable(t, new Map())).toMatchObject({ split_by_user: { part: 1, of_parts: 2, whole_transaction_id: "c1", whole_amount: -150 }, tags: ["Party"], owed_to_user: { by: "Sam", amount: 75, paid_back_on: null } });
+    const data = { ...demo(), transactions: [...demo().transactions, t] };
+    expect(searchTransactions(data, { query: "party", from: TODAY }).transactions.map((x) => x.id)).toEqual(["c1~1"]);
+    expect(searchTransactions(data, { query: "sam", from: TODAY }).transactions.map((x) => x.id)).toEqual(["c1~1"]);
+  });
+
   it("says when the person filed it under a category the bank didn't, and what the bank said", () => {
     const t = { id: "t2", accountId: "a1", date: TODAY, amount: -550, merchant: "Blue Bottle", category: "food" as const, bankCategory: "shopping" as const, pending: false };
     expect(citeable(t, new Map())).toMatchObject({ category: "Food & dining", category_set_by_person: true, bank_category: "Shopping" });

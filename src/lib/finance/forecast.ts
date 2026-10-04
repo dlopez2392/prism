@@ -74,7 +74,8 @@ export function dailyDriftStats(
   const from = addDays(today, -HISTORY_DAYS);
   const perDay = new Map(eachDay(from, addDays(today, -1)).map((d) => [d, 0]));
   for (const t of txns) {
-    if (t.accountId !== accountId || recurringIds.has(t.id) || !perDay.has(t.date)) continue;
+    // A part of a split bill is the bill's: already in the schedule.
+    if (t.accountId !== accountId || recurringIds.has(t.split?.of ?? t.id) || !perDay.has(t.date)) continue;
     perDay.set(t.date, perDay.get(t.date)! + t.amount);
   }
   const xs = [...perDay.values()];
