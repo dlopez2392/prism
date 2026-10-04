@@ -101,6 +101,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </Link>
               </div>
             ) : null}
+            {/* On a phone the header has no room to say the money isn't real (the sidebar that also says so is hidden); it says so just under it. */}
+            {data.source === "demo" && data.view !== "household" ? (
+              <p className="flex items-center gap-2 px-4 pt-3 text-xs text-ink-3 sm:px-6 lg:hidden print:hidden">
+                <span className="size-2 shrink-0 rounded-full bg-accent" aria-hidden />
+                A demo household: nothing here is real money.
+              </p>
+            ) : null}
             {/* On a phone the header has no room for the switch; it sits just under it. */}
             {data.inHousehold ? (
               <div className="px-4 pt-3 sm:hidden">

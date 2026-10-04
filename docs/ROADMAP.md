@@ -237,5 +237,12 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     morning check so alert emails agree. Next, if people ask for it: sharing
     a request for what's owed (a Venmo or a text link), splits that follow a
     merchant automatically, and tags a household shares.
-18. **Next, in the owner's order (2026-10-04):** **browser tests in CI**
-    (Playwright on the example household), its own pull request.
+18. **Browser tests in CI.** **Built (2026-10-04):** Playwright runs the
+    production build on the example household at desktop and 360px phone
+    widths inside the required `verify` job: every screen renders whole (no
+    console error, no sideways scroll, at most one hero), navigation on both
+    widths, the theme toggle, Can I afford it?, the tax summary, the
+    ledger's search and links, and the doors a stranger tries. Its first run
+    caught a real gap: on a phone nothing said the example household wasn't
+    real money (now it does). Next, if it's ever needed: the signed-in
+    journeys against a throwaway Supabase project, and visual comparisons.

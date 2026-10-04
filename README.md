@@ -679,9 +679,22 @@ pnpm typecheck
 pnpm lint
 pnpm test          # vitest — analytics, geometry, Plaid + Coinbase, vault, plans, calendar
 pnpm build
+pnpm test:e2e      # Playwright — the built app in a browser, desktop and 360px phone
 ```
 
-CI (`.github/workflows/ci.yml`) runs all four on every push.
+CI (`.github/workflows/ci.yml`) runs all five on every push, the browser
+tests inside the same `verify` job the rule on `main` already requires.
+
+The browser tests (`e2e/`, `playwright.config.ts`) serve the production
+build on the example household (they blank every key, so nothing real is
+ever linked) and check what a visitor meets: every screen answers with its
+title, at most one hero, no console error and no sideways scroll at either
+width; the sidebar, the phone tab bar and its More sheet; the theme toggle;
+Can I afford it?, the tax summary's years and the ledger's search and
+links; and the doors a stranger tries (framing, downloads, the AI
+connector). Locally, after `pnpm build`, `pnpm test:e2e` starts the server
+itself (or reuses one on port 3100); on a machine without Chromium, run
+`pnpm exec playwright install chromium` once.
 
 ## License
 

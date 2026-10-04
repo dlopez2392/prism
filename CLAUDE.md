@@ -7,7 +7,11 @@
   shares no code, database, authentication or deployment with it.
 - Product and company names live in `src/lib/brand.ts`; never hard-code them.
 - Gates before any merge: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
-  `pnpm build`. CI runs all four (`.github/workflows/ci.yml`, job `verify`).
+  `pnpm build`, `pnpm test:e2e` (Playwright on the built app, example
+  household only, desktop and 360px). CI runs all five in job `verify`
+  (`.github/workflows/ci.yml`). A new screen gets a row in
+  `e2e/screens.spec.ts`; a test that needs real money or a signed-in
+  account belongs in the unit suite, never e2e.
 - **`main` is protected by a GitHub ruleset (since 2026-09-29), with no
   bypass, the owner included.** Changes arrive only through a pull request
   whose `verify` check is green on its head commit and whose branch is up to
