@@ -14,6 +14,8 @@
 //   - Streamflix raised its price two months ago.
 //   - There were two trips this year, eight and three months ago.
 //   - $900 a month moves to savings and $450 to the brokerage account.
+//   - Two loans: the car at the higher rate, the smaller balance on the
+//     student loan, so paying off highest-rate-first and smallest-first differ.
 //   - Three bills don't come monthly: water every three months, contact
 //     lenses twice a year, a delivery membership once a year.
 
@@ -274,7 +276,7 @@ export function buildDemoData(today: ISODate): FinanceData {
     acct(ACCOUNT_IDS.crypto, "beacon", "Crypto wallet", "0x9f…c21", "crypto", walk(240_000, 391_000, 0.22, 37)),
     acct(ACCOUNT_IDS.car, "manual", "2021 Crossover SUV", null, "property", walk(2_180_000, 1_942_000, 0.004, 41), "manual"),
     acct(ACCOUNT_IDS.autoLoan, "harbor", "Auto loan", "3302", "loan", walk(-1_530_000, -1_118_000, 0, 53)),
-    acct(ACCOUNT_IDS.studentLoan, "northwind", "Student loan", "6614", "loan", walk(-1_690_000, -1_472_000, 0, 59)),
+    acct(ACCOUNT_IDS.studentLoan, "northwind", "Student loan", "6614", "loan", walk(-1_060_000, -842_000, 0, 59)),
   ];
 
   // What each lender says is due next — in a real household, Plaid Liabilities.

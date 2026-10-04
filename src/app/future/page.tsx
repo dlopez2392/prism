@@ -230,7 +230,7 @@ export default async function FuturePage() {
                   <li key={s.id} className="flex items-center gap-3 py-2.5">
                     <CategoryIcon category={s.category} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-ink-1">{s.merchant}</div>
+                      <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{s.merchant}</div>
                       <div className="text-xs text-ink-3">
                         {scheduleText(s.cadence, undefined)} · next{" "}
                         <span className="num">{s.nextDate.slice(0, 4) === a.today.slice(0, 4) ? shortDate(s.nextDate) : `${shortDate(s.nextDate)}, ${s.nextDate.slice(0, 4)}`}</span>
@@ -266,7 +266,7 @@ export default async function FuturePage() {
                 <li key={s.id} className="flex items-center gap-3 py-2.5">
                   <CategoryIcon category={s.category} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-ink-1">{s.merchant}</div>
+                    <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{s.merchant}</div>
                     <div className="text-xs text-ink-3">Next {shortDate(s.nextDate)}</div>
                   </div>
                   <div className="text-right">

@@ -1,7 +1,7 @@
 // What a visitor can do on the example household, end to end: try a
-// purchase on Future and see the bills that don't come monthly, read the tax
-// summary year by year, and search the ledger, including from a link that
-// names what to look for.
+// purchase on Future and see the bills that don't come monthly, plan paying
+// off the loans on Net worth, read the tax summary year by year, and search
+// the ledger, including from a link that names what to look for.
 
 import { expect, test } from "@playwright/test";
 
@@ -29,6 +29,21 @@ test("Future lists the bills that don't come monthly, with what to put aside for
   await expect(card.getByText(/^Every three months · next/)).toBeVisible();
   await expect(card.getByText(/^Twice a year · next/)).toBeVisible();
   await expect(card.getByText(/^Every year · next/)).toBeVisible();
+});
+
+test("the payoff plan compares both orders, follows the one picked, and asks for a missing rate", async ({ page }) => {
+  await page.goto("/net-worth");
+  const card = page.locator("section", { hasText: "Paying off what you owe" }).last();
+  await card.getByLabel("Extra each month, on top").fill("200");
+  const order = card.getByRole("list").last();
+  await expect(card.getByRole("button", { name: /Highest rate first/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(card.getByText(/^Debt-free \w{3} \d{4}$/).first()).toBeVisible();
+  await expect(order.getByRole("listitem").first()).toContainText("Auto loan");
+  await card.getByRole("button", { name: /Smallest balance first/ }).click();
+  await expect(order.getByRole("listitem").first()).toContainText("Student loan");
+  await card.getByLabel("Yearly rate").first().fill("");
+  await expect(card.getByText("Its yearly rate, like 6.9")).toBeVisible();
+  await expect(card.getByText(/Add the yearly rate and monthly payment/)).toBeVisible();
 });
 
 test("the tax summary moves between years and shows the transactions behind a section", async ({ page }) => {

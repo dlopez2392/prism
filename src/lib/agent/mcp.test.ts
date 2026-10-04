@@ -97,6 +97,7 @@ describe("the MCP endpoint", () => {
       "get_overview",
       "get_tax_summary",
       "list_accounts",
+      "plan_debt_payoff",
       "search",
       "search_transactions",
       "spending_breakdown",

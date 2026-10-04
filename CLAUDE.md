@@ -272,6 +272,16 @@
   monthly set-aside comes only from `setAside`, so the screen and the
   connectors agree. Loosening any of these rules needs a test that a
   lookalike (a store visited twice a year apart) still isn't a bill.
+- Paying off what you owe (`src/lib/finance/payoff.ts`, the card on Net
+  worth, `plan_debt_payoff`): one arithmetic for the screen and the
+  connectors. A rate or a payment is the lender's (`Account.liability`) or
+  the person's, NEVER a guess; a debt missing one is asked about, not
+  planned. A card starts in the plan only when it charged interest in the
+  last 65 days (`chargedInterest`: the bank's `interestCharge`, or the words
+  on the line); loans always. Nothing is saved, and it describes both orders
+  without recommending one. A debt whose payment doesn't cover its interest
+  is "stuck" and said so, and a plan whose pot doesn't cover the month's
+  interest stops; never let the simulation run on growing balances.
 - Your taxes (`/taxes`, `src/lib/finance/taxes.ts`, `taxes.csv`,
   `get_tax_summary`, the `taxes:<year>` research document): it FINDS and
   never advises. Never add up a deduction, estimate a tax or call a figure

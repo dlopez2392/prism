@@ -102,6 +102,8 @@ export type Transaction = {
   incomeKind?: IncomeKind;
   /** Money out a tax return might ask about, when the bank's category says so (finance/taxes.ts). */
   taxHint?: TaxHint;
+  /** Interest a card or a loan charged, when the bank's category says so (finance/payoff.ts reads the name otherwise). */
+  interestCharge?: true;
   /** Who a Venmo, PayPal or Cash App payment was for, from the person's own file of that app (finance/p2p.ts). */
   p2p?: P2pNote;
   /** One part of a line the person split across categories: which line, which part, and the whole line's amount (finance/details.ts). */

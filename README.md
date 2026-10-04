@@ -404,6 +404,33 @@ Subscriptions card stays the monthly charges a person might cancel. Detected
 once, they also stop counting as day-to-day spending in the forecast, and a
 yearly renewal is no longer flagged as "a bigger one" among recent purchases.
 
+## Paying off what you owe
+
+On Net worth, every card and loan with something owed, each with its yearly
+rate and monthly payment: the lender's own when Prism reads them (Plaid
+Liabilities), typed by the person otherwise, never guessed. Add an extra each
+month and see both orders side by side (`src/lib/finance/payoff.ts`):
+
+- **Highest rate first** ("avalanche"): the least interest.
+- **Smallest balance first** ("snowball"): the first debt gone soonest.
+
+Either way every debt keeps its own payment, the extra goes to the first in
+line, and each debt paid off adds its payment to the next (the roll-over).
+Paying only what each one asks, with no extra and nothing rolled over, is the
+yardstick, and the chart shows what's owed month by month against it. Interest
+is a twelfth of the yearly rate each month, to the cent, and payments stay as
+they are today. A debt whose payment doesn't cover its interest is named:
+it never gets paid off that way.
+
+Which debts start ticked: every loan, and a card only when it charged
+interest in the last two statements (65 days), from the bank's own "interest
+charge" category or the words on the line. A card that's paid off every
+month carries no debt, so it starts unticked and says why. The arithmetic
+runs in the browser and nothing is saved; `plan_debt_payoff` gives Claude and
+ChatGPT the same plans, takes the person's own rates and payments when they
+give them, and asks for any that are missing. It says what each order would
+do and never which to pick.
+
 ## Crypto wallets you hold yourself
 
 A signed-in person adds a wallet on Connections by its **public address**:
@@ -500,10 +527,10 @@ Prism is an MCP server at **`/mcp`** (production:
 `https://prism.bis-rgv.com/mcp`). Add it to Claude (Customize → Connectors →
 Add custom connector) or ChatGPT (Settings → Security and login → Developer
 mode, then Plugins → +); the app sends the person to Prism to sign in and
-approve it, and from then on can ask twelve read-only questions: `get_overview`,
+approve it, and from then on can ask thirteen read-only questions: `get_overview`,
 `list_accounts`, `search_transactions`, `spending_breakdown`, `get_cash_flow`,
 `get_budgets`, `get_goals`, `upcoming_bills`, `get_income`, `get_net_worth`,
-`get_tax_summary`, `can_i_afford`.
+`get_tax_summary`, `can_i_afford`, `plan_debt_payoff`.
 Answers cite the transactions they rest on, carry the person's own "today"
 and time zone, and say `demo: true` when nothing is linked yet.
 
@@ -656,7 +683,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), **bills that don't come every month** (every three, six or twelve months, each with its next date and what to put aside for it each month), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
-| **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
+| **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account; **paying off what you owe**: highest rate first against smallest balance first, with an extra each month, against paying only what each asks (when each debt is gone, the interest, and what's owed month by month; nothing saved) |
 | **Your year** | One calendar year on one page: what came in, what went out, what you kept (against the same stretch the year before when Prism holds it), month by month, where it went by category, the ten places you paid most, net worth from the year's start, pay, subscriptions, and the year in a few lines; honest about where the records start and a year still under way; **print or save as PDF** (always in the light theme) and download that year's transactions |
 | **Taxes** | One year sorted into what a tax return asks about: pay, interest, dividends, benefits, other money and refunds in; gifts to charity, medical, taxes paid, mortgage, student loans, childcare and tuition out; each with its total, the form that holds the official figure and the transactions behind it; what was looked for and not found; **print or save as PDF** and **download for your tax preparer** |
 | **Connections** | Per-institution health (with **Sign in by <date>** a week before a bank's consent runs out), how data is protected, an honest catalogue of every integration and its real access path, **Import history** from a Mint, Monarch or bank CSV (read in the browser, never uploaded), and, in a household, **Shared / Private** for each of the person's accounts (Coinbase included: the household sees its total value as of the owner's last visit) |

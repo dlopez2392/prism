@@ -255,3 +255,11 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     month. Next, if people ask for it: a savings goal that sets that amount
     aside automatically, and telling the person when a renewal came in higher
     than the year before.
+20. **Paying off what you owe.** **Built (2026-10-04):** on Net worth, every
+    card and loan with its rate and monthly payment (the lender's, or typed),
+    an extra each month, and highest-rate-first against smallest-balance-first
+    with the roll-over, both against paying only what each asks: when each
+    debt is gone, the interest, and what's owed month by month. Cards paid off
+    each month start out of the plan. Claude and ChatGPT ask the same through
+    `plan_debt_payoff`. Next, if people ask for it: saving a plan and tracking
+    it month by month, and a card's own falling minimum instead of today's.

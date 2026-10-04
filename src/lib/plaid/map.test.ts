@@ -36,6 +36,10 @@ describe("mapTransaction", () => {
   it("prefers the clean merchant name", () => {
     expect(mapTransaction(ptx({})).merchant).toBe("Bean There");
     expect(mapTransaction(ptx({ merchant_name: null })).merchant).toBe("SQ *COFFEE");
+    // A card's interest charge says so, for the payoff plan; nothing else does.
+    expect(mapTransaction(ptx({ personal_finance_category: { primary: "BANK_FEES", detailed: "BANK_FEES_INTEREST_CHARGE" } })).interestCharge).toBe(true);
+    expect(mapTransaction(ptx({ personal_finance_category: { primary: "BANK_FEES", detailed: "BANK_FEES_OVERDRAFT_FEES" } }))).not.toHaveProperty("interestCharge");
+    expect(mapTransaction(ptx({}))).not.toHaveProperty("interestCharge");
   });
 });
 

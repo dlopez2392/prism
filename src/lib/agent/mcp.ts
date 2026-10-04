@@ -22,6 +22,7 @@ import {
   listAccounts,
   netWorth,
   overview,
+  planDebtPayoff,
   searchTransactions,
   SEARCH_LIMIT_MAX,
   SPEND_CATEGORY_HELP,
@@ -39,6 +40,7 @@ export const INSTRUCTIONS = `${BRAND.product} is the user's personal finance app
 - Dates are the user's own calendar; each result says which day "today" is (as_of) and in which time zone.
 - For a broad question ("how am I doing?") start with get_overview; reach for the other tools for detail.
 - For "can I afford…" questions, can_i_afford tests a purchase, a new monthly payment or a raise against the forecast, safe-to-spend and what the user usually keeps; pass on its answer with its reasons, as an observation.
+- For paying off debt, plan_debt_payoff compares paying the highest rate first with the smallest balance first, and both with paying only what each debt asks: when each is paid off and the interest. Present both orders; the choice is the user's.
 - For tax questions, get_tax_summary sorts a year into what a US tax return asks about and names the form that holds each official figure. It is not tax advice: point to those forms, and never present a figure as a deduction.
 - search and fetch serve research: search finds documents (summaries, each month and year, each year's taxes, each category and merchant of the last 12 months) and fetch reads one in full, with a link to the page in ${BRAND.product} that shows the same figures.
 - When an answer rests on particular transactions, cite them — merchant, date and amount. Their ids are stable.
@@ -256,6 +258,32 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Can I afford it?", ...READ_ONLY },
     },
     runWith(canIAfford),
+  );
+
+  server.registerTool(
+    "plan_debt_payoff",
+    {
+      title: "Plan paying off debt",
+      description:
+        "Every card and loan the user owes on (with the lender's rate and minimum payment when Prism reads them), and when each would be paid off two ways: highest rate first (the least interest) and smallest balance first (the first debt gone soonest), each with an optional extra every month and the payments of paid-off debts rolled into the next, against paying only what each one asks. A card with no interest charged lately is left out unless included. Debts missing a rate or a payment are listed as needing one: ask the user and pass it in. Nothing is saved.",
+      inputSchema: z.object({
+        extra_per_month: z.number().min(0).max(1_000_000).optional().describe("US dollars a month on top of the payments. Default 0."),
+        debts: z
+          .array(
+            z.object({
+              account_id: z.string().max(200).describe("The account's id, from list_accounts or a previous answer."),
+              include: z.boolean().optional().describe("Put it in the plan, or leave it out."),
+              apr: z.number().min(0).max(100).optional().describe("Its yearly interest rate, as a percentage, when the user gives one."),
+              monthly_payment: z.number().positive().max(1_000_000).optional().describe("What it's paid each month, in US dollars, when the user gives it."),
+            }),
+          )
+          .max(20)
+          .optional()
+          .describe("What the user said about particular debts; anything left out keeps the lender's terms."),
+      }),
+      annotations: { title: "Plan paying off debt", ...READ_ONLY },
+    },
+    runWith(planDebtPayoff),
   );
 
   // — Deep research: the two tools ChatGPT reads a connector through, by these exact names and shapes. —
