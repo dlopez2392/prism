@@ -1,0 +1,57 @@
+// What a visitor can do on the example household, end to end: try a
+// purchase on Future, read the tax summary year by year, and search the
+// ledger, including from a link that names what to look for.
+
+import { expect, test } from "@playwright/test";
+
+test("Can I afford it? answers as you type, and says when it doesn't fit", async ({ page }) => {
+  await page.goto("/future");
+  const card = page.locator("section", { hasText: "Can I afford it?" });
+  await card.getByLabel("How much?").fill("50");
+  await expect(card.getByText("Fits", { exact: true })).toBeVisible();
+  await card.getByLabel("How much?").fill("999999");
+  await expect(card.getByText("Doesn't fit", { exact: true })).toBeVisible();
+  await expect(card.getByText(/below zero/)).toBeVisible();
+  await card.getByRole("button", { name: "A new monthly bill" }).click();
+  await expect(card.getByRole("button", { name: "A new monthly bill" })).toHaveAttribute("aria-pressed", "true");
+  await card.getByLabel("How much a month?").fill("abc");
+  await expect(card.getByText(/Type an amount in dollars/)).toBeVisible();
+});
+
+test("the tax summary moves between years and shows the transactions behind a section", async ({ page }) => {
+  await page.goto("/taxes");
+  const heading = page.locator("h1");
+  const first = await heading.innerText();
+  const tabs = page.getByRole("navigation", { name: "Tax year" });
+  const other = tabs.locator("a:not([aria-current])").first();
+  const year = await other.innerText();
+  await other.click();
+  await expect(heading).toHaveText(`Your ${year} taxes`);
+  expect(first).not.toBe(`Your ${year} taxes`);
+  const show = page.getByText(/^Show the \d+ transactions$/).first();
+  await show.click();
+  await expect(page.locator("details[open] li").first()).toBeVisible();
+});
+
+test("the ledger narrows as you search, and opens narrowed from a link that names a merchant", async ({ page }) => {
+  await page.goto("/spending?range=12");
+  const count = page.getByText(/^\d[\d,]* transactions?$/);
+  const all = Number((await count.innerText()).replace(/\D/g, ""));
+  await page.getByPlaceholder(/Search a merchant/).fill("green basket");
+  await expect(count).not.toHaveText(`${all.toLocaleString("en-US")} transactions`);
+  const some = Number((await count.innerText()).replace(/\D/g, ""));
+  expect(some).toBeGreaterThan(0);
+  expect(some).toBeLessThan(all);
+
+  await page.goto("/spending?range=12#find=green%20basket");
+  await expect(page.getByPlaceholder(/Search a merchant/)).toHaveValue("green basket");
+  await expect(count).toHaveText(`${some.toLocaleString("en-US")} ${some === 1 ? "transaction" : "transactions"}`);
+});
+
+test("the year page leads to the tax summary for the same year", async ({ page }) => {
+  await page.goto("/year");
+  const year = (await page.locator("h1").innerText()).match(/\d{4}/)![0];
+  await page.getByRole("link", { name: `See ${year} for your taxes` }).click();
+  await expect(page).toHaveURL(new RegExp(`/taxes\\?y=${year}$`));
+  await expect(page.locator("h1")).toHaveText(`Your ${year} taxes`);
+});
