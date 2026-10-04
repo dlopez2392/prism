@@ -4,6 +4,7 @@ import { analyze } from "@/lib/finance/model";
 import { addDays } from "@/lib/finance/dates";
 import {
   budgets,
+  canIAfford,
   cashFlow,
   citeable,
   goals,
@@ -52,6 +53,7 @@ describe("every result", () => {
       income(data),
       netWorth(data),
       taxes(data),
+      canIAfford(data, { kind: "monthly_payment", amount: 450 }),
     ];
     expect(data).toEqual(before);
     for (const r of results) expect(JSON.stringify(r).length).toBeLessThan(40_000);
@@ -324,5 +326,31 @@ describe("get_tax_summary", () => {
     const p = r.sections.find((x) => x.id === "pay")!;
     expect(p.transactions).toHaveLength(TAX_LINES_MAX);
     expect(p.not_listed).toBe(p.transaction_count - TAX_LINES_MAX);
+  });
+});
+
+describe("can_i_afford", () => {
+  type Answered = Extract<ReturnType<typeof canIAfford>, { tried: unknown }>;
+
+  it("answers from the same forecast the Future page draws, with the figures before and after", () => {
+    const data = demo();
+    const a = analyze(data);
+    const r = canIAfford(data, { kind: "purchase", amount: 1, date: TODAY }) as Answered;
+    expect(r).toMatchObject({ as_of: TODAY, demo: true, tried: { kind: "purchase", amount: 1, date: TODAY }, answer: "fits" });
+    expect(r.safe_to_spend_today.before).toBe(usd(a.safe!.amount));
+    expect(r.checking_lowest_point.before).toEqual({ date: a.forecast!.lowest.date, balance: usd(a.forecast!.lowest.balance) });
+    expect(r.safe_to_spend_today.after).toBe(usd(Math.max(0, a.safe!.amount - 100)));
+  });
+
+  it("says no to what checking can't carry, and why", () => {
+    const r = canIAfford(demo(), { kind: "purchase", amount: 1_000_000 }) as Answered;
+    expect(r.answer).toBe("does_not_fit");
+    expect(r.reasons[0]).toMatch(/below zero/);
+  });
+
+  it("turns away a date it can't test, and answers plainly without a checking account", () => {
+    expect(canIAfford(demo(), { kind: "raise", amount: 500, date: "2020-01-01" })).toMatchObject({ answer: null, note: expect.stringMatching(/a date from 2026-09-18/) });
+    const none = { ...demo(), accounts: demo().accounts.filter((x) => x.kind !== "checking") };
+    expect(canIAfford(none, { kind: "purchase", amount: 50 })).toMatchObject({ answer: null, note: expect.stringMatching(/No checking account/) });
   });
 });

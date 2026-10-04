@@ -238,6 +238,13 @@
   `cashflow.ts` counts, starts where the records do, and compares with the
   year before only when Prism holds that whole span. Printing is always light:
   the dark tokens live under `@media screen` in `tokens.css`.
+- Can I afford it? (`src/lib/finance/afford.ts`, the card on Future,
+  `can_i_afford`): a scenario is the forecast plus its own money from the day
+  it lands, never a second model; safe-to-spend comes from `safeToSpend`
+  itself, and a raise never stands in for the next paycheck. What the person
+  "usually keeps" is the last three FULL months Prism saw from their first
+  day, else null and said so. It stays an answer about money, never advice
+  or a judgment, and nothing a person tries is saved or sent.
 - Your taxes (`/taxes`, `src/lib/finance/taxes.ts`, `taxes.csv`,
   `get_tax_summary`, the `taxes:<year>` research document): it FINDS and
   never advises. Never add up a deduction, estimate a tax or call a figure

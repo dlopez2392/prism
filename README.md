@@ -437,10 +437,10 @@ Prism is an MCP server at **`/mcp`** (production:
 `https://prism.bis-rgv.com/mcp`). Add it to Claude (Customize → Connectors →
 Add custom connector) or ChatGPT (Settings → Security and login → Developer
 mode, then Plugins → +); the app sends the person to Prism to sign in and
-approve it, and from then on can ask eleven read-only questions: `get_overview`,
+approve it, and from then on can ask twelve read-only questions: `get_overview`,
 `list_accounts`, `search_transactions`, `spending_breakdown`, `get_cash_flow`,
 `get_budgets`, `get_goals`, `upcoming_bills`, `get_income`, `get_net_worth`,
-`get_tax_summary`.
+`get_tax_summary`, `can_i_afford`.
 Answers cite the transactions they rest on, carry the person's own "today"
 and time zone, and say `demo: true` when nothing is linked yet.
 
@@ -589,7 +589,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Cash flow** | Income → categories → saved **Sankey**; **your paychecks** (who pays you, how often, what lands, the next payday) and where your income comes from, by kind; money in vs out by month, what you kept each month, savings-rate trend |
 | **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop, kept sealed in their account and applied everywhere, Claude included) |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
-| **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
+| **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
 | **Your year** | One calendar year on one page: what came in, what went out, what you kept (against the same stretch the year before when Prism holds it), month by month, where it went by category, the ten places you paid most, net worth from the year's start, pay, subscriptions, and the year in a few lines; honest about where the records start and a year still under way; **print or save as PDF** (always in the light theme) and download that year's transactions |
