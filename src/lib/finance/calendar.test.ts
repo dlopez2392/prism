@@ -49,6 +49,15 @@ describe("rruleFor", () => {
     expect(rruleFor(stream())).toBe("FREQ=MONTHLY;BYMONTHDAY=1;COUNT=12");
   });
 
+  it("repeats every three or six months, and every year in the month it last came, for a year (two for a yearly one)", () => {
+    expect(rruleFor(stream({ cadence: "quarterly", lastDate: "2026-07-06" }))).toBe("FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=6;COUNT=4");
+    expect(rruleFor(stream({ cadence: "semiannual", lastDate: "2026-05-17" }))).toBe("FREQ=MONTHLY;INTERVAL=6;BYMONTHDAY=17;COUNT=2");
+    expect(rruleFor(stream({ cadence: "annual", lastDate: "2026-03-31" }))).toBe("FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=28,29,30,31;BYSETPOS=-1;COUNT=2");
+    // A leap day lands on Feb 28 in the years without one, as the forecast does.
+    expect(rruleFor(stream({ cadence: "annual", lastDate: "2028-02-29" }))).toBe("FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=28,29;BYSETPOS=-1;COUNT=2");
+    expect(firstUpcoming(stream({ cadence: "quarterly", lastDate: "2026-01-31", nextDate: "2026-04-30" }), "2026-05-01")).toBe("2026-07-31");
+  });
+
   it("lands a bill due on the 29th–31st on the last day of a short month, not nowhere", () => {
     expect(rruleFor(stream({ lastDate: "2026-08-31" }))).toBe("FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1;COUNT=12");
     expect(rruleFor(stream({ lastDate: "2026-09-29" }))).toBe("FREQ=MONTHLY;BYMONTHDAY=28,29;BYSETPOS=-1;COUNT=12");
@@ -202,8 +211,13 @@ describe("buildCalendar", () => {
   it("covers the demo household's bills end to end", () => {
     const data = buildDemoData(TODAY);
     const ics = buildCalendar(options({ streams: detectRecurring(data.transactions, TODAY), accounts: data.accounts }));
-    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(17);
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(20);
     expect(ics).toContain("SUMMARY:Payday: Lumen Design Co. payroll · +$2\\,981.40");
+    // The bills that don't come monthly, each a series of its own.
+    expect(ics).toContain("DTSTART;VALUE=DATE:20261006\r\nDTEND;VALUE=DATE:20261007\r\nRRULE:FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=6;COUNT=4");
+    expect(ics).toContain("RRULE:FREQ=MONTHLY;INTERVAL=6;BYMONTHDAY=17;COUNT=2");
+    expect(ics).toContain("DTSTART;VALUE=DATE:20270901\r\nDTEND;VALUE=DATE:20270902\r\nRRULE:FREQ=YEARLY;BYMONTH=9;BYMONTHDAY=1;COUNT=2");
+    expect(ics.replace(/\r\n /g, "")).toContain("DESCRIPTION:Expected out: $139.00 · Everyday Checking ••4821 · every year.");
     expect(ics).not.toContain("Transfer from Everyday Checking");
     expect(ics).not.toContain("Interest earned");
   });
@@ -223,7 +237,7 @@ describe("feedSnapshot", () => {
     const data = buildDemoData(TODAY);
     const snap = feedSnapshot(data);
     expect(snap.v).toBe(1);
-    expect(snap.streams).toHaveLength(17);
+    expect(snap.streams).toHaveLength(20);
     expect(snap.streams.every((s) => s.transactionIds.length === 0)).toBe(true);
     for (const a of snap.accounts) expect(Object.keys(a).sort()).toEqual(["id", "kind", "mask", "name"]);
     const used = new Set(snap.streams.map((s) => s.accountId));

@@ -246,3 +246,12 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     caught a real gap: on a phone nothing said the example household wasn't
     real money (now it does). Next, if it's ever needed: the signed-in
     journeys against a throwaway Supabase project, and visual comparisons.
+19. **Bills that don't come every month.** **Built (2026-10-04):** bills
+    that come every three, six or twelve months (insurance renewals, a
+    quarterly water bill, a yearly membership) are found over two years of
+    history, money going out only, with strict rules against lookalikes, and
+    join the forecast, safe-to-spend, Can I afford it?, the alert emails, the
+    calendar and the connectors. Future lists them with what to put aside each
+    month. Next, if people ask for it: a savings goal that sets that amount
+    aside automatically, and telling the person when a renewal came in higher
+    than the year before.

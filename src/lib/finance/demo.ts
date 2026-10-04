@@ -14,6 +14,8 @@
 //   - Streamflix raised its price two months ago.
 //   - There were two trips this year, eight and three months ago.
 //   - $900 a month moves to savings and $450 to the brokerage account.
+//   - Three bills don't come monthly: water every three months, contact
+//     lenses twice a year, a delivery membership once a year.
 
 import { addDays, addMonths, daysInMonth, dayOfWeek, monthKey, startOfMonth } from "./dates";
 import type {
@@ -31,6 +33,8 @@ import type {
 } from "./types";
 
 const SEED = 0x5eed_2026;
+/** The quarterly water bill, by month offset + 11 (it lands at -11, -8, -5 and -2): its amount moves, as a water bill does. */
+const WATER: Record<number, Cents> = { 0: 6_840, 3: 7_215, 6: 8_960, 9: 7_480 };
 
 /** mulberry32 — tiny, fast, and deterministic across engines. */
 function makeRng(seed: number) {
@@ -197,6 +201,11 @@ export function buildDemoData(today: ISODate): FinanceData {
 
       if (rng.chance(0.05)) onCard(date, -rng.cents(10, 45), "Wellcare Pharmacy", "health");
       if (dom === 11 && (offset === -10 || offset === -4)) onCard(date, -rng.cents(40, 120), "Brightside Dental", "health");
+
+      // ── Bills that don't come monthly (fixed amounts: the random sequence stays as it was) ──
+      if (dom === 6 && [-11, -8, -5, -2].includes(offset)) add(chk, date, -WATER[offset + 11]!, "Clearwater Water & Sewer", "bills");
+      if (dom === 17 && (offset === -10 || offset === -4)) onCard(date, -9_600, "ClearSight Lenses", "health");
+      if (dom === 1 && (offset === -12 || offset === 0)) add(chk, date, -13_900, "Parcelpass membership", "shopping");
 
       if (dom === 19 && rng.chance(0.9)) add(chk, date, -2_500, "Riverside Food Bank", "other");
       if (rng.chance(0.012)) add(chk, date, -6_000, "ATM withdrawal", "other");

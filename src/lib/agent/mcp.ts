@@ -202,7 +202,7 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
     {
       title: "Upcoming bills and paydays",
       description:
-        "Bills, subscriptions and paychecks expected over the next N days, detected from repeating charges (each cites the charges it is based on), card and loan payments due as their lenders report them (due date, minimum, statement balance, rate), the monthly cost of all subscriptions, and the lowest the checking balance is expected to reach.",
+        "Bills, subscriptions and paychecks expected over the next N days, detected from repeating charges (each cites the charges it is based on), card and loan payments due as their lenders report them (due date, minimum, statement balance, rate), the monthly cost of all subscriptions, every bill that comes only every three, six or twelve months (with its next date, however far off, and what putting aside for it each month comes to), and the lowest the checking balance is expected to reach.",
       inputSchema: z.object({ days: z.number().int().min(1).max(90).optional().describe("How far ahead, 1–90 days. Default 30.") }),
       annotations: { title: "Upcoming bills and paydays", ...READ_ONLY },
     },

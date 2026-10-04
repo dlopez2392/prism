@@ -260,6 +260,18 @@
   "usually keeps" is the last three FULL months Prism saw from their first
   day, else null and said so. It stays an answer about money, never advice
   or a judgment, and nothing a person tries is saved or sent.
+- Bills that don't come every month (`detectRecurring` in
+  `src/lib/finance/recurring.ts`, `setAside`, the card on Future,
+  `upcoming_bills`): every three, six or twelve months, found over up to two
+  years (`LONG_LOOKBACK_DAYS`) and ONLY when the 200-day monthly-and-faster
+  path finds nothing, so those streams never change. Money going out only,
+  never `NOT_LONG` (transfers, meals, trips); every three months needs three
+  charges; two charges alone must be within 30% of the latest; a missed
+  renewal stops the bill (`grace`, never a second cycle); the amount expected
+  is the latest; and the kind is always "bill", never "subscription". The
+  monthly set-aside comes only from `setAside`, so the screen and the
+  connectors agree. Loosening any of these rules needs a test that a
+  lookalike (a store visited twice a year apart) still isn't a bill.
 - Your taxes (`/taxes`, `src/lib/finance/taxes.ts`, `taxes.csv`,
   `get_tax_summary`, the `taxes:<year>` research document): it FINDS and
   never advises. Never add up a deduction, estimate a tax or call a figure

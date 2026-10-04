@@ -6,7 +6,7 @@
 // payday and bill. Most budgeting apps only look backwards; this looks ahead.
 
 import type { Metadata } from "next";
-import { CalendarClock, CreditCard, Repeat, Telescope } from "lucide-react";
+import { CalendarClock, CalendarRange, CreditCard, Repeat, Telescope } from "lucide-react";
 import { AddToCalendar } from "@/components/add-to-calendar";
 import { CanIAfford } from "@/components/afford";
 import { UpcomingList } from "@/components/blocks";
@@ -20,8 +20,9 @@ import { dueReminders, remindable } from "@/lib/finance/calendar";
 import { dueIn, paymentsDue, rateText, statementText } from "@/lib/finance/debts";
 import { addDays } from "@/lib/finance/dates";
 import { dayDate, money, money0, shortDate } from "@/lib/finance/format";
+import { scheduleText } from "@/lib/finance/income";
 import { analyze, FORECAST_DAYS } from "@/lib/finance/model";
-import { monthlyCost } from "@/lib/finance/recurring";
+import { monthlyCost, setAside } from "@/lib/finance/recurring";
 import { dailyBalances } from "@/lib/finance/view";
 import { accountFeedToken } from "@/lib/server/account-store";
 import { getFinance } from "@/lib/server/finance";
@@ -68,6 +69,9 @@ export default async function FuturePage() {
   const outflow = next30.filter((e) => e.amount < 0).reduce((s, e) => s - e.amount, 0);
   const subs = a.streams.filter((s) => s.kind === "subscription" && s.amount < 0).sort((x, y) => monthlyCost(y) - monthlyCost(x));
   const subsMonthly = subs.reduce((s, x) => s + monthlyCost(x), 0);
+  // Bills that come every three, six or twelve months, and what they cost spread over the year.
+  const lessOften = setAside(a.streams);
+  const soon = lessOften.bills.filter((s) => s.accountId === checking.id && s.nextDate <= forecast.points.at(-1)!.date);
   // Cards and loans whose lender sends their terms (Plaid Liabilities, when switched on).
   const withTerms = data.accounts.filter((acc) => acc.liability);
   const due = paymentsDue(data.accounts, a.today);
@@ -214,6 +218,46 @@ export default async function FuturePage() {
             )}
           </Card>
         ) : null}
+        <Card className="p-5 sm:p-6">
+          <CardHeader
+            title="Bills that don't come every month"
+            subtitle={lessOften.bills.length ? `Put aside ${money0(lessOften.monthly)} a month and they're paid for when they land` : undefined}
+          />
+          {lessOften.bills.length ? (
+            <>
+              <ul className="mt-3 divide-y divide-[var(--line)]">
+                {lessOften.bills.map((s) => (
+                  <li key={s.id} className="flex items-center gap-3 py-2.5">
+                    <CategoryIcon category={s.category} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-ink-1">{s.merchant}</div>
+                      <div className="text-xs text-ink-3">
+                        {scheduleText(s.cadence, undefined)} · next{" "}
+                        <span className="num">{s.nextDate.slice(0, 4) === a.today.slice(0, 4) ? shortDate(s.nextDate) : `${shortDate(s.nextDate)}, ${s.nextDate.slice(0, 4)}`}</span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="num text-sm font-bold text-ink-1">{s.variable ? `about ${money0(Math.abs(s.amount))}` : money(Math.abs(s.amount))}</div>
+                      <div className="num text-xs text-ink-3">{money0(monthlyCost(s))} a month</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {soon.length ? (
+                <p className="mt-3 text-xs text-ink-3">
+                  {soon.length === 1 ? `${soon[0]!.merchant} comes` : `${soon.length} of these come`} out of {checking.name} in the next {FORECAST_DAYS} days, so{" "}
+                  {soon.length === 1 ? "it's" : "they're"} already in the forecast above.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <EmptyState
+              icon={CalendarRange}
+              title="None spotted yet"
+              body="Car insurance, a yearly membership, the water bill every three months: once we've seen one come round, it shows here with what to put aside each month."
+            />
+          )}
+        </Card>
         <Card className="p-5 sm:p-6">
           <CardHeader title="Subscriptions" subtitle={subs.length ? `${money0(subsMonthly)} a month · ${money0(subsMonthly * 12)} a year` : undefined} />
           {subs.length ? (

@@ -204,6 +204,18 @@ describe("upcoming_bills", () => {
     }
     expect(upcomingBills(data, { days: 1000 }).to).toBe(addDays(TODAY, 90));
   });
+
+  it("lists every bill that doesn't come monthly, however far off, with what to put aside for it", () => {
+    const r = upcomingBills(demo(), { days: 30 });
+    expect(r.bills_less_often_than_monthly).toEqual([
+      { name: "Clearwater Water & Sewer", amount: -74.8, estimated: true, cadence: "quarterly", next: "2026-10-06", set_aside_per_month: 24.93, account: "Everyday Checking ••4821" },
+      { name: "ClearSight Lenses", amount: -96, cadence: "semiannual", next: "2026-11-17", set_aside_per_month: 16, account: "Summit Rewards Visa ••1107" },
+      { name: "Parcelpass membership", amount: -139, cadence: "annual", next: "2027-09-01", set_aside_per_month: 11.58, account: "Everyday Checking ••4821" },
+    ]);
+    expect(r.less_often_set_aside_per_month).toBe(52.51);
+    // The one due inside the window is an item too, citing the charges it comes from.
+    expect(r.items.find((i) => i.name === "Clearwater Water & Sewer")).toMatchObject({ date: "2026-10-06", cadence: "quarterly", estimated: true });
+  });
 });
 
 describe("get_net_worth", () => {

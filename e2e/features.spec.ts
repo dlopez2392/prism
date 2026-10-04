@@ -1,6 +1,7 @@
 // What a visitor can do on the example household, end to end: try a
-// purchase on Future, read the tax summary year by year, and search the
-// ledger, including from a link that names what to look for.
+// purchase on Future and see the bills that don't come monthly, read the tax
+// summary year by year, and search the ledger, including from a link that
+// names what to look for.
 
 import { expect, test } from "@playwright/test";
 
@@ -16,6 +17,18 @@ test("Can I afford it? answers as you type, and says when it doesn't fit", async
   await expect(card.getByRole("button", { name: "A new monthly bill" })).toHaveAttribute("aria-pressed", "true");
   await card.getByLabel("How much a month?").fill("abc");
   await expect(card.getByText(/Type an amount in dollars/)).toBeVisible();
+});
+
+test("Future lists the bills that don't come monthly, with what to put aside for them", async ({ page }) => {
+  await page.goto("/future");
+  const card = page.locator("section", { hasText: "Bills that don't come every month" });
+  await expect(card.getByText(/^Put aside \$\d+ a month and they're paid for when they land$/)).toBeVisible();
+  for (const name of ["Clearwater Water & Sewer", "ClearSight Lenses", "Parcelpass membership"]) {
+    await expect(card.getByText(name, { exact: true })).toBeVisible();
+  }
+  await expect(card.getByText(/^Every three months · next/)).toBeVisible();
+  await expect(card.getByText(/^Twice a year · next/)).toBeVisible();
+  await expect(card.getByText(/^Every year · next/)).toBeVisible();
 });
 
 test("the tax summary moves between years and shows the transactions behind a section", async ({ page }) => {
