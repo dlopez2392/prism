@@ -24,6 +24,7 @@ import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
 import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiability, type StoredLiability } from "@/lib/plaid/liabilities";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
+import { applyDetails, NO_DETAILS, type TxnDetails } from "@/lib/finance/details";
 import { applyP2pNotes, NO_P2P_NOTES, type P2pNotes } from "@/lib/finance/p2p";
 import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
@@ -156,6 +157,8 @@ export type Sources = {
   imports: ImportedHistory[];
   /** Who their Venmo, PayPal and Cash App payments were for (finance/p2p.ts). A device keeps none. */
   p2p: P2pNotes;
+  /** Their splits, tags and who owes them (finance/details.ts). A device keeps none. */
+  details: TxnDetails;
   /** Imports that won't open under any key this deployment has. A device keeps none. */
   lockedImports: LockedImport[];
   /** They're in a household. A device never is. */
@@ -197,8 +200,8 @@ type WalletSource = {
   offline?: boolean;
 };
 
-/** `p2p` is left out where nothing reads a person's payment notes: the morning check never does. */
-export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets"> & { p2p?: P2pNotes };
+/** `p2p` is left out where nothing reads a person's payment notes: the morning check never does. Splits change totals, so it reads `details`. */
+export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets"> & { p2p?: P2pNotes; details?: TxnDetails };
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -263,6 +266,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       },
       imports: a.imports,
       p2p: a.p2pNotes,
+      details: a.details,
       lockedImports: a.lockedImports,
       inHousehold: a.inHousehold,
       coinbaseShared: a.coinbaseShared,
@@ -307,6 +311,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     wallets: { list: [], save: null, scan: null },
     imports: [],
     p2p: NO_P2P_NOTES,
+    details: NO_DETAILS,
     lockedImports: [],
     inHousehold: false,
     coinbaseShared: null,
@@ -356,7 +361,7 @@ type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "accou
  * made-up money are never shown together, so linking anything ends the
  * demo), else every bank and Coinbase, fetched in parallel.
  */
-async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Promise<{ money: Live; wallets: Wallet[] }> {
+async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Promise<{ money: Live; wallets: Wallet[]; undetailed?: Transaction[] }> {
   const config = plaidConfig();
   if (!isLive(src)) return { money: { ...buildDemoData(today), notice: null, plaidReady: config !== null }, wallets: [] };
   const [banks, crypto, read] = await Promise.all([
@@ -372,7 +377,11 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
   const imported = withImports(owned, src.imports, src.categories, none.banks && none.manual && none.wallets);
   const all = withWallets(imported, read.wallets, none.banks && none.manual && none.imports);
   // Who each Venmo, PayPal or Cash App line was for: the person's own notes, on their own lines.
-  return { money: src.p2p ? { ...all, transactions: applyP2pNotes(all.transactions, src.p2p) } : all, wallets: read.wallets };
+  const noted = src.p2p ? applyP2pNotes(all.transactions, src.p2p) : all.transactions;
+  // Then what they added themselves: a split becomes its parts, after their category fixes.
+  const detailed = src.details ? applyDetails(noted, src.details) : noted;
+  // The household sees each line as the bank sent it (undetailed): the same for every member, and none of anyone's own notes.
+  return { money: detailed === all.transactions ? all : { ...all, transactions: detailed }, wallets: read.wallets, undetailed: noted };
 }
 
 /** Wallets added by address, as accounts under "Your wallets", each with a holding per asset. */
@@ -461,17 +470,17 @@ export const getPersonalFinance = cache(async (): Promise<Loaded> => (await ownM
 /** The page's money, as the Me / Household switch has it. */
 export const getFinance = cache(async (): Promise<Loaded> => {
   // One load of the person's own money per request, whichever of the two a layout and its page ask for.
-  const { loaded, base, src, today } = await ownMoney();
+  const { loaded, base, shared, src, today } = await ownMoney();
   if ((await cookies()).get(VIEW_COOKIE)?.value !== "household" || !src.account || !src.inHousehold) return loaded;
   try {
     // After the calendar's refresh in ownMoney: the feed is only ever the person's own bills.
-    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? base : null, today)), notice: base.notice, view: "household" };
+    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household" };
   } catch {
     return { ...loaded, notice: "We couldn't load your household just now. This is your own money." };
   }
 });
 
-const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sources; today: ISODate }> => {
+const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: Live; src: Sources; today: ISODate }> => {
   const jar = await cookies();
   const zone = jar.get("prism-tz")?.value;
   const today = todayIn(zone);
@@ -512,7 +521,9 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; src: Sour
     householdPlan: null,
   };
   if (src.account) rememberAlerts(src.account, src.alerts, isLive(src) ? personal : null);
-  return { loaded: personal, base, src, today };
+  // What the household is shown of my own money: my lines without my splits, tags or who owes me.
+  const shared: Live = own.undetailed ? { ...base, transactions: own.undetailed } : base;
+  return { loaded: personal, base, shared, src, today };
 });
 
 /**
@@ -643,6 +654,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     manual: a.manual,
     imports: a.imports,
     p2p: a.p2pNotes,
+    details: a.details,
     // Read again in memory when stale; a connected app never saves (and the database wouldn't let it).
     wallets: { list: a.wallets, save: null, scan: null },
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,

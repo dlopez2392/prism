@@ -2,59 +2,25 @@
 
 // src/components/category-fixer.tsx
 //
-// "Change category" for one transaction: pick a category, and (by default)
-// use it for every purchase at that merchant, past and future. Saved to the
-// person's account by fixCategory; the page re-renders with every chart,
-// budget and insight already agreeing. A transaction the person changed can
-// go back to the bank's category from here too.
+// "Change category" for one transaction (the Category tab of
+// transaction-dialog.tsx): pick a category, and (by default) use it for every
+// purchase at that merchant, past and future. Saved to the person's account
+// by fixCategory; the page re-renders with every chart, budget and insight
+// already agreeing. A transaction the person changed can go back to the
+// bank's category from here too.
 
 import { startTransition, useActionState, type FormEvent } from "react";
-import { RotateCcw, Tags } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import clsx from "clsx";
 import { CategoryIcon } from "@/components/category-icon";
-import { buttonGhost, buttonPrimary, Dialog, FormMessage } from "@/components/dialog";
+import { buttonGhost, buttonPrimary, FormMessage } from "@/components/dialog";
 import { CATEGORIES } from "@/lib/finance/categories";
 import { choicesFor } from "@/lib/finance/category-rules";
-import { money, shortDate } from "@/lib/finance/format";
 import { IDLE, type PlanFormState } from "@/lib/finance/plan";
 import type { Transaction } from "@/lib/finance/types";
 import { fixCategory } from "@/lib/server/category-actions";
 
-export function CategoryFixDialog({
-  dialogRef,
-  transaction,
-  session,
-  onDone,
-}: {
-  dialogRef: React.RefObject<HTMLDialogElement | null>;
-  transaction: Transaction | null;
-  /** A new number each time the dialog opens, so the form starts fresh. */
-  session: number;
-  onDone: (message: string) => void;
-}) {
-  return (
-    <Dialog
-      dialogRef={dialogRef}
-      title="Change category"
-      description={transaction ? `${transaction.merchant} · ${transaction.amount > 0 ? "+" : ""}${money(transaction.amount)} · ${shortDate(transaction.date)}` : undefined}
-      icon={Tags}
-    >
-      {transaction ? (
-        <FixForm
-          key={`${session}-${transaction.id}`}
-          t={transaction}
-          onDone={(message) => {
-            onDone(message);
-            dialogRef.current?.close();
-          }}
-          onCancel={() => dialogRef.current?.close()}
-        />
-      ) : null}
-    </Dialog>
-  );
-}
-
-function FixForm({ t, onDone, onCancel }: { t: Transaction; onDone: (message: string) => void; onCancel: () => void }) {
+export function FixForm({ t, onDone, onCancel }: { t: Transaction; onDone: (message: string) => void; onCancel: () => void }) {
   const [state, action, pending] = useActionState(async (prev: PlanFormState, form: FormData) => {
     const next = await fixCategory(prev, form);
     if (next.status === "saved") onDone(next.message);

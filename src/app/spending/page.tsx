@@ -2,23 +2,27 @@
 //
 // Hero (the one --gradient-prism card): total spent in the window. Then the
 // composition over time, categories against the window before, the busiest
-// merchants, a calendar of every day, and the searchable ledger.
+// merchants, a calendar of every day, who owes the person and what their tags
+// add up to, and the searchable ledger.
 
 import type { Metadata } from "next";
-import { ShoppingBag } from "lucide-react";
+import Link from "next/link";
+import { HandCoins, ShoppingBag, Tag } from "lucide-react";
 import { ChartCard } from "@/components/chart-card";
 import { BarChart } from "@/components/charts/bar-chart";
 import { CalendarHeatmap } from "@/components/charts/calendar-heatmap";
 import { Legend } from "@/components/charts/core";
 import { CategoryIcon } from "@/components/category-icon";
+import { OwedList } from "@/components/owed-list";
 import { RangeTabs } from "@/components/range-tabs";
 import { TransactionsTable } from "@/components/transactions-table";
 import { Card, CardHeader, Change, EmptyState, PageHeader } from "@/components/ui";
 import { categoryBreakdown, dailySpend, monthlyByCategory, sumSpending, topMerchants } from "@/lib/finance/cashflow";
 import { CATEGORIES, categoryColor, SPEND_CATEGORIES } from "@/lib/finance/categories";
 import { addDays } from "@/lib/finance/dates";
-import { money0, monthShort, monthYear, signedMoney0, signedPercent } from "@/lib/finance/format";
-import { monthWindow, parseRange } from "@/lib/finance/view";
+import { stillOwed, tagTotals } from "@/lib/finance/details";
+import { money, money0, monthShort, monthYear, signedMoney0, signedPercent } from "@/lib/finance/format";
+import { ledgerHash, monthWindow, parseRange } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Spending" };
@@ -47,6 +51,11 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
   const inWindow = txns.filter((t) => t.date >= w.from && t.date <= w.to);
   // Category fixes live in an account and rename the person's own money, never the example household's.
   const canFix = data.account !== null && data.source !== "demo" && data.view === "me";
+  // Who owes them, still open, whenever it was; and their tags over the year the ledger's 12M view shows.
+  const owed = canFix ? stillOwed(txns).map(({ t, owed: o }) => ({ id: t.split?.of ?? t.id, who: o.who, amount: o.amount, merchant: t.merchant, date: t.date })) : [];
+  const owedTotal = owed.reduce((s, o) => s + o.amount, 0);
+  const year = monthWindow(data.today, 12);
+  const tags = canFix ? tagTotals(txns.filter((t) => t.date >= year.from && t.date <= year.to)) : [];
   const fixHint = canFix
     ? null
     : data.view === "household"
@@ -178,6 +187,41 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
       >
         <CalendarHeatmap days={days} ariaLabel="Daily spending over the last year" />
       </ChartCard>
+
+      {canFix ? (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          <Card className="p-5 sm:p-6 lg:col-span-6">
+            <CardHeader title="Owed to you" subtitle={owed.length ? `${money(owedTotal)} from ${owed.length} ${owed.length === 1 ? "purchase" : "purchases"}` : "Nothing open"} />
+            {owed.length ? (
+              <div className="mt-2">
+                <OwedList rows={owed} />
+              </div>
+            ) : (
+              <EmptyState icon={HandCoins} title="Nobody owes you right now" body="Covered dinner or bought the tickets? Open the purchase below and say who owes you. It waits here until they pay you back." />
+            )}
+          </Card>
+          <Card className="p-5 sm:p-6 lg:col-span-6">
+            <CardHeader title="Your tags" subtitle={tags.length ? "Spent under each, the last 12 months" : "None yet"} />
+            {tags.length ? (
+              <ul className="mt-3 divide-y divide-[var(--line)]">
+                {tags.slice(0, 12).map((g) => (
+                  <li key={g.tag}>
+                    <Link href={`/spending?range=12${ledgerHash({ find: g.tag })}`} className="-mx-2 flex items-center gap-3 rounded-ctl px-2 py-2.5 transition-colors duration-150 hover:bg-surface-3">
+                      <span className="min-w-0 flex-1 text-sm font-semibold text-ink-1">{g.tag}</span>
+                      <span className="text-xs text-ink-3">
+                        {g.count} {g.count === 1 ? "purchase" : "purchases"}
+                      </span>
+                      <span className="num w-24 text-right text-sm font-bold text-ink-1">{money0(g.spent)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState icon={Tag} title="Total a trip or a project" body="Tag purchases like Vacation 2026 or Kitchen redo to see what each cost across every category. Open any transaction below to add one." />
+            )}
+          </Card>
+        </div>
+      ) : null}
 
       <Card className="p-5 sm:p-6">
         <div id="transactions" className="scroll-mt-24">

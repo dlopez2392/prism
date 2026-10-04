@@ -8,6 +8,7 @@
 // card payment), and the difference matters to the forecast's error band.
 
 import { addDays, addMonths, dayOfMonth, dayOfWeek, daysBetween, daysInMonth, isBusinessDay } from "./dates";
+import { wholeLines } from "./details";
 import type { Cents, CategoryId, ISODate, Transaction } from "./types";
 
 export type Cadence = "weekly" | "biweekly" | "semimonthly" | "monthly";
@@ -88,7 +89,8 @@ function median(xs: number[]): number {
 export function detectRecurring(txns: Transaction[], today: ISODate): RecurringStream[] {
   const since = addDays(today, -LOOKBACK_DAYS);
   const groups = new Map<string, Transaction[]>();
-  for (const t of txns) {
+  // A bill the person split is still one bill: its parts are joined back first.
+  for (const t of wholeLines(txns)) {
     if (t.date < since || t.pending || t.amount === 0) continue;
     const key = `${t.accountId}|${normalizeMerchant(t.merchant)}|${t.amount > 0 ? "in" : "out"}`;
     const list = groups.get(key);

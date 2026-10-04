@@ -167,7 +167,7 @@ export function generateInsights(input: {
   // 6. A one-off purchase well above the usual for its category.
   const scheduled = new Set(streams.flatMap((s) => s.transactionIds));
   const recent = txns.filter(
-    (t) => t.amount < -20_000 && t.date > addDays(today, -14) && CATEGORIES[t.category].slot > 0 && !scheduled.has(t.id),
+    (t) => t.amount < -20_000 && t.date > addDays(today, -14) && CATEGORIES[t.category].slot > 0 && !scheduled.has(t.split?.of ?? t.id),
   );
   for (const t of recent.sort((a, b) => a.amount - b.amount).slice(0, 1)) {
     const sameCat = txns

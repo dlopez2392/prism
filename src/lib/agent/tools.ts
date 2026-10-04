@@ -75,6 +75,10 @@ export function citeable(t: Transaction, accounts: Map<string, Account>) {
     account: accountLabel(accounts.get(t.accountId)),
     // From the person's own Venmo, PayPal or Cash App file: who it was for, and the note — written by them or the other person.
     ...(t.p2p ? { payment: { app: P2P_APP_NAMES[t.p2p.app], who: p2pLabel(t.p2p), note: t.p2p.note } } : {}),
+    // What the person added themselves (finance/details.ts): one part of a purchase they split, their tags, who owes them for it.
+    ...(t.split ? { split_by_user: { part: t.split.part, of_parts: t.split.parts, whole_transaction_id: t.split.of, whole_amount: usd(t.split.total) } } : {}),
+    ...(t.tags ? { tags: t.tags } : {}),
+    ...(t.owed ? { owed_to_user: { by: t.owed.who, amount: usd(t.owed.amount), paid_back_on: t.owed.paid } } : {}),
     ...(t.pending ? { pending: true } : {}),
   };
 }
@@ -211,7 +215,7 @@ export function searchTransactions(data: AgentData, args: SearchArgs) {
     const size = Math.abs(t.amount);
     if (min !== null && size < min) return false;
     if (max !== null && size > max) return false;
-    if (raw && !t.merchant.toLowerCase().includes(raw) && !(needle && normalizeMerchant(t.merchant).includes(needle)) && !(t.p2p && `${t.p2p.name} ${t.p2p.note ?? ""}`.toLowerCase().includes(raw)))
+    if (raw && !t.merchant.toLowerCase().includes(raw) && !(needle && normalizeMerchant(t.merchant).includes(needle)) && !(t.p2p && `${t.p2p.name} ${t.p2p.note ?? ""}`.toLowerCase().includes(raw)) && !(t.tags ?? []).some((tag) => tag.toLowerCase().includes(raw)) && !(t.owed && t.owed.who.toLowerCase().includes(raw)))
       return false;
     return true;
   });

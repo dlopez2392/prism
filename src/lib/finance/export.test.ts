@@ -60,7 +60,7 @@ describe("the transactions file", () => {
   it("lists newest first, names the account and its bank, and says what's still pending", () => {
     const text = transactionsCsv(data);
     const rows = parseCsv(text, 100_000);
-    expect(rows[0]).toEqual(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note"]);
+    expect(rows[0]).toEqual(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note", "Split", "Tags", "Owed by", "Owed amount", "Paid back on"]);
     const dates = rows.slice(1).map((r) => r[0]!);
     expect(dates).toEqual([...dates].sort().reverse());
     const first = data.accounts[0]!;
@@ -81,9 +81,22 @@ describe("the transactions file", () => {
       transactions: [{ ...tx("2026-09-13", -4_500, "Venmo", "transfer"), p2p: { app: "venmo", dir: "to", name: "Alex Kim", note: "=SUM(A1:A9)", date: "2026-09-12" } }],
     };
     const [header, row] = parseCsv(transactionsCsv(paid));
-    expect(row!.slice(header!.indexOf("Paid to or from"))).toEqual(["To Alex Kim", "'=SUM(A1:A9)"]);
+    expect(row!.slice(header!.indexOf("Paid to or from"), header!.indexOf("Payment note") + 1)).toEqual(["To Alex Kim", "'=SUM(A1:A9)"]);
     const [t] = everythingJson(paid, { wallets: [], manual: [], homes: [] }, { email: "a@x.test", firstName: null }, "2026-10-01T00:00:00Z").transactions;
     expect(t).toMatchObject({ payment: { app: "Venmo", who: "To Alex Kim", note: "=SUM(A1:A9)" } });
+  });
+
+  it("says what the person added: a split's part, their tags, and who owes them, written as words", () => {
+    const added: FinanceData = {
+      ...data,
+      transactions: [
+        { ...tx("2026-09-20", -9_000, "Costco", "food"), id: "c1~1", split: { of: "c1", part: 1, parts: 2, total: -15_000 }, tags: ["Party", "=cmd"], owed: { who: "@Sam", amount: 7_500, paid: "2026-09-30" } },
+      ],
+    };
+    const [header, row] = parseCsv(transactionsCsv(added));
+    expect(row!.slice(header!.indexOf("Split"))).toEqual(["Part 1 of 2", "Party, =cmd", "'@Sam", "75.00", "2026-09-30"]);
+    const [t] = everythingJson(added, { wallets: [], manual: [], homes: [] }, { email: "a@x.test", firstName: null }, "2026-10-01T00:00:00Z").transactions;
+    expect(t).toMatchObject({ split: { part: 1, of_parts: 2, whole_transaction_id: "c1", whole_amount: -150 }, tags: ["Party", "=cmd"], owed: { by: "@Sam", amount: 75, paid_back_on: "2026-09-30" } });
   });
 
   it("keeps one year, for the year page", () => {

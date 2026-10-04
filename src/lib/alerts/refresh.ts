@@ -16,6 +16,7 @@ import "server-only";
 import { validWallets } from "@/lib/crypto/wallets";
 import { alertSnapshot, type AlertSnapshot } from "@/lib/finance/alert-snapshot";
 import { NO_RULES, validCategoryRules } from "@/lib/finance/category-rules";
+import { NO_DETAILS, validDetails } from "@/lib/finance/details";
 import { assembleImports } from "@/lib/finance/import";
 import { validManualItems } from "@/lib/finance/manual";
 import { analyze } from "@/lib/finance/model";
@@ -50,6 +51,7 @@ type Sources = {
   sealed_category_rules: string | null;
   sealed_manual_items: string | null;
   sealed_wallets: string | null;
+  sealed_txn_details?: string | null;
   banks: BankRow[];
   imports: ImportRow[];
 };
@@ -85,6 +87,7 @@ export async function morningCheck(db: JobDb, config: AlertsConfig, key: VaultKe
   const rules = src.sealed_category_rules ? openPacked(src.sealed_category_rules, key) : null;
   const manual = src.sealed_manual_items ? openPacked(src.sealed_manual_items, key) : null;
   const wallets = src.sealed_wallets ? openPacked(src.sealed_wallets, key) : null;
+  const details = src.sealed_txn_details ? openPacked(src.sealed_txn_details, key) : null;
   const money: Money = {
     items: plaidConfig() ? items : [],
     plaidSync: {
@@ -104,6 +107,8 @@ export async function morningCheck(db: JobDb, config: AlertsConfig, key: VaultKe
     imports: assembleImports(parts).imports,
     wallets: { list: wallets === null ? [] : validWallets(wallets), save: null, scan: null, offline: true },
     coinbase: null,
+    // A bill they split counts in its parts, as on a visit.
+    details: details === null ? NO_DETAILS : validDetails(details),
   };
 
   const plan = { budgets: validBudgets(src.plan_budgets ?? undefined), goals: validGoals(src.plan_goals ?? undefined) };

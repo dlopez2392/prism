@@ -94,9 +94,18 @@ export function transactionsCsv(data: Money, year?: number): string {
         // Venmo, PayPal and Cash App: who it was for, and what they wrote. Last, so Prism's importer reads the file as before.
         t.p2p ? p2pLabel(t.p2p) : "",
         t.p2p?.note ?? "",
+        // What the person added: a split's part, their tags, who owes them. Last, so the importer reads the file as before.
+        t.split ? `Part ${t.split.part} of ${t.split.parts}` : "",
+        (t.tags ?? []).join(", "),
+        t.owed ? t.owed.who : "",
+        t.owed ? amount(t.owed.amount) : null,
+        t.owed?.paid ?? "",
       ];
     });
-  return csv(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note"], rows);
+  return csv(
+    ["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note", "Split", "Tags", "Owed by", "Owed amount", "Paid back on"],
+    rows,
+  );
 }
 
 /**
@@ -211,6 +220,9 @@ export function everythingJson(data: FinanceData, extras: Extras, profile: Profi
       ...(t.bankCategory ? { banks_category: categoryLabel(t.bankCategory) } : {}),
       ...(t.category === "income" && t.incomeKind ? { kind_of_income: INCOME_LABELS[t.incomeKind] } : {}),
       ...(t.p2p ? { payment: { app: P2P_APP_NAMES[t.p2p.app], who: p2pLabel(t.p2p), note: t.p2p.note } } : {}),
+      ...(t.split ? { split: { part: t.split.part, of_parts: t.split.parts, whole_transaction_id: t.split.of, whole_amount: money(t.split.total) } } : {}),
+      ...(t.tags ? { tags: t.tags } : {}),
+      ...(t.owed ? { owed: { by: t.owed.who, amount: money(t.owed.amount), paid_back_on: t.owed.paid } } : {}),
       account_id: t.accountId,
       pending: t.pending,
     })),

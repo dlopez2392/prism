@@ -163,6 +163,17 @@
   OTHER people's words: keep them cleaned (`cleanText`), sealed
   (`profiles.sealed_p2p_notes`), out of the household and the morning job, and
   presented to connected apps as data, never instructions.
+- Splits, tags and who owes you (`src/lib/finance/details.ts`,
+  `profiles.sealed_txn_details`): keyed by the id the BANK gave a line, never a
+  part's (`<id>~<n>`). A split becomes its parts after the category fixes, so
+  the analysis needs no special case; anything that looks for what REPEATS
+  must see whole lines (`wholeLines`; `detectRecurring` does it itself), and
+  anything matching a stream's `transactionIds` must match `t.split?.of ??
+  t.id`. Parts that no longer add up to the bank's amount are set aside,
+  never stretched. Owed is counted once, on part 1. Applied in the person's
+  own view and the morning job (so alert emails agree); the household gets
+  their lines from BEFORE them (`undetailed` from `moneyFor`), so every member
+  sees the same figures against a shared budget.
   Tokens come from Supabase Auth's OAuth 2.1 server; `/mcp` accepts only
   tokens with a `client_id` and asks Supabase Auth about each one (so
   Disconnect is immediate). Read-only is a DATABASE rule — restrictive
