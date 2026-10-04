@@ -123,7 +123,7 @@ export default function PrivacyPage() {
             {alerts ? (
               <li>
                 If you turn on alert emails: what you chose them to cover; what your last visit found worth one, such as a bill that may not be covered, and
-                the week&apos;s figures for your Monday summary, stored encrypted; and a fingerprint of each alert sent, so none is sent twice. A fingerprint is a
+                the figures for your summaries (last week&apos;s and last month&apos;s), stored encrypted; and a fingerprint of each alert sent, so none is sent twice. A fingerprint is a
                 scrambled code that names no bank, shop or amount.
               </li>
             ) : null}
@@ -155,7 +155,7 @@ export default function PrivacyPage() {
             <li>To show you your money: balances, spending, budgets, goals, bills and insights.</li>
             <li>To keep your connections up to date, and to tell you when one needs attention.</li>
             <li>To sign you in and send your sign-in codes.</li>
-            {alerts ? <li>To email you alerts and a Monday summary, and send the same alerts to your devices, if you turn them on.</li> : null}
+            {alerts ? <li>To email you alerts and summaries, and send the same alerts to your devices, if you turn them on.</li> : null}
             <li>To answer questions from AI apps you&apos;ve approved, read-only.</li>
             <li>To keep {BRAND.product} secure, prevent abuse, and fix problems.</li>
           </Bullets>

@@ -214,7 +214,12 @@
   person's own visit (`rememberAlerts` in `finance.ts`, never a connected app
   or the household view), kept only while their emails are on. Each alert is
   sent once by fingerprint (sha256 of person + alert id); a quiet Monday
-  still sends its summary, saying so. Emails carry no images or tracking and
+  still sends its summary, saying so. The recap of last month rides the
+  same "weekly" choice (shown as Summaries; `profiles.alert_kinds` has a
+  check constraint, and widening it needs a DROP the owner must run, so a
+  new kind is a migration decision, not a code one): it needs a snapshot
+  taken after the month ended, goes once (`monthly:YYYY-MM`) within the
+  first seven days, and says why on the 7th when it has no figures. Emails carry no images or tracking and
   one-click unsubscribe (HMAC of `CRON_SECRET`). The MORNING CHECK
   (`src/lib/alerts/refresh.ts`, migration `alert_refresh`, owner-approved
   2026-10-01) is the one place Prism reads a bank without its owner present:

@@ -12,6 +12,10 @@
 //   - On their own Monday, a short summary of the week, from the same
 //     snapshot. A quiet or stale week still sends, saying so, because silence
 //     can't be told apart from a broken job.
+//   - Early each month, the month before in a few lines (the same "weekly"
+//     choice, shown as Summaries): the first morning a snapshot taken this
+//     month has it, or on the 7th, saying why it can't. It takes the place of
+//     a Monday summary that falls on the same day.
 //
 // Each piece is sent once: its fingerprint (sha256 of the person and the
 // alert's occasion) is recorded after sending, and anything already recorded
@@ -21,8 +25,8 @@ import { createHash } from "node:crypto";
 import { BRAND } from "@/lib/brand";
 import type { Alert } from "@/lib/finance/alerts";
 import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
-import { addDays, dayOfWeek, daysBetween } from "@/lib/finance/dates";
-import { dayDate, money0, percent, shortDate } from "@/lib/finance/format";
+import { addDays, addMonths, dayOfMonth, dayOfWeek, daysBetween, monthKey, startOfMonth } from "@/lib/finance/dates";
+import { dayDate, money0, monthLong, percent, shortDate } from "@/lib/finance/format";
 import type { Cents, ISODate } from "@/lib/finance/types";
 
 export { ALERT_CHOICES, isAlertChoice, type AlertChoice } from "./choices";
@@ -60,6 +64,8 @@ export type Email = {
 
 /** A snapshot older than this says nothing about bills or prices; the weekly summary says when it was taken instead. */
 export const SNAPSHOT_FRESH_DAYS = 8;
+/** The recap of last month waits this many days at most for a snapshot that has it. */
+export const RECAP_LAST_DAY = 7;
 /** A short bill is sent from this many days before it's due. */
 const BILL_LEAD_DAYS = 7;
 /** At most this many alerts in one email (alerts_sent records up to 50). */
@@ -171,6 +177,62 @@ function summaryOf(r: Recipient, snap: AlertSnapshot | null, today: ISODate, fre
   return { title, lines, note: null };
 }
 
+const cap = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
+const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+
+/**
+ * Last month, in a few lines, early in this one: once a snapshot taken this
+ * month has it, or on the 7th saying why it can't. Null while it waits, and
+ * for a month Prism didn't hold whole (nothing to sum up, nothing wrong).
+ */
+function recapOf(r: Recipient, snap: AlertSnapshot | null, today: ISODate): { id: string; summary: Summary } | null {
+  if (dayOfMonth(today) > RECAP_LAST_DAY) return null;
+  const thisMonth = startOfMonth(today);
+  const month = monthKey(addMonths(thisMonth, -1));
+  const name = monthLong(`${month}-01`);
+  const id = `monthly:${month}`;
+  const title = `Your ${name}`;
+  const seenThisMonth = snap !== null && snap.today >= thisMonth;
+  const m = seenThisMonth ? snap.monthly : null;
+  if (!m || m.month !== month) {
+    if (seenThisMonth || dayOfMonth(today) < RECAP_LAST_DAY) return null;
+    const seen = snap ? `since ${dayDate(snap.today)}` : "lately";
+    return { id, summary: { title, lines: [], note: `${BRAND.product} hasn't looked at your accounts ${seen}, so it can't sum up ${name} here. Open ${BRAND.product} to see it on Cash flow.` } };
+  }
+  const lines: SummaryLine[] = [];
+  const kept = m.income - m.spent;
+  lines.push({
+    label: "In and out",
+    value: r.amounts
+      ? `${money0(m.income)} came in and ${money0(m.spent)} went out, so you ${kept >= 0 ? `kept ${money0(kept)}` : `spent ${money0(-kept)} more than came in`}`
+      : kept >= 0
+        ? "You kept some of what came in"
+        : "You spent more than came in",
+  });
+  if (m.before) {
+    const prev = monthLong(`${monthKey(addMonths(`${month}-01`, -1))}-01`);
+    const spent = compared(m.spent, m.before.spent, r.amounts, `more spent than in ${prev}`, `less spent than in ${prev}`, `about the same spent as in ${prev}`);
+    lines.push({ label: `Against ${prev}`, value: cap(spent) });
+  }
+  if (m.top.length) {
+    lines.push({ label: "Where it went", value: r.amounts ? m.top.map((t) => `${t.label} ${money0(t.spent)}`).join(", ") : list(m.top.map((t) => t.label)) });
+  }
+  if (m.netWorth) {
+    const c = m.netWorth.change;
+    const way = Math.abs(c) < 100 ? "about level" : c > 0 ? "up" : "down";
+    const moved = way === "about level" || !r.amounts ? `${way} over the month` : `${way} ${money0(Math.abs(c))} over the month`;
+    lines.push({ label: "Net worth", value: r.amounts ? `${money0(m.netWorth.end)} at the end of ${name}, ${moved}` : cap(moved) });
+  }
+  if (m.ahead) {
+    const bills = `${m.ahead.count} ${m.ahead.count === 1 ? "bill" : "bills"} in the next 30 days`;
+    lines.push({
+      label: "Coming up",
+      value: m.ahead.count === 0 ? `Nothing ${BRAND.product} knows of is due in the next 30 days.` : r.amounts ? `${bills}, about ${money0(m.ahead.total)} in all` : cap(bills),
+    });
+  }
+  return { id, summary: { title, lines, note: null } };
+}
+
 function clip(s: string): string {
   return s.length <= SUBJECT_MAX ? s : `${s.slice(0, SUBJECT_MAX - 1).trimEnd()}…`;
 }
@@ -194,7 +256,15 @@ export function emailFor(r: Recipient, now: Date): Email | null {
   const items = chosen.map((c) => c.item).sort((x, y) => Number(y.urgent) - Number(x.urgent));
 
   let summary: Summary | null = null;
-  if (r.kinds.includes("weekly") && dayOfWeek(today) === 1) {
+  if (r.kinds.includes("weekly")) {
+    const recap = recapOf(r, snap, today);
+    const f = recap ? fingerprint(r.userId, recap.id) : null;
+    if (recap && f && !r.sent.has(f)) {
+      summary = recap.summary;
+      prints.push(f);
+    }
+  }
+  if (!summary && r.kinds.includes("weekly") && dayOfWeek(today) === 1) {
     const f = fingerprint(r.userId, `weekly:${today}`);
     if (!r.sent.has(f)) {
       summary = summaryOf(r, snap, today, fresh);
@@ -204,7 +274,7 @@ export function emailFor(r: Recipient, now: Date): Email | null {
   if (items.length === 0 && !summary) return null;
 
   const [first] = items;
-  const subject = first ? clip(items.length > 1 ? `${first.title}, and ${items.length - 1} more` : first.title) : `Your week in ${BRAND.product}`;
+  const subject = first ? clip(items.length > 1 ? `${first.title}, and ${items.length - 1} more` : first.title) : `${summary!.title} in ${BRAND.product}`;
   const fromSnapshot = chosen.some((c) => c.fromSnapshot) || (summary !== null && summary.note === null);
   return { subject, items, summary, asOf: fromSnapshot && snap ? { day: snap.today, by: snap.by } : null, fingerprints: prints };
 }
