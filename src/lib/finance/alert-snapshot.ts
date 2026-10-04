@@ -2,15 +2,17 @@
 //
 // What a person's visit leaves for the alert email job, which can't read
 // their money itself: the alerts the visit found (alerts.ts), the week's
-// numbers for a Monday summary, and the next two weeks' bills. Sealed with
+// numbers for a Monday summary, the last whole month's for the recap early in
+// the month, and the next two weeks' bills. Sealed with
 // the vault key before it's stored, and kept only while their alert emails
 // are on (profiles.sealed_alerts). Every email says when this was taken.
 //
 // Pure: built from the analysis, checked again when it's opened.
 
 import { alertsFor, type Alert, type AlertKind } from "./alerts";
-import { addDays } from "./dates";
-import { sumSpending } from "./cashflow";
+import { addDays, addMonths, monthKey, startOfMonth } from "./dates";
+import { categoryTotals, sumIncome, sumSpending } from "./cashflow";
+import { CATEGORIES } from "./categories";
 import type { Analysis } from "./model";
 import type { Cents, ISODate } from "./types";
 
@@ -28,6 +30,22 @@ export type WeeklyNumbers = {
   netWorthLastMonth: Cents | null;
 };
 
+/** The last whole month before the visit's day, for the recap early in the next. */
+export type MonthlyNumbers = {
+  /** "YYYY-MM". */
+  month: string;
+  income: Cents;
+  spent: Cents;
+  /** The month before it, when Prism holds all of that month too. */
+  before: { income: Cents; spent: Cents } | null;
+  /** Where most of it went: up to three categories, the most first. */
+  top: { label: string; spent: Cents }[];
+  /** Net worth at the month's end, and how it moved over the month, when Prism has both ends. */
+  netWorth: { end: Cents; change: Cents } | null;
+  /** The bills the forecast has in the 30 days after the visit; null when there's no forecast to ask. */
+  ahead: { count: number; total: Cents } | null;
+};
+
 /** A bill or payment coming out of the account the forecast follows. */
 export type Upcoming = { name: string; date: ISODate; amount: Cents };
 
@@ -42,11 +60,15 @@ export type AlertSnapshot = {
   /** Bills short and price rises: a bank's warnings come fresher from the database itself. */
   alerts: Alert[];
   weekly: WeeklyNumbers;
+  /** Null when Prism doesn't hold the whole of last month (a bank linked part-way through it). */
+  monthly: MonthlyNumbers | null;
   /** What the forecast has going out in the next two weeks; null when there's no forecast to ask. */
   upcoming: Upcoming[] | null;
 };
 
 const UPCOMING_DAYS = 14;
+const AHEAD_DAYS = 30;
+const TOP_CATEGORIES = 3;
 const MAX_UPCOMING = 20;
 const MAX_ALERTS = 20;
 
@@ -71,6 +93,7 @@ export function alertSnapshot(a: Analysis, at: string, by: AlertSnapshot["by"] =
       netWorth: nw.at(-1)?.net ?? 0,
       netWorthLastMonth: nw.length >= 2 ? nw.at(-2)!.net : null,
     },
+    monthly: monthlyNumbers(a),
     upcoming: a.forecast
       ? a.forecast.events
           .filter((e) => e.amount < 0 && e.date <= addDays(t, UPCOMING_DAYS))
@@ -80,7 +103,57 @@ export function alertSnapshot(a: Analysis, at: string, by: AlertSnapshot["by"] =
   };
 }
 
+/** Last month, whole, as of the visit's day: only when Prism holds every day of it. */
+export function monthlyNumbers(a: Analysis): MonthlyNumbers | null {
+  const txns = a.data.transactions;
+  const thisMonth = startOfMonth(a.today);
+  const from = addMonths(thisMonth, -1);
+  const to = addDays(thisMonth, -1);
+  const first = txns.reduce<ISODate | null>((min, t) => (t.date <= a.today && (min === null || t.date < min) ? t.date : min), null);
+  if (first === null || first > from) return null;
+  const prevFrom = addMonths(from, -1);
+  const totals = Object.entries(categoryTotals(txns, from, to)) as [keyof typeof CATEGORIES, Cents][];
+  const nw = a.netWorth;
+  return {
+    month: monthKey(from),
+    income: sumIncome(txns, from, to),
+    spent: sumSpending(txns, from, to),
+    before: first <= prevFrom ? { income: sumIncome(txns, prevFrom, addDays(from, -1)), spent: sumSpending(txns, prevFrom, addDays(from, -1)) } : null,
+    top: totals
+      .filter(([, v]) => v > 0)
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, TOP_CATEGORIES)
+      .map(([c, v]) => ({ label: CATEGORIES[c].label, spent: v })),
+    netWorth: nw.length >= 3 ? { end: nw.at(-2)!.net, change: nw.at(-2)!.net - nw.at(-3)!.net } : null,
+    ahead: a.forecast
+      ? a.forecast.events
+          .filter((e) => e.amount < 0 && e.date <= addDays(a.today, AHEAD_DAYS))
+          .reduce((x, e) => ({ count: x.count + 1, total: x.total - e.amount }), { count: 0, total: 0 })
+      : null,
+  };
+}
+
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH = /^\d{4}-\d{2}$/;
+
+function validMonthly(x: unknown): MonthlyNumbers | null | undefined {
+  if (x === undefined || x === null) return null;
+  const m = x as Partial<MonthlyNumbers>;
+  if (!text(m.month, 7) || !MONTH.test(m.month) || !cents(m.income) || !cents(m.spent)) return undefined;
+  if (m.before !== null && !(m.before && cents(m.before.income) && cents(m.before.spent))) return undefined;
+  if (!Array.isArray(m.top) || m.top.length > TOP_CATEGORIES || !m.top.every((t) => t && text(t.label, 40) && cents(t.spent))) return undefined;
+  if (m.netWorth !== null && !(m.netWorth && cents(m.netWorth.end) && cents(m.netWorth.change))) return undefined;
+  if (m.ahead !== null && !(m.ahead && Number.isSafeInteger(m.ahead.count) && m.ahead.count >= 0 && cents(m.ahead.total))) return undefined;
+  return {
+    month: m.month,
+    income: m.income,
+    spent: m.spent,
+    before: m.before ? { income: m.before.income, spent: m.before.spent } : null,
+    top: m.top.map((t) => ({ label: t.label, spent: t.spent })),
+    netWorth: m.netWorth ? { end: m.netWorth.end, change: m.netWorth.change } : null,
+    ahead: m.ahead ? { count: m.ahead.count, total: m.ahead.total } : null,
+  };
+}
 const KINDS: AlertKind[] = ["bank", "bill-short", "price-rise"];
 const text = (x: unknown, max: number): x is string => typeof x === "string" && x.length <= max;
 const cents = (x: unknown): x is Cents => Number.isSafeInteger(x);
@@ -105,6 +178,9 @@ export function validSnapshot(x: unknown): AlertSnapshot | null {
   if (s.upcoming !== null && !(Array.isArray(s.upcoming) && s.upcoming.length <= MAX_UPCOMING)) return null;
   const alerts = s.alerts.map(validAlert);
   if (alerts.some((a) => a === null)) return null;
+  // Snapshots from before the recap have none; one that's there must read whole.
+  const monthly = validMonthly((s as { monthly?: unknown }).monthly);
+  if (monthly === undefined) return null;
   const upcoming = s.upcoming?.filter((u): u is Upcoming => !!u && text(u.name, 200) && typeof u.date === "string" && DAY.test(u.date) && cents(u.amount)) ?? null;
   return {
     v: 1,
@@ -114,6 +190,7 @@ export function validSnapshot(x: unknown): AlertSnapshot | null {
     today: s.today,
     alerts: alerts as Alert[],
     weekly: { from: w.from, to: w.to, spent: w.spent, spentBefore: w.spentBefore, month: w.month ? { spent: w.month.spent, limit: w.month.limit } : null, netWorth: w.netWorth, netWorthLastMonth: w.netWorthLastMonth ?? null },
+    monthly,
     upcoming: upcoming?.map((u) => ({ name: u.name, date: u.date, amount: u.amount })) ?? null,
   };
 }

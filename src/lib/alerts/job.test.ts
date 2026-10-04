@@ -41,6 +41,7 @@ const snap: AlertSnapshot = {
     },
   ],
   weekly: { from: "2026-09-28", to: "2026-10-04", spent: 1, spentBefore: 1, month: null, netWorth: 1, netWorthLastMonth: null },
+  monthly: null,
   upcoming: null,
 };
 

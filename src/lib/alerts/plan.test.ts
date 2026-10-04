@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { Alert } from "@/lib/finance/alerts";
-import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
+import type { AlertSnapshot, MonthlyNumbers } from "@/lib/finance/alert-snapshot";
 import { emailFor, fingerprint, localDay, phoneAlertFor, type Recipient } from "./plan";
 
 const U = "11111111-1111-4111-8111-111111111111";
@@ -42,6 +42,7 @@ function snapshot(over: Partial<AlertSnapshot> = {}): AlertSnapshot {
     today: "2026-10-04",
     alerts: [bill, rise],
     weekly: { from: "2026-09-27", to: "2026-10-03", spent: 84_000, spentBefore: 80_000, month: { spent: 30_000, limit: 200_000 }, netWorth: 1_250_000, netWorthLastMonth: 1_200_000 },
+    monthly: null,
     upcoming: [
       { name: "Oak Street Rent", date: "2026-10-08", amount: 180_000 },
       { name: "City Power", date: "2026-10-20", amount: 9_000 },
@@ -201,5 +202,105 @@ describe("the same news on a phone", () => {
     const p = phoneAlertFor(emailFor(person({ snapshot: snapshot({ alerts: [long] }), kinds: ["bill-short"] }), TUESDAY)!);
     expect(p.title.length).toBeLessThanOrEqual(120);
     expect(p.body.length).toBeLessThanOrEqual(240);
+  });
+});
+
+describe("the recap of last month", () => {
+  // Friday Oct 2 2026, 8 AM in Chicago.
+  const at = (day: string) => new Date(`2026-10-${day}T13:00:00Z`);
+  const september: MonthlyNumbers = {
+    month: "2026-09",
+    income: 582_000,
+    spent: 410_000,
+    before: { income: 560_000, spent: 440_000 },
+    top: [
+      { label: "Housing", spent: 195_000 },
+      { label: "Food & dining", spent: 62_000 },
+      { label: "Transport", spent: 41_000 },
+    ],
+    netWorth: { end: 8_420_000, change: 120_000 },
+    ahead: { count: 9, total: 310_000 },
+  };
+  const seen = (day: string, monthly: MonthlyNumbers | null = september) => snapshot({ today: `2026-10-${day}`, at: `2026-10-${day}T12:00:00.000Z`, alerts: [], monthly });
+  const recap = (over: Partial<Recipient>, day: string) => emailFor(person({ kinds: ["weekly"], ...over }), at(day));
+
+  it("goes out the first morning a snapshot from this month has it, in a few lines, once", () => {
+    const e = recap({ snapshot: seen("02") }, "02")!;
+    expect(e.subject).toBe("Your September in Prism");
+    expect(e.summary).toEqual({
+      title: "Your September",
+      lines: [
+        { label: "In and out", value: "$5,820 came in and $4,100 went out, so you kept $1,720" },
+        { label: "Against August", value: "$300 less spent than in August" },
+        { label: "Where it went", value: "Housing $1,950, Food & dining $620, Transport $410" },
+        { label: "Net worth", value: "$84,200 at the end of September, up $1,200 over the month" },
+        { label: "Coming up", value: "9 bills in the next 30 days, about $3,100 in all" },
+      ],
+      note: null,
+    });
+    expect(e.fingerprints).toEqual([fingerprint(U, "monthly:2026-09")]);
+    expect(e.asOf).toEqual({ day: "2026-10-02", by: "visit" });
+    expect(recap({ snapshot: seen("02"), sent: new Set(e.fingerprints) }, "03")).toBeNull();
+    expect(phoneAlertFor(e)).toEqual({ title: "Your September in Prism", body: "In and out: $5,820 came in and $4,100 went out, so you kept $1,720", url: "/" });
+  });
+
+  it("says it in words alone when amounts are off", () => {
+    const e = recap({ snapshot: seen("02"), amounts: false }, "02")!;
+    expect(JSON.stringify(e.summary)).not.toMatch(/\$|\d,\d{3}/);
+    expect(e.summary!.lines.map((l) => l.value)).toEqual([
+      "You kept some of what came in",
+      "Less spent than in August",
+      "Housing, Food & dining and Transport",
+      "Up over the month",
+      "9 bills in the next 30 days",
+    ]);
+  });
+
+  it("says when more went out than came in, and leaves out what it doesn't know", () => {
+    const lean: MonthlyNumbers = { ...september, income: 300_000, before: null, top: [], netWorth: null, ahead: { count: 1, total: 5_000 } };
+    expect(recap({ snapshot: seen("02", lean) }, "02")!.summary!.lines).toEqual([
+      { label: "In and out", value: "$3,000 came in and $4,100 went out, so you spent $1,100 more than came in" },
+      { label: "Coming up", value: "1 bill in the next 30 days, about $50 in all" },
+    ]);
+    expect(recap({ snapshot: seen("02", lean), amounts: false }, "02")!.summary!.lines[0]!.value).toBe("You spent more than came in");
+    expect(recap({ snapshot: seen("02", { ...lean, ahead: { count: 0, total: 0 } }) }, "02")!.summary!.lines[1]!.value).toBe("Nothing Prism knows of is due in the next 30 days.");
+    expect(recap({ snapshot: seen("02", { ...lean, ahead: null }) }, "02")!.summary!.lines).toHaveLength(1);
+    // Net worth that fell, and one that barely moved.
+    const nw = (change: number, amounts = true) => recap({ snapshot: seen("02", { ...lean, ahead: null, netWorth: { end: 8_000_000, change } }), amounts }, "02")!.summary!.lines[1]!.value;
+    expect(nw(-250_000)).toBe("$80,000 at the end of September, down $2,500 over the month");
+    expect(nw(99)).toBe("$80,000 at the end of September, about level over the month");
+    expect(nw(-100)).toBe("$80,000 at the end of September, down $1 over the month");
+    expect(nw(-250_000, false)).toBe("Down over the month");
+  });
+
+  it("waits for a snapshot from this month until the 7th, then says why there are no figures", () => {
+    const old = snapshot({ today: "2026-09-29", at: "2026-09-29T12:00:00.000Z", alerts: [] });
+    expect(recap({ snapshot: old }, "02")).toBeNull();
+    expect(recap({ snapshot: old }, "06")).toBeNull();
+    const late = recap({ snapshot: old }, "07")!;
+    expect(late.summary).toEqual({ title: "Your September", lines: [], note: "Prism hasn't looked at your accounts since Tue, Sep 29, so it can't sum up September here. Open Prism to see it on Cash flow." });
+    expect(late.asOf).toBeNull();
+    expect(recap({ snapshot: null }, "07")!.summary!.note).toMatch(/hasn't looked at your accounts lately/);
+    expect(recap({ snapshot: old }, "08")).toBeNull();
+  });
+
+  it("counts a snapshot taken on the 1st, never sends a month that isn't last month, and says $0 kept plainly", () => {
+    expect(recap({ snapshot: seen("01") }, "01")!.summary!.title).toBe("Your September");
+    expect(recap({ snapshot: seen("02", { ...september, month: "2026-08" }) }, "02")).toBeNull();
+    const even = recap({ snapshot: seen("02", { ...september, income: 410_000 }) }, "02")!;
+    expect(even.summary!.lines[0]!.value).toBe("$4,100 came in and $4,100 went out, so you kept $0");
+  });
+
+  it("stays quiet for a month Prism didn't hold whole, and for anyone who didn't ask for summaries", () => {
+    expect(recap({ snapshot: seen("07", null) }, "07")).toBeNull();
+    expect(emailFor(person({ kinds: ["bank"], snapshot: seen("02") }), at("02"))).toBeNull();
+  });
+
+  it("takes the place of a Monday summary on the same day, and once it has gone, a Monday has its own again", () => {
+    const monday = recap({ snapshot: seen("05") }, "05")!;
+    expect(monday.summary!.title).toBe("Your September");
+    expect(monday.fingerprints).toEqual([fingerprint(U, "monthly:2026-09")]);
+    const next = recap({ snapshot: seen("05"), sent: new Set(monday.fingerprints) }, "05")!;
+    expect(next.summary!.title).toBe("Your week");
   });
 });

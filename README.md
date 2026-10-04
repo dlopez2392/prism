@@ -154,14 +154,14 @@ person's own view only.
 ### Alert emails
 
 Opt-in, per person, on the Account page: which of the four kinds (a bank
-needs you, a bill may not be covered, a subscription went up, a Monday
-summary) and whether amounts may show. Prism holds no service-role key, so
+needs you, a bill may not be covered, a subscription went up, summaries)
+and whether amounts may show. Prism holds no service-role key, so
 the daily job (`/api/cron/alerts`, Vercel Cron at 13:00 UTC) can't read
 anyone's money as itself:
 
 - **Each visit leaves a snapshot.** After the person's own page loads, at
   most every 15 minutes, what the visit found (short bills, price rises, the
-  week's figures, the next two weeks' bills) is sealed with the vault key into
+  week's figures, last month's, the next two weeks' bills) is sealed with the vault key into
   `alert_snapshots`, and only while their emails are on. Turning them off
   deletes it (a trigger). Bank warnings come straight from `plaid_items`.
 - **The morning check reads the banks first** (`src/lib/alerts/refresh.ts`),
@@ -186,6 +186,16 @@ anyone's money as itself:
   key covers a retried run. Bills and price rises come only from a snapshot
   under 8 days old, a short bill from 7 days before it's due. On the person's
   own Monday the summary goes even in a quiet or stale week, saying so.
+- **Early each month, the month before** (the same "Summaries" choice, so no
+  new setting and no schema change): what came in and went out and what was
+  kept, against the month before, where most of it went, net worth over the
+  month, and the next 30 days' bills, in words when amounts are off. It
+  needs a snapshot taken after the month ended (a visit, or the morning
+  check), so it goes the first morning one has it, within the first seven
+  days; with none by the 7th it goes anyway, saying why it has no figures. A
+  month Prism didn't hold whole (a bank linked part-way through) gets no
+  recap. It takes the place of a Monday summary on the same day, and reaches
+  a phone like any other email.
 - **One click stops them.** Every email carries `List-Unsubscribe` (RFC 8058
   one-click) and a link to `/alerts/unsubscribe`, both signed for that person
   with an HMAC of `CRON_SECRET`; opening the link changes nothing until its

@@ -263,3 +263,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     each month start out of the plan. Claude and ChatGPT ask the same through
     `plan_debt_payoff`. Next, if people ask for it: saving a plan and tracking
     it month by month, and a card's own falling minimum instead of today's.
+21. **The month before, early each month.** **Built (2026-10-04):** with
+    summaries on, the alert email and the phone carry last month in a few
+    lines (in and out, what was kept, against the month before, where it
+    went, net worth's move, the next 30 days' bills), the first morning a
+    snapshot taken after the month ended has it, or a note on the 7th. Next,
+    if people ask for it: its own on/off switch (a schema change: the alert
+    kinds are checked by the database), and a year-end recap in January.
