@@ -10,7 +10,7 @@
 //      twice — once when you buy, once when you pay the card.
 
 import { lastMonths, monthKey } from "@/lib/finance/dates";
-import type { Account, AccountKind, AssetClass, CategoryId, Cents, Holding, IncomeKind, ISODate, Transaction } from "@/lib/finance/types";
+import type { Account, AccountKind, AssetClass, CategoryId, Cents, Holding, IncomeKind, ISODate, TaxHint, Transaction } from "@/lib/finance/types";
 import type { PlaidAccount, PlaidHolding, PlaidSecurity, PlaidTransaction } from "./client";
 
 export const toCents = (dollars: number | null | undefined): Cents => Math.round((dollars ?? 0) * 100);
@@ -105,8 +105,41 @@ export function incomeKindOf(pfc: { primary: string; detailed: string } | null |
   }
 }
 
+/**
+ * Plaid's detailed category → what a tax return might ask about the payment
+ * (the same names in both of Plaid's category versions). A vet is not a
+ * doctor, so MEDICAL_VETERINARY_SERVICES says nothing; a political gift is
+ * left to finance/taxes.ts, which reads the name.
+ */
+export function taxHintOf(pfc: { primary: string; detailed: string } | null | undefined): TaxHint | undefined {
+  switch (pfc?.detailed) {
+    case "GOVERNMENT_AND_NON_PROFIT_DONATIONS":
+      return "donation";
+    case "GOVERNMENT_AND_NON_PROFIT_TAX_PAYMENT":
+      return "tax-payment";
+    case "MEDICAL_DENTAL_CARE":
+    case "MEDICAL_EYE_CARE":
+    case "MEDICAL_NURSING_CARE":
+    case "MEDICAL_PHARMACIES_AND_SUPPLEMENTS":
+    case "MEDICAL_PRIMARY_CARE":
+    case "MEDICAL_OTHER_MEDICAL":
+      return "medical";
+    case "GENERAL_SERVICES_CHILDCARE":
+      return "childcare";
+    case "GENERAL_SERVICES_EDUCATION":
+      return "education";
+    case "LOAN_PAYMENTS_MORTGAGE_PAYMENT":
+      return "mortgage";
+    case "LOAN_PAYMENTS_STUDENT_LOAN_PAYMENT":
+      return "student-loan";
+    default:
+      return undefined;
+  }
+}
+
 export function mapTransaction(t: PlaidTransaction): Transaction {
   const incomeKind = incomeKindOf(t.personal_finance_category);
+  const taxHint = taxHintOf(t.personal_finance_category);
   return {
     id: t.transaction_id,
     accountId: t.account_id,
@@ -115,6 +148,7 @@ export function mapTransaction(t: PlaidTransaction): Transaction {
     merchant: (t.merchant_name || t.name || "Unknown").trim(),
     category: mapCategory(t.personal_finance_category),
     ...(incomeKind ? { incomeKind } : {}),
+    ...(taxHint ? { taxHint } : {}),
     pending: t.pending,
   };
 }

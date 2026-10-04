@@ -14,6 +14,8 @@ import {
   searchTransactions,
   SEARCH_LIMIT_MAX,
   spendingBreakdown,
+  TAX_LINES_MAX,
+  taxes,
   upcomingBills,
   usd,
   type AgentData,
@@ -49,6 +51,7 @@ describe("every result", () => {
       upcomingBills(data, {}),
       income(data),
       netWorth(data),
+      taxes(data),
     ];
     expect(data).toEqual(before);
     for (const r of results) expect(JSON.stringify(r).length).toBeLessThan(40_000);
@@ -291,5 +294,35 @@ describe("Venmo, PayPal and Cash App payments", () => {
     expect(searchTransactions(data, { query: "pizza" }).transactions).toHaveLength(1);
     // A transaction without one says nothing about payments.
     expect(searchTransactions(data, { limit: 100 }).transactions.filter((t) => "payment" in t)).toHaveLength(1);
+  });
+});
+
+describe("get_tax_summary", () => {
+  it("sorts the year into what a return asks about, money out negative, citing each line and the form to trust", () => {
+    const data = demo();
+    const r = taxes(data, { year: 2026 });
+    expect(r).toMatchObject({ as_of: TODAY, demo: true, year: 2026, span: { from: "2026-01-01", to: TODAY, year_under_way: true } });
+    expect(r.note).toMatch(/Not tax advice/);
+    const by = new Map(r.sections.map((x) => [x.id, x]));
+    expect(by.get("interest")).toMatchObject({ money: "in", form: "1099-INT" });
+    expect(by.get("interest")!.total).toBeGreaterThan(0);
+    expect(by.get("student-loans")).toMatchObject({ money: "out", form: "1098-E" });
+    expect(by.get("student-loans")!.total).toBeLessThan(0);
+    for (const x of r.sections) {
+      expect(x.transactions.length).toBe(Math.min(x.transaction_count, TAX_LINES_MAX));
+      for (const t of x.transactions) expect(ids(data).has(t.id)).toBe(true);
+    }
+    expect(r.nothing_found_for).toContain("Mortgage payments");
+  });
+
+  it("caps what it lists, says how many it left out, and says when it answered for another year", () => {
+    const data = demo();
+    const pay = Array.from({ length: TAX_LINES_MAX + 5 }, (_, i) => ({ id: `p${i}`, accountId: data.accounts[0]!.id, date: addDays("2026-01-01", i), amount: 100_000, merchant: "Acme Payroll", category: "income" as const, pending: false }));
+    const r = taxes({ ...data, transactions: [...data.transactions, ...pay] }, { year: 1999 });
+    expect(r.year).toBe(2026);
+    expect(r.year_note).toMatch(/no records from 1999/);
+    const p = r.sections.find((x) => x.id === "pay")!;
+    expect(p.transactions).toHaveLength(TAX_LINES_MAX);
+    expect(p.not_listed).toBe(p.transaction_count - TAX_LINES_MAX);
   });
 });

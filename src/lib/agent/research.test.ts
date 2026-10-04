@@ -7,6 +7,7 @@ import { monthlyCashFlow } from "@/lib/finance/cashflow";
 import { buildDemoData } from "@/lib/finance/demo";
 import { money } from "@/lib/finance/format";
 import { monthWindow, readLedgerHash } from "@/lib/finance/view";
+import { taxSummary } from "@/lib/finance/taxes";
 import { yearReview } from "@/lib/finance/year";
 import { DOC_TRANSACTIONS_MAX, RESEARCH_RESULTS_MAX, researchFetch, researchSearch } from "./research";
 import { overview, upcomingBills, type AgentData } from "./tools";
@@ -33,6 +34,16 @@ describe("search", () => {
     expect(ids("2025")[0]).toBe("year:2025");
     expect(ids("this year")[0]).toBe("year:2026");
     expect(ids("2025 against 2026").slice(0, 2).sort()).toEqual(["year:2025", "year:2026"]);
+  });
+
+  it("finds a year's taxes when the question is about taxes: the year it names, else the one a person most likely means", () => {
+    expect(ids("taxes")[0]).toBe("taxes:2026");
+    expect(ids("taxes")).not.toContain("taxes:2025");
+    expect(ids("taxes 2025").slice(0, 2)).toEqual(["taxes:2025", "year:2025"]);
+    expect(ids("charitable donations last year")[0]).toBe("taxes:2025");
+    expect(ids("is my interest taxable")[0]).toBe("taxes:2026");
+    expect(ids("2025")).not.toContain("taxes:2025");
+    expect(ids("taxes 2019").filter((id) => id.includes("2019"))).toEqual([]);
   });
 
   it("never offers a month or a year Prism has no record of", () => {
@@ -101,7 +112,7 @@ describe("fetch", () => {
   it("reads every document a search can return, with the same title and link", () => {
     const data = demo();
     const all = new Set<string>();
-    for (const q of ["", "2025", "2026", "march", "last month", "food", "rent", "bills", "travel", "fun", "other", "green basket", "sushi", "market", "fuel"]) {
+    for (const q of ["", "2025", "2026", "march", "last month", "food", "rent", "bills", "travel", "fun", "other", "green basket", "sushi", "market", "fuel", "taxes", "taxes 2025"]) {
       for (const hit of researchSearch(data, SITE, q).results) {
         all.add(hit.id);
         const doc = researchFetch(data, SITE, hit.id)!;
@@ -157,6 +168,20 @@ describe("fetch", () => {
     expect(doc.url).toBe(`${SITE}/year?y=2025`);
   });
 
+  it("gives a year's taxes as the tax page does, citing every line, and says it isn't advice", () => {
+    const data = demo();
+    const s = taxSummary(data, 2026);
+    const doc = read("taxes:2026", data)!;
+    expect(doc.url).toBe(`${SITE}/taxes?y=2026`);
+    expect(doc.text).toMatch(/Not tax advice/);
+    expect(doc.text).toContain("The year is still under way");
+    for (const x of s.sections) {
+      expect(doc.text).toContain(`${x.title} (money ${x.side}): ${money(x.side === "in" ? x.total : -x.total)}`);
+      for (const t of x.lines) expect(doc.text).toContain(`| id ${t.id}`);
+    }
+    expect(doc.text).toContain("Looked for and not found: Dividends");
+  });
+
   it("covers a category over the twelve months its link shows, and lists the newest when there are too many to list", () => {
     const data = demo();
     const w = monthWindow(TODAY, 12);
@@ -192,6 +217,8 @@ describe("fetch", () => {
       "month:2019-01",
       "month:2026-13",
       "year:1999",
+      "taxes:1999",
+      "taxes:",
       "category:income",
       "category:__proto__",
       "merchant:",

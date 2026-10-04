@@ -74,15 +74,25 @@ export function defaultYear(data: Pick<FinanceData, "transactions" | "today">): 
   return years.includes(now) || years.length === 0 ? now : years[0]!;
 }
 
-export function yearReview(data: FinanceData, year: number): YearReview {
-  const txns = data.transactions.filter((t) => t.date <= data.today);
-  const first = txns.reduce<ISODate | null>((min, t) => (min === null || t.date < min ? t.date : min), null);
+export type YearSpan = Pick<YearReview, "from" | "to" | "partial" | "recordsFrom"> & {
+  /** The first day Prism has any record of, or null when it has none. */
+  first: ISODate | null;
+};
+
+/** The stretch of `year` Prism can speak for: Jan 1 or its first record, to Dec 31 or today. */
+export function yearSpan(data: Pick<FinanceData, "transactions" | "today">, year: number): YearSpan {
+  const first = data.transactions.reduce<ISODate | null>((min, t) => (t.date <= data.today && (min === null || t.date < min) ? t.date : min), null);
   const jan1 = `${year}-01-01`;
   const dec31 = `${year}-12-31`;
   const partial = data.today < dec31;
   const to = partial ? data.today : dec31;
   const recordsFrom = first !== null && first > jan1 && first <= to ? first : null;
-  const from = recordsFrom ?? jan1;
+  return { from: recordsFrom ?? jan1, to, partial, recordsFrom, first };
+}
+
+export function yearReview(data: FinanceData, year: number): YearReview {
+  const txns = data.transactions.filter((t) => t.date <= data.today);
+  const { from, to, partial, recordsFrom, first } = yearSpan(data, year);
 
   // The same span, a year earlier — only when the records reach back to its first day.
   const priorFrom = `${year - 1}${from.slice(4)}`;

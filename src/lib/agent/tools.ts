@@ -20,6 +20,7 @@ import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences } from "@/lib/finance/recurring";
 import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
+import { defaultTaxYear, taxSummary, taxYears } from "@/lib/finance/taxes";
 import type { Account, CategoryId, Cents, FinanceData, ISODate, Liability, Transaction } from "@/lib/finance/types";
 
 /** The money a connected app is shown, and what kind of money it is. */
@@ -455,3 +456,48 @@ export function netWorth(data: AgentData) {
 export const SPEND_CATEGORY_HELP = CATEGORY_IDS.filter((c) => isSpendCategory(c))
   .map((c) => `${c} (${CATEGORIES[c].label})`)
   .join(", ");
+
+// — get_tax_summary ——————————————————————————————————————————————
+
+/** Per section, the most transactions a result carries: enough to cite, never a year of paychecks in full. */
+export const TAX_LINES_MAX = 50;
+
+export const TAX_NOTE =
+  "Not tax advice. Found from the bank's categories and the names on each line. A bank line is what landed, not what a tax form says (take-home pay isn't wages; a mortgage payment isn't its interest): the form each section names holds the official figure.";
+
+export function taxes(data: AgentData, args: { year?: number } = {}) {
+  const years = taxYears(data);
+  const year = args.year !== undefined && years.includes(args.year) ? args.year : defaultTaxYear(data);
+  const s = taxSummary(data, year);
+  const accounts = byId(data);
+  return {
+    ...frame(data),
+    year,
+    ...(args.year !== undefined && args.year !== year ? { year_note: `Prism has no records from ${args.year}, so this is ${year}.` } : {}),
+    years_with_records: years,
+    span: { from: s.from, to: s.to, year_under_way: s.partial, records_start: s.recordsFrom },
+    note: TAX_NOTE,
+    sections: s.sections.map((x) => ({
+      id: x.id,
+      title: x.title,
+      money: x.side,
+      // Money out negative, as everywhere: the gifts, bills and payments that went out.
+      total: usd(x.side === "in" ? x.total : -x.total),
+      form: x.form,
+      about: x.note,
+      transaction_count: x.lines.length,
+      transactions: x.lines.slice(0, TAX_LINES_MAX).map((t) => citeable(t, accounts)),
+      ...(x.lines.length > TAX_LINES_MAX ? { not_listed: x.lines.length - TAX_LINES_MAX } : {}),
+    })),
+    nothing_found_for: s.nothing.map((n) => n.title),
+    ...(s.political.length
+      ? {
+          left_out_political_gifts: {
+            why: "Gifts to campaigns and parties aren't deductible, so they're not counted as gifts to charity.",
+            total: usd(s.political.reduce((sum, t) => sum + t.amount, 0)),
+            transactions: s.political.slice(0, TAX_LINES_MAX).map((t) => citeable(t, accounts)),
+          },
+        }
+      : {}),
+  };
+}

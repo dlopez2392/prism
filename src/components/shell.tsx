@@ -18,6 +18,7 @@ import {
   Menu,
   PiggyBank,
   PlugZap,
+  ReceiptText,
   Target,
   Telescope,
   UserRound,
@@ -39,6 +40,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
       { href: "/spending", label: "Spending", icon: ChartPie },
       { href: "/budgets", label: "Budgets", icon: Target },
       { href: "/year", label: "Your year", icon: CalendarRange },
+      { href: "/taxes", label: "Taxes", icon: ReceiptText },
     ],
   },
   {

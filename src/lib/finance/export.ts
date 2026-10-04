@@ -21,6 +21,7 @@ import { INCOME_LABELS } from "./income";
 import type { ManualItem } from "./manual";
 import { MANUAL_KINDS } from "./manual";
 import { P2P_APP_NAMES, p2pLabel } from "./p2p";
+import { taxSummary } from "./taxes";
 import type { Account, Budget, Cents, FinanceData, Goal, Holding, ISODate, Institution, Transaction } from "./types";
 import { lastMonths } from "./dates";
 
@@ -96,6 +97,21 @@ export function transactionsCsv(data: Money, year?: number): string {
       ];
     });
   return csv(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note"], rows);
+}
+
+/**
+ * The tax summary (finance/taxes.ts) for whoever does the return: one row per
+ * transaction, grouped by what a return asks about, each group closed by its
+ * total. Money out stays negative, as in every file Prism writes.
+ */
+export function taxesCsv(data: Money & Pick<FinanceData, "today">, year: number): string {
+  const accounts = byId(data.accounts);
+  const rows: Cell[][] = [];
+  for (const s of taxSummary(data, year).sections) {
+    for (const t of s.lines) rows.push([s.title, t.date, t.merchant, t.p2p ? p2pLabel(t.p2p) : "", amount(t.amount), accountName(accounts.get(t.accountId)), s.form]);
+    rows.push([s.title, "", `Total of ${s.lines.length} ${s.lines.length === 1 ? "transaction" : "transactions"}`, "", amount(s.side === "in" ? s.total : -s.total), "", s.form]);
+  }
+  return csv(["Section", "Date", "Merchant", "Paid to or from", "Amount", "Account", "Form"], rows);
 }
 
 /** Each account as it stands today. */

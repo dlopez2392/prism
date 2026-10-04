@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { buildDemoData } from "./demo";
-import { accountsCsv, balancesCsv, cell, csv, dollars, everythingJson, EXPORT_README, transactionsCsv } from "./export";
+import { accountsCsv, balancesCsv, cell, csv, dollars, everythingJson, EXPORT_README, taxesCsv, transactionsCsv } from "./export";
 import { detectColumns, mapIsUsable, mapRows, parseCsv } from "./import";
 import { tx } from "./test-helpers";
 import type { FinanceData } from "./types";
@@ -139,5 +139,36 @@ describe("the README in the download", () => {
   it("explains every file the download holds", () => {
     const readme = EXPORT_README("Prism", TODAY);
     for (const f of ["transactions.csv", "accounts.csv", "balances.csv", "budgets.csv", "goals.csv", "holdings.csv", "everything.json"]) expect(readme).toContain(f);
+  });
+});
+
+describe("the taxes file", () => {
+  it("lists each section's transactions, then its total, with the form", () => {
+    const money: FinanceData = {
+      ...data,
+      today: "2026-12-31",
+      transactions: [
+        tx("2026-03-31", 412, "Savings interest", "income"),
+        tx("2026-06-30", 388, "Savings interest", "income"),
+        // A merchant that looks like a formula is written as words.
+        tx("2026-05-01", -30_000, "@Red Cross", "other"),
+        { ...tx("2026-06-01", -12_000, "Venmo", "transfer"), p2p: { app: "venmo", dir: "to", name: "Maria Lopez", note: "babysitting", date: "2026-06-01" } },
+      ],
+    };
+    const rows = parseCsv(taxesCsv(money, 2026));
+    expect(rows[0]).toEqual(["Section", "Date", "Merchant", "Paid to or from", "Amount", "Account", "Form"]);
+    expect(rows.slice(1).map((r) => [r[0], r[1], r[2], r[3], r[4], r[6]])).toEqual([
+      ["Interest", "2026-06-30", "Savings interest", "", "3.88", "1099-INT"],
+      ["Interest", "2026-03-31", "Savings interest", "", "4.12", "1099-INT"],
+      ["Interest", "", "Total of 2 transactions", "", "8.00", "1099-INT"],
+      ["Gifts to charity", "2026-05-01", "'@Red Cross", "", "-300.00", ""],
+      ["Gifts to charity", "", "Total of 1 transaction", "", "-300.00", ""],
+      ["Childcare", "2026-06-01", "Venmo", "To Maria Lopez", "-120.00", ""],
+      ["Childcare", "", "Total of 1 transaction", "", "-120.00", ""],
+    ]);
+  });
+
+  it("is only a header when there's nothing to list", () => {
+    expect(parseCsv(taxesCsv({ ...data, transactions: [] }, 2026))).toEqual([["Section", "Date", "Merchant", "Paid to or from", "Amount", "Account", "Form"]]);
   });
 });

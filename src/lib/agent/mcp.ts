@@ -1,7 +1,7 @@
 // src/lib/agent/mcp.ts
 //
-// Prism as an MCP server: twelve read-only tools over the person's money, for
-// Claude, ChatGPT or any MCP client they connect. Ten answer questions
+// Prism as an MCP server: thirteen read-only tools over the person's money, for
+// Claude, ChatGPT or any MCP client they connect. Eleven answer questions
 // directly; `search` and `fetch` are the pair ChatGPT's deep research reads a
 // connector through (research.ts). The data is loaded lazily, once per
 // request, by the loader the endpoint passes in — a tool list or a handshake
@@ -24,6 +24,7 @@ import {
   SEARCH_LIMIT_MAX,
   SPEND_CATEGORY_HELP,
   spendingBreakdown,
+  taxes,
   upcomingBills,
   type AgentData,
 } from "./tools";
@@ -35,7 +36,8 @@ export const INSTRUCTIONS = `${BRAND.product} is the user's personal finance app
 - Amounts are US dollars. In transactions, money out is negative and money in is positive.
 - Dates are the user's own calendar; each result says which day "today" is (as_of) and in which time zone.
 - For a broad question ("how am I doing?") start with get_overview; reach for the other tools for detail.
-- search and fetch serve research: search finds documents (summaries, each month and year, each category and merchant of the last 12 months) and fetch reads one in full, with a link to the page in ${BRAND.product} that shows the same figures.
+- For tax questions, get_tax_summary sorts a year into what a US tax return asks about and names the form that holds each official figure. It is not tax advice: point to those forms, and never present a figure as a deduction.
+- search and fetch serve research: search finds documents (summaries, each month and year, each year's taxes, each category and merchant of the last 12 months) and fetch reads one in full, with a link to the page in ${BRAND.product} that shows the same figures.
 - When an answer rests on particular transactions, cite them — merchant, date and amount. Their ids are stable.
 - If a result says demo: true, the money is ${BRAND.product}'s example household, NOT the user's. Say so plainly, and suggest linking a bank in ${BRAND.product}.
 - If a result carries a notice (a bank needing attention, say), pass it on; the figures may be incomplete.
@@ -224,13 +226,25 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
     run(netWorth),
   );
 
+  server.registerTool(
+    "get_tax_summary",
+    {
+      title: "Tax summary",
+      description:
+        "One year sorted into what a US tax return asks about. Money in: pay, interest, dividends, benefits and pensions, other money (side work, clients) and tax refunds. Money out: gifts to charity, medical and dental, taxes paid, mortgage and student-loan payments, childcare and tuition. Each section has its total, the form that holds the official figure (W-2, 1099-INT, 1098…), what it means for a return, and the transactions behind it. Also says what was looked for and not found. Not tax advice.",
+      inputSchema: z.object({ year: z.number().int().min(1900).max(2200).optional().describe("The tax year, e.g. 2025. Default: last year until the April deadline has passed, this year after.") }),
+      annotations: { title: "Tax summary", ...READ_ONLY },
+    },
+    runWith(taxes),
+  );
+
   // — Deep research: the two tools ChatGPT reads a connector through, by these exact names and shapes. —
 
   server.registerTool(
     "search",
     {
       title: "Search the user's money",
-      description: `Find documents about the user's money for research. Returns up to ${RESEARCH_RESULTS_MAX}, each an id, a title and a link to the page in ${BRAND.product} that shows it; read one in full with fetch. There are summaries (overview, spending, cash flow, budgets, bills, accounts, net worth, goals, income), each month and each year, and each spending category and each merchant of the last 12 months. Name what you're after: 'groceries', a merchant, 'March 2026', '2025', 'last month', 'subscriptions'. A question that names nothing returns the summaries.`,
+      description: `Find documents about the user's money for research. Returns up to ${RESEARCH_RESULTS_MAX}, each an id, a title and a link to the page in ${BRAND.product} that shows it; read one in full with fetch. There are summaries (overview, spending, cash flow, budgets, bills, accounts, net worth, goals, income), each month and each year, each year's taxes, and each spending category and each merchant of the last 12 months. Name what you're after: 'groceries', a merchant, 'March 2026', '2025', 'last month', 'subscriptions', 'taxes 2025'. A question that names nothing returns the summaries.`,
       inputSchema: z.object({ query: z.string().max(200).describe("What to look for: a merchant, a category, a month or a year, or a topic like 'subscriptions' or 'net worth'.") }),
       outputSchema: z.object({ results: z.array(z.object({ id: z.string(), title: z.string(), url: z.string() })) }),
       annotations: { title: "Search the user's money", ...READ_ONLY },

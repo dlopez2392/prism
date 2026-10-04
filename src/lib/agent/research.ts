@@ -5,8 +5,8 @@
 // title and a link), and `fetch`, which returns one document's full text.
 // This is the person's money as that library: the summaries the other tools
 // already give (overview, accounts, net worth, spending, cash flow, budgets,
-// goals, bills, income), each month and each year, and each spending category
-// and each merchant of the last twelve months.
+// goals, bills, income), each month and each year, each year's taxes, and each
+// spending category and each merchant of the last twelve months.
 //
 // Every document is drawn from the same functions as the other tools and the
 // screens, so a research report can never disagree with the app; and every one
@@ -24,10 +24,11 @@ import { addMonths, daysInMonth, monthKey, startOfMonth } from "@/lib/finance/da
 import { money } from "@/lib/finance/format";
 import { p2pLabel } from "@/lib/finance/p2p";
 import { normalizeMerchant } from "@/lib/finance/recurring";
+import { defaultTaxYear, taxSummary } from "@/lib/finance/taxes";
 import type { Account, Cents, ISODate, SpendCategoryId, Transaction } from "@/lib/finance/types";
 import { ledgerHash, monthWindow, type LedgerNarrowing } from "@/lib/finance/view";
 import { reviewYears, yearReview } from "@/lib/finance/year";
-import { budgets, cashFlow, goals, income, listAccounts, netWorth, overview, spendingBreakdown, upcomingBills, type AgentData } from "./tools";
+import { budgets, cashFlow, goals, income, listAccounts, netWorth, overview, spendingBreakdown, TAX_NOTE, upcomingBills, type AgentData } from "./tools";
 
 export type ResearchHit = { id: string; title: string; url: string };
 export type ResearchDoc = ResearchHit & { text: string; metadata: Record<string, string | number | boolean> };
@@ -176,7 +177,10 @@ const ledgerPath = (narrow: LedgerNarrowing) => `/spending?range=${RECENT_MONTHS
 
 // — The library ————————————————————————————————————————————————————
 
-type Entry = ResearchHit & { kind: "summary" | "month" | "year" | "category" | "merchant"; words: string[] };
+type Entry = ResearchHit & { kind: "summary" | "month" | "year" | "taxes" | "category" | "merchant"; words: string[] };
+
+/** Words that ask about taxes: they find a year's tax summary, that year's when the question names one. */
+const TAX_WORDS = ["tax", "taxes", "taxable", "irs", "deduction", "deductions", "deductible", "deduct", "itemize", "itemized", "charity", "charitable", "donation", "donations", "1099", "1098", "w2", "refund", "refunds"];
 
 /** The span categories and merchants cover: the Spending page's 12M view. */
 const recent = (d: AgentData) => monthWindow(d.today, RECENT_MONTHS);
@@ -216,6 +220,15 @@ function library(d: AgentData, site: string): Entry[] {
       url: url(`/year?y=${y}`),
       kind: "year",
       words: [],
+    });
+  }
+  for (const y of reviewYears(d)) {
+    entries.push({
+      id: `taxes:${y}`,
+      title: `${y}${String(y) === d.today.slice(0, 4) ? " so far" : ""}: for your taxes`,
+      url: url(`/taxes?y=${y}`),
+      kind: "taxes",
+      words: TAX_WORDS,
     });
   }
   for (const c of SPEND_CATEGORIES) {
@@ -310,10 +323,17 @@ export function researchSearch(d: AgentData, site: string, query: string): { res
   if (/\b(this|current)\s+year\b/.test(q)) add(`year:${thisYear}`, 10);
   if (/\b(last|previous)\s+year\b/.test(q)) add(`year:${thisYear - 1}`, 10);
 
+  // Taxes: the year the question names (or "last year"), else the year a person most likely means; above that year's review.
+  const taxed = tokens.reduce((s, t) => s + Math.max(0, ...TAX_WORDS.map((w) => wordScore(t, w))), 0);
+  if (taxed > 0) {
+    const asked = [...years, ...(/\b(this|current)\s+year\b/.test(q) ? [thisYear] : []), ...(/\b(last|previous)\s+year\b/.test(q) ? [thisYear - 1] : [])];
+    for (const y of asked.length ? asked : [defaultTaxYear(d)]) add(`taxes:${y}`, 10 + taxed);
+  }
+
   // Names: a merchant or a category the question names outranks the summaries a word like "spend" also names.
   const phrase = tokens.filter((t) => !/^\d+$/.test(t)).join(" ");
   for (const e of entries) {
-    if (e.kind === "month" || e.kind === "year") continue;
+    if (e.kind === "month" || e.kind === "year" || e.kind === "taxes") continue;
     const score = e.kind === "merchant" ? nameScore : wordScore;
     let s = 0;
     for (const t of tokens) s += Math.max(0, ...e.words.map((w) => score(t, w)));
@@ -483,6 +503,29 @@ function merchantBody(d: AgentData, key: string, accounts: Map<string, Account>)
 }
 
 /** One document in full, or null when the id names nothing Prism has. */
+function taxesBody(d: AgentData, y: number, accounts: Map<string, Account>) {
+  const s = taxSummary(d, y);
+  const political = s.political.reduce((sum, t) => sum + t.amount, 0);
+  return {
+    span: { from: s.from, to: s.to },
+    text: [
+      "",
+      TAX_NOTE,
+      ...(s.partial ? [`The year is still under way: this counts ${s.from} to ${s.to}.`] : []),
+      ...(s.recordsFrom ? [`Prism's records start on ${s.recordsFrom}; nothing earlier in ${y} is counted.`] : []),
+      ...s.sections.flatMap((x) => [
+        "",
+        `${x.title} (money ${x.side}): ${money(x.side === "in" ? x.total : -x.total)}${x.form ? `. Official figure: form ${x.form}` : ""}.`,
+        x.note,
+        ...ledger("Transactions", x.lines, accounts).slice(1),
+      ]),
+      "",
+      s.nothing.length ? `Looked for and not found: ${s.nothing.map((n) => n.title).join(", ")}.` : "Something was found for every section.",
+      ...(s.political.length ? [`Left out of gifts to charity: ${s.political.length} to campaigns or parties (${money(political)}), which aren't deductible.`] : []),
+    ],
+  };
+}
+
 export function researchFetch(d: AgentData, site: string, id: string): ResearchDoc | null {
   const entry = library(d, site).find((e) => e.id === id);
   if (!entry) return null;
@@ -508,6 +551,10 @@ export function researchFetch(d: AgentData, site: string, id: string): ResearchD
     }
     case "year": {
       const b = yearBody(d, Number(rest), accounts);
+      return doc(entry.title, b.text, b.span);
+    }
+    case "taxes": {
+      const b = taxesBody(d, Number(rest), accounts);
       return doc(entry.title, b.text, b.span);
     }
     case "category": {

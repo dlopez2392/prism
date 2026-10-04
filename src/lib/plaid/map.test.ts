@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { plaidConfig, plaidRequest, PlaidError } from "./client";
 import { syncTransactions } from "./sync";
-import { accountKind, incomeKindOf, mapAccount, mapCategory, mapHoldings, mapTransaction, reconstructHistory, signedBalance, suggestedLimit } from "./map";
+import { accountKind, incomeKindOf, mapAccount, mapCategory, mapHoldings, mapTransaction, reconstructHistory, signedBalance, suggestedLimit, taxHintOf } from "./map";
 import type { PlaidAccount, PlaidTransaction } from "./client";
 
 const acct = (over: Partial<PlaidAccount>): PlaidAccount => ({
@@ -59,6 +59,33 @@ describe("what kind of income the bank says it is", () => {
     const pay = mapTransaction(ptx({ amount: -2_450, name: "ACME PAYROLL", merchant_name: null, personal_finance_category: income("INCOME_WAGES") }));
     expect(pay).toMatchObject({ category: "income", incomeKind: "pay", amount: 245_000 });
     expect("incomeKind" in mapTransaction(ptx({}))).toBe(false);
+  });
+});
+
+describe("taxHintOf", () => {
+  const PRIMARY = ["GOVERNMENT_AND_NON_PROFIT", "GENERAL_SERVICES", "LOAN_PAYMENTS", "PERSONAL_CARE", "MEDICAL"];
+  const pfc = (detailed: string) => ({ primary: PRIMARY.find((p) => detailed.startsWith(`${p}_`))!, detailed });
+
+  it("names what a tax return asks about, from the bank's detailed category", () => {
+    expect(taxHintOf(pfc("GOVERNMENT_AND_NON_PROFIT_DONATIONS"))).toBe("donation");
+    expect(taxHintOf(pfc("GOVERNMENT_AND_NON_PROFIT_TAX_PAYMENT"))).toBe("tax-payment");
+    for (const d of ["DENTAL_CARE", "EYE_CARE", "NURSING_CARE", "PHARMACIES_AND_SUPPLEMENTS", "PRIMARY_CARE", "OTHER_MEDICAL"]) expect(taxHintOf(pfc(`MEDICAL_${d}`))).toBe("medical");
+    expect(taxHintOf(pfc("GENERAL_SERVICES_CHILDCARE"))).toBe("childcare");
+    expect(taxHintOf(pfc("GENERAL_SERVICES_EDUCATION"))).toBe("education");
+    expect(taxHintOf(pfc("LOAN_PAYMENTS_MORTGAGE_PAYMENT"))).toBe("mortgage");
+    expect(taxHintOf(pfc("LOAN_PAYMENTS_STUDENT_LOAN_PAYMENT"))).toBe("student-loan");
+  });
+
+  it("says nothing of a vet, a government fee, anything else or nothing", () => {
+    expect(taxHintOf(pfc("MEDICAL_VETERINARY_SERVICES"))).toBeUndefined();
+    expect(taxHintOf(pfc("GOVERNMENT_AND_NON_PROFIT_GOVERNMENT_DEPARTMENTS_AND_AGENCIES"))).toBeUndefined();
+    expect(taxHintOf(pfc("PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS"))).toBeUndefined();
+    expect(taxHintOf(null)).toBeUndefined();
+  });
+
+  it("is kept on the transaction only when there is one", () => {
+    expect(mapTransaction(ptx({ amount: 120, name: "ST JUDE", merchant_name: null, personal_finance_category: pfc("GOVERNMENT_AND_NON_PROFIT_DONATIONS") }))).toMatchObject({ amount: -12_000, category: "other", taxHint: "donation" });
+    expect("taxHint" in mapTransaction(ptx({}))).toBe(false);
   });
 });
 
