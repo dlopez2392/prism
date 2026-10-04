@@ -6,7 +6,8 @@
 // or how it splits across categories, its tags, and who owes the person for
 // it (finance/details.ts). A split line opens whole, by the id the bank gave
 // it, whichever of its parts was tapped; its parts take their categories from
-// the split, so it has no single category to change.
+// the split, so it has no single category to change. A split can be kept for
+// every purchase at the same shop; one there can still be kept whole.
 
 import { startTransition, useActionState, useId, useState, type FormEvent } from "react";
 import { Plus, ReceiptText, X } from "lucide-react";
@@ -14,7 +15,7 @@ import clsx from "clsx";
 import { FixForm } from "@/components/category-fixer";
 import { buttonGhost, buttonPrimary, Dialog, FormMessage } from "@/components/dialog";
 import { CATEGORIES, SPEND_CATEGORIES, isSpendCategory } from "@/lib/finance/categories";
-import { DETAIL_LIMITS } from "@/lib/finance/details";
+import { DETAIL_LIMITS, ruleKey } from "@/lib/finance/details";
 import { dayDate, money, shortDate } from "@/lib/finance/format";
 import { dollarsInput, parseDollars } from "@/lib/finance/plan";
 import type { Cents, SpendCategoryId, Transaction } from "@/lib/finance/types";
@@ -42,12 +43,15 @@ export function TransactionDialog({
   opened,
   session,
   onDone,
+  ruleShops = [],
 }: {
   dialogRef: React.RefObject<HTMLDialogElement | null>;
   opened: Opened | null;
   /** A new number each time the dialog opens, so the forms start fresh. */
   session: number;
   onDone: (message: string) => void;
+  /** The shops whose every purchase the person splits the same way, by ruleKey. */
+  ruleShops?: string[];
 }) {
   const [tab, setTab] = useState<"category" | "details">("category");
   const [seen, setSeen] = useState(session);
@@ -104,7 +108,7 @@ export function TransactionDialog({
               <FixForm key={`${session}-${t.id}-category`} t={t} onDone={done} onCancel={close} />
             )
           ) : (
-            <DetailForm key={`${session}-${t.id}-details`} opened={opened} onDone={done} onCancel={close} />
+            <DetailForm key={`${session}-${t.id}-details`} opened={opened} onDone={done} onCancel={close} shopHasRule={ruleShops.includes(ruleKey(t.merchant) ?? "")} />
           )}
         </>
       ) : null}
@@ -114,13 +118,16 @@ export function TransactionDialog({
 
 type Part = { category: SpendCategoryId; amount: string };
 
-function DetailForm({ opened, onDone, onCancel }: { opened: Opened; onDone: (message: string) => void; onCancel: () => void }) {
+function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened; onDone: (message: string) => void; onCancel: () => void; shopHasRule: boolean }) {
   const id = useId();
   const { whole: t, parts: given } = opened;
   const total: Cents = Math.abs(t.amount);
   const canSplit = t.amount < 0 && t.category !== "income";
   const first: SpendCategoryId = isSpendCategory(t.category) ? t.category : "other";
   const [splitOn, setSplitOn] = useState(given.length > 0);
+  // Every purchase at this shop split this way: ticked while the shop has a split of its own.
+  const [ruleOn, setRuleOn] = useState(shopHasRule);
+  const shopNamed = ruleKey(t.merchant) !== null;
   // The first part is always "the rest", so the parts add up by construction.
   const [rest, setRest] = useState<Part[]>(
     given.length ? given.slice(1).map((p) => ({ category: p.category as SpendCategoryId, amount: dollarsInput(-p.amount) })) : [{ category: first === "shopping" ? "food" : "shopping", amount: "" }],
@@ -149,6 +156,7 @@ function DetailForm({ opened, onDone, onCancel }: { opened: Opened; onDone: (mes
     if (blocked) return;
     const detail = {
       split: splitOn ? [{ category: firstCategory, amount: left }, ...rest.map((p, i) => ({ category: p.category, amount: amounts[i]! }))] : null,
+      ...(splitOn && shopNamed ? { rule: ruleOn } : {}),
       tags: tags.split(",").map((x) => x.trim()).filter(Boolean),
       owed: owedOn ? { who: who.trim(), amount: owedCents!, paid: null } : null,
     };
@@ -224,7 +232,18 @@ function DetailForm({ opened, onDone, onCancel }: { opened: Opened; onDone: (mes
                 ) : null}
               </div>
               {partError ? <p className="text-xs font-medium text-crit-ink">{partError}</p> : null}
+              {shopNamed ? (
+                <label className="flex cursor-pointer items-start gap-2.5 pt-1 text-sm text-ink-1">
+                  <input type="checkbox" checked={ruleOn} onChange={(e) => setRuleOn(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-[var(--button)]" />
+                  <span>
+                    <span className="font-semibold [overflow-wrap:anywhere]">Split every {t.merchant} purchase this way</span>
+                    <span className="block text-[13px] text-ink-3">By the same shares, the ones before this and the ones to come. One you split yourself keeps its own.</span>
+                  </span>
+                </label>
+              ) : null}
             </div>
+          ) : shopHasRule ? (
+            <p className="mt-2 text-[13px] text-ink-3">This one stays whole. Other {t.merchant} purchases still follow your split; remove it under Split rules on Spending.</p>
           ) : null}
         </fieldset>
       ) : null}

@@ -15,6 +15,9 @@
 
 import { addDays, addMonths, dayOfMonth, dayOfWeek, daysBetween, daysInMonth, isBusinessDay } from "./dates";
 import { wholeLines } from "./details";
+import { normalizeMerchant } from "./merchant";
+
+export { normalizeMerchant };
 import type { Cents, CategoryId, ISODate, Transaction } from "./types";
 
 export type Cadence = "weekly" | "biweekly" | "semimonthly" | "monthly" | "quarterly" | "semiannual" | "annual";
@@ -97,14 +100,6 @@ const SUBSCRIPTION_MAX: Cents = 10_000;
 /** A small fixed "bill" (cloud storage, a news app) is a subscription too. */
 const SMALL_BILL_MAX: Cents = 3_000;
 
-export function normalizeMerchant(merchant: string): string {
-  return merchant
-    .toLowerCase()
-    .replace(/[#*]\s*\d+/g, "")
-    .replace(/\s+\d{3,}$/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);

@@ -30,6 +30,7 @@ export function TransactionsTable({
   accountNames,
   canFix = false,
   fixHint = null,
+  ruleShops = [],
 }: {
   transactions: Transaction[];
   accountNames: Record<string, string>;
@@ -37,6 +38,8 @@ export function TransactionsTable({
   canFix?: boolean;
   /** Where they can't yet, the one line saying how they could. */
   fixHint?: string | null;
+  /** The shops whose every purchase the person splits the same way. */
+  ruleShops?: string[];
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [fixing, setFixing] = useState<Opened | null>(null);
@@ -221,7 +224,7 @@ export function TransactionsTable({
           Show {Math.min(PAGE, rows.length - shown)} more
         </button>
       ) : null}
-      {canFix ? <TransactionDialog dialogRef={dialog} opened={fixing} session={session} onDone={setNotice} /> : null}
+      {canFix ? <TransactionDialog dialogRef={dialog} opened={fixing} session={session} onDone={setNotice} ruleShops={ruleShops} /> : null}
     </div>
   );
 }

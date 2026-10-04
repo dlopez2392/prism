@@ -14,6 +14,7 @@ import { CalendarHeatmap } from "@/components/charts/calendar-heatmap";
 import { Legend } from "@/components/charts/core";
 import { CategoryIcon } from "@/components/category-icon";
 import { OwedList } from "@/components/owed-list";
+import { SplitRules } from "@/components/split-rules";
 import { RangeTabs } from "@/components/range-tabs";
 import { TransactionsTable } from "@/components/transactions-table";
 import { Card, CardHeader, Change, EmptyState, PageHeader } from "@/components/ui";
@@ -220,6 +221,14 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
               <EmptyState icon={Tag} title="Total a trip or a project" body="Tag purchases like Vacation 2026 or Kitchen redo to see what each cost across every category. Open any transaction below to add one." />
             )}
           </Card>
+          {data.splitRules.length ? (
+            <Card className="p-5 sm:p-6 lg:col-span-12">
+              <CardHeader title="Split rules" subtitle="Shops whose every purchase you split the same way. A purchase you split yourself, or keep whole, keeps its own." />
+              <div className="mt-2">
+                <SplitRules rules={data.splitRules} />
+              </div>
+            </Card>
+          ) : null}
         </div>
       ) : null}
 
@@ -228,7 +237,7 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
           <CardHeader title="Transactions" subtitle={`Everything in ${period}`} />
         </div>
         <div className="mt-4">
-          <TransactionsTable transactions={inWindow} accountNames={accountNames} canFix={canFix} fixHint={fixHint} />
+          <TransactionsTable transactions={inWindow} accountNames={accountNames} canFix={canFix} fixHint={fixHint} ruleShops={canFix ? data.splitRules.map((r) => r.key) : []} />
         </div>
       </Card>
     </div>

@@ -24,7 +24,7 @@ import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
 import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiability, type StoredLiability } from "@/lib/plaid/liabilities";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
-import { applyDetails, NO_DETAILS, type TxnDetails } from "@/lib/finance/details";
+import { applyDetails, NO_DETAILS, type SplitRule, type TxnDetails } from "@/lib/finance/details";
 import { applyP2pNotes, NO_P2P_NOTES, type P2pNotes } from "@/lib/finance/p2p";
 import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
@@ -88,6 +88,8 @@ export type Loaded = FinanceData & {
   inHousehold: boolean;
   /** In the Household view: the version each shared list is saved from, and who changed it last. Null in Me. */
   householdPlan: Omit<HouseholdPlan, "budgets" | "goals"> | null;
+  /** The shops whose every purchase the person splits the same way (finance/details.ts), for Spending. Never the household's. */
+  splitRules: ({ key: string } & SplitRule)[];
 };
 
 export function hourIn(zone: string | undefined, now = new Date()): number {
@@ -354,7 +356,7 @@ function carryoverOf(jar: Jar, signedIn: boolean): string[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "homeValues" | "wallets" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "homeValues" | "wallets" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan" | "splitRules">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
@@ -474,7 +476,7 @@ export const getFinance = cache(async (): Promise<Loaded> => {
   if ((await cookies()).get(VIEW_COOKIE)?.value !== "household" || !src.account || !src.inHousehold) return loaded;
   try {
     // After the calendar's refresh in ownMoney: the feed is only ever the person's own bills.
-    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household" };
+    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household", splitRules: [] };
   } catch {
     return { ...loaded, notice: "We couldn't load your household just now. This is your own money." };
   }
@@ -519,6 +521,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
     view: "me",
     inHousehold: src.inHousehold,
     householdPlan: null,
+    splitRules: Object.entries(src.details?.rules ?? {}).map(([key, rule]) => ({ key, ...rule })),
   };
   if (src.account) rememberAlerts(src.account, src.alerts, isLive(src) ? personal : null);
   // What the household is shown of my own money: my lines without my splits, tags or who owes me.

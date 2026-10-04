@@ -17,16 +17,29 @@
 // whose parts no longer add up to the bank's amount (a tip added when the
 // charge posted) is set aside, never stretched to fit: the line shows whole
 // until the person splits it again.
+//
+// A split can also follow a SHOP: every purchase at Costco, say, 70% food
+// and 30% household. It's kept as shares (hundredths of a percent) under the
+// shop's name as recurring.ts groups it, and splits each purchase there that
+// the person hasn't split, or kept whole, themselves; the cents left over by
+// rounding go to the parts that lost the most, so the parts always add up.
 
 import { CATEGORIES, isSpendCategory } from "./categories";
+import { money, shortDate } from "./format";
+import { normalizeMerchant } from "./merchant";
 import { cleanText } from "./p2p";
 import type { Cents, ISODate, Owed, SpendCategoryId, Transaction } from "./types";
 
 export type { Owed };
 export type SplitPart = { category: SpendCategoryId; amount: Cents };
-/** What the person added to one transaction. Split amounts are positive: their sign is the transaction's. */
-export type TxnDetail = { split?: SplitPart[]; tags?: string[]; owed?: Owed };
-export type TxnDetails = { v: 1; lines: Record<string, TxnDetail> };
+/** What the person added to one transaction. Split amounts are positive: their sign is the transaction's. `whole`: not split, even by a shop's rule. */
+export type TxnDetail = { split?: SplitPart[]; tags?: string[]; owed?: Owed; whole?: true };
+/** One part of a shop's split, in hundredths of a percent: 7000 is 70%. */
+export type SplitShare = { category: SpendCategoryId; share: number };
+/** Every purchase at one shop, split the same way. `name` is how the bank last wrote it. */
+export type SplitRule = { name: string; split: SplitShare[] };
+/** `rules` is keyed by the shop as normalizeMerchant writes it. */
+export type TxnDetails = { v: 1; lines: Record<string, TxnDetail>; rules?: Record<string, SplitRule> };
 
 export const NO_DETAILS: TxnDetails = { v: 1, lines: {} };
 
@@ -39,7 +52,14 @@ export const DETAIL_LIMITS = {
   whoLength: 40,
   /** Tags a person can have across everything, so the list stays one they can scan. */
   allTags: 60,
+  /** Shops with a split of their own. */
+  rules: 100,
+  ruleName: 60,
 } as const;
+
+/** All of a purchase, in shares. */
+export const WHOLE_SHARE = 10_000;
+const RULE_KEY_MAX = 120;
 
 const TXN_ID_MAX = 200;
 const SPLIT_MARK = "~";
@@ -94,8 +114,54 @@ export function validDetail(x: unknown): TxnDetail | null {
   const split = d.split === undefined ? null : validParts(d.split);
   const tags = d.tags === undefined ? null : validTags(d.tags);
   const owed = d.owed === undefined ? null : validOwed(d.owed);
-  if (!split && !tags && !owed) return null;
-  return { ...(split ? { split } : {}), ...(tags ? { tags } : {}), ...(owed ? { owed } : {}) };
+  // Kept whole means nothing next to a split of its own.
+  const whole = d.whole === true && !split;
+  if (!split && !tags && !owed && !whole) return null;
+  return { ...(split ? { split } : {}), ...(tags ? { tags } : {}), ...(owed ? { owed } : {}), ...(whole ? { whole: true as const } : {}) };
+}
+
+/** A shop's split as stored: 2 to 8 spending categories whose shares make exactly the whole. */
+export function validRule(x: unknown): SplitRule | null {
+  if (!x || typeof x !== "object") return null;
+  const { name, split } = x as Record<string, unknown>;
+  const label = typeof name === "string" ? cleanText(name, DETAIL_LIMITS.ruleName) : "";
+  if (!label || !Array.isArray(split) || split.length < 2 || split.length > DETAIL_LIMITS.parts) return null;
+  const shares: SplitShare[] = [];
+  for (const p of split) {
+    const { category, share } = (p ?? {}) as Record<string, unknown>;
+    if (typeof category !== "string" || !Object.hasOwn(CATEGORIES, category) || !isSpendCategory(category as SpendCategoryId)) return null;
+    if (!Number.isSafeInteger(share) || (share as number) <= 0) return null;
+    shares.push({ category: category as SpendCategoryId, share: share as number });
+  }
+  return shares.reduce((s, p) => s + p.share, 0) === WHOLE_SHARE ? { name: label, split: shares } : null;
+}
+
+/** A shop's name as a rule is kept under: the way recurring.ts groups it, or null when there's nothing to go by. */
+export function ruleKey(merchant: string): string | null {
+  const key = normalizeMerchant(merchant).slice(0, RULE_KEY_MAX);
+  return key ? key : null;
+}
+
+/** Whole cents (or shares) in proportion to `weights`, adding up to exactly `total`: what rounding leaves goes to the largest remainders. */
+function apportion(total: number, weights: number[], of: number): number[] {
+  const exact = weights.map((w) => (total * w) / of);
+  const out = exact.map(Math.floor);
+  const order = exact.map((x, i) => [x - out[i]!, i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  for (let k = 0, left = total - out.reduce((s, x) => s + x, 0); k < left; k++) out[order[k]![1]]!++;
+  return out;
+}
+
+/** A split as shares of the whole, for a shop's rule; null when a part is too small to keep a share of. */
+export function sharesOf(parts: SplitPart[]): SplitShare[] | null {
+  const total = parts.reduce((s, p) => s + p.amount, 0);
+  const shares = apportion(WHOLE_SHARE, parts.map((p) => p.amount), total);
+  return shares.every((x) => x > 0) ? parts.map((p, i) => ({ category: p.category, share: shares[i]! })) : null;
+}
+
+/** A purchase split by a shop's shares, to the cent; parts that round to nothing are left out. */
+export function partsByShare(total: Cents, split: SplitShare[]): SplitPart[] {
+  const amounts = apportion(total, split.map((p) => p.share), WHOLE_SHARE);
+  return split.map((p, i) => ({ category: p.category, amount: amounts[i]! })).filter((p) => p.amount > 0);
 }
 
 /** Everything stored, as it was kept: anything unreadable is dropped, never guessed at. */
@@ -110,7 +176,18 @@ export function validDetails(x: unknown): TxnDetails {
     if (d) kept.push([id, d]);
     if (kept.length === DETAIL_LIMITS.lines) break;
   }
-  return { v: 1, lines: Object.fromEntries(kept) };
+  const stored = (x as { rules?: unknown }).rules;
+  const rules: [string, SplitRule][] = [];
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    for (const [key, value] of Object.entries(stored as Record<string, unknown>)) {
+      // Only a key a shop's name could have made, so a rule always finds its purchases.
+      if (ruleKey(key) !== key) continue;
+      const r = validRule(value);
+      if (r) rules.push([key, r]);
+      if (rules.length === DETAIL_LIMITS.rules) break;
+    }
+  }
+  return { v: 1, lines: Object.fromEntries(kept), ...(rules.length ? { rules: Object.fromEntries(rules) } : {}) };
 }
 
 /**
@@ -150,21 +227,35 @@ export function withDetail(old: TxnDetails, id: string, detail: TxnDetail | null
   const lines = { ...old.lines };
   if (detail) lines[id] = detail;
   else delete lines[id];
-  return validDetails({ v: 1, lines });
+  return validDetails({ ...old, lines });
+}
+
+/** The details with one shop's split set (or removed, with null). */
+export function withRule(old: TxnDetails, key: string, rule: SplitRule | null): TxnDetails {
+  const rules = { ...old.rules };
+  if (rule) rules[key] = rule;
+  else delete rules[key];
+  return validDetails({ ...old, rules });
 }
 
 /** Each transaction with what the person added: a split becomes its parts. Never changes the transactions it's given. */
 export function applyDetails<T extends Transaction>(txns: T[], details: TxnDetails): T[] {
-  if (!Object.keys(details.lines).length) return txns;
+  const rules = details.rules ?? {};
+  if (!Object.keys(details.lines).length && !Object.keys(rules).length) return txns;
   const out: T[] = [];
   for (const t of txns) {
     const d = Object.hasOwn(details.lines, t.id) ? details.lines[t.id]! : null;
-    if (!d) {
+    // A shop's split, for a purchase there the person hasn't split or kept whole themselves.
+    const key = !d?.split && !d?.whole && t.amount < 0 && isSpendCategory(t.category) ? ruleKey(t.merchant) : null;
+    const rule = key !== null && Object.hasOwn(rules, key) ? rules[key]! : null;
+    if (!d && !rule) {
       out.push(t);
       continue;
     }
-    const base: T = { ...t, ...(d.tags ? { tags: d.tags } : {}), ...(d.owed ? { owed: d.owed } : {}) };
-    const parts = d.split && t.amount < 0 && d.split.reduce((s, p) => s + p.amount, 0) === -t.amount ? d.split : null;
+    const base: T = { ...t, ...(d?.tags ? { tags: d.tags } : {}), ...(d?.owed ? { owed: d.owed } : {}) };
+    const own = d?.split && t.amount < 0 && d.split.reduce((s, p) => s + p.amount, 0) === -t.amount ? d.split : null;
+    const byRule = !own && rule ? partsByShare(-t.amount, rule.split) : null;
+    const parts = own ?? (byRule && byRule.length >= 2 ? byRule : null);
     if (!parts) {
       out.push(base);
       continue;
@@ -177,7 +268,7 @@ export function applyDetails<T extends Transaction>(txns: T[], details: TxnDetai
         id: `${t.id}${SPLIT_MARK}${i + 1}`,
         amount: -p.amount,
         category: p.category,
-        split: { of: t.id, part: i + 1, parts: parts.length, total: t.amount },
+        split: { of: t.id, part: i + 1, parts: parts.length, total: t.amount, ...(own ? {} : { rule: true as const }) },
       };
       if (p.category === bank) delete part.bankCategory;
       else part.bankCategory = bank;
@@ -215,6 +306,11 @@ export function wholeLines<T extends Transaction>(txns: T[]): T[] {
     else line.bankCategory = bank;
   }
   return out;
+}
+
+/** A friendly nudge about what someone owes, for the person to send themselves. */
+export function reminderText(o: { who: string; amount: Cents; merchant: string; date: ISODate }): string {
+  return `Hi ${o.who}, a quick reminder about the ${money(o.amount)} for ${o.merchant} on ${shortDate(o.date)}. Thanks!`;
 }
 
 /** Who owes the person what, still open, oldest first: each with the line it's for. */

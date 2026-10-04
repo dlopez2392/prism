@@ -107,7 +107,7 @@ export type Transaction = {
   /** Who a Venmo, PayPal or Cash App payment was for, from the person's own file of that app (finance/p2p.ts). */
   p2p?: P2pNote;
   /** One part of a line the person split across categories: which line, which part, and the whole line's amount (finance/details.ts). */
-  split?: { of: string; part: number; parts: number; total: Cents };
+  split?: { of: string; part: number; parts: number; total: Cents; rule?: true };
   /** The person's own tags ("Vacation 2026"). */
   tags?: string[];
   /** Someone owes the person for this, until they mark it paid back. */

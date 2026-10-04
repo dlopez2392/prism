@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import { categoryTotals } from "./cashflow";
-import { applyDetails, checkDetail, cleanTag, DETAIL_LIMITS, NO_DETAILS, stillOwed, tagTotals, validDetails, wholeLines, withDetail, type TxnDetails } from "./details";
+import { applyDetails, checkDetail, cleanTag, DETAIL_LIMITS, NO_DETAILS, partsByShare, reminderText, ruleKey, sharesOf, stillOwed, tagTotals, validDetails, validRule, wholeLines, withDetail, withRule, type SplitRule, type TxnDetails } from "./details";
 import { dailyDriftStats } from "./forecast";
 import { generateInsights } from "./insights";
 import { detectRecurring } from "./recurring";
@@ -86,6 +86,10 @@ describe("what someone owes", () => {
     ]);
   });
 
+  it("can be asked for with a friendly reminder the person sends themselves", () => {
+    expect(reminderText({ who: "Sam", amount: 2_550, merchant: "Pizza Place", date: "2026-09-05" })).toBe("Hi Sam, a quick reminder about the $25.50 for Pizza Place on Sep 5. Thanks!");
+  });
+
   it("drops off the list once it's paid back", () => {
     const lines = applyDetails([costco()], details({ c1: { owed: { who: "Sam", amount: 7_500, paid: "2026-09-30" } } }));
     expect(stillOwed(lines)).toEqual([]);
@@ -165,5 +169,89 @@ describe("what's stored", () => {
   it("changes nothing when there's nothing to apply", () => {
     const list = [costco()];
     expect(applyDetails(list, NO_DETAILS)).toBe(list);
+  });
+});
+
+describe("a split that follows a shop", () => {
+  const costco: SplitRule = { name: "Costco", split: [{ category: "food", share: 7_000 }, { category: "shopping", share: 3_000 }] };
+  const withCostco = (lines: TxnDetails["lines"] = {}): TxnDetails => ({ v: 1, lines, rules: { costco } });
+  const at = (id: string, amount: number, merchant = "COSTCO #482", category: Transaction["category"] = "food") => ({ ...tx("2026-09-20", amount, merchant, category), id });
+
+  it("splits every purchase there by its shares, to the cent, under any of the shop's spellings", () => {
+    const [food, home] = applyDetails([at("c9", -10_001)], withCostco());
+    // 70% of $100.01 is 7000.7 cents and 30% is 3000.3: the extra cent goes to the bigger remainder.
+    expect(food).toMatchObject({ id: "c9~1", amount: -7_001, category: "food", split: { of: "c9", part: 1, parts: 2, total: -10_001, rule: true } });
+    expect(home).toMatchObject({ id: "c9~2", amount: -3_000, category: "shopping", bankCategory: "food" });
+    expect(applyDetails([at("c8", -5_000, "Costco")], withCostco())).toHaveLength(2);
+    expect(ruleKey("  COSTCO   #482 ")).toBe("costco");
+    expect(ruleKey("#123")).toBeNull();
+  });
+
+  it("leaves alone what isn't a purchase there, one split by hand, one kept whole, and one too small to split", () => {
+    const refund = at("r1", 2_000);
+    const pay = at("i1", -1_000, "Costco", "income");
+    const other = at("t1", -5_000, "Target");
+    expect(applyDetails([refund, pay, other], withCostco())).toEqual([refund, pay, other]);
+    const own = applyDetails([at("c1", -15_000)], withCostco({ c1: { split: [{ category: "fun", amount: 5_000 }, { category: "food", amount: 10_000 }] } }));
+    expect(own.map((t) => [t.category, t.amount, t.split?.rule])).toEqual([
+      ["fun", -5_000, undefined],
+      ["food", -10_000, undefined],
+    ]);
+    expect(applyDetails([at("c2", -15_000)], withCostco({ c2: { whole: true, tags: ["Party"] } }))).toEqual([{ ...at("c2", -15_000), tags: ["Party"] }]);
+    // One cent can't be split in two.
+    expect(applyDetails([at("c3", -1)], withCostco())).toEqual([at("c3", -1)]);
+    // A split of its own that no longer adds up is set aside, and the shop's doesn't step in.
+    expect(applyDetails([at("c4", -16_500)], withCostco({ c4: { split: [{ category: "fun", amount: 5_000 }, { category: "food", amount: 10_000 }] } }))).toEqual([at("c4", -16_500)]);
+  });
+
+  it("is still one purchase to what looks for things that repeat", () => {
+    const months = ["2026-05", "2026-06", "2026-07", "2026-08", "2026-09"];
+    const runs = monthly(months, 6, -12_000, "COSTCO #482", "food").map((t, i) => ({ ...t, id: `k${i}` }));
+    const split = applyDetails(runs, withCostco());
+    expect(split).toHaveLength(10);
+    expect(wholeLines(split).map((t) => [t.id, t.amount, t.split])).toEqual(runs.map((t) => [t.id, -12_000, undefined]));
+    expect(detectRecurring(split, "2026-09-20")[0]).toMatchObject({ amount: -12_000, cadence: "monthly", transactionIds: runs.map((t) => t.id) });
+  });
+
+  it("keeps shares that add up to the whole, from parts by largest remainder", () => {
+    expect(sharesOf([{ category: "food", amount: 9_000 }, { category: "shopping", amount: 6_000 }])).toEqual([{ category: "food", share: 6_000 }, { category: "shopping", share: 4_000 }]);
+    // Thirds: 3333.33 each, and the leftover hundredth goes to the first.
+    expect(sharesOf([{ category: "food", amount: 100 }, { category: "fun", amount: 100 }, { category: "health", amount: 100 }])!.map((p) => p.share)).toEqual([3_334, 3_333, 3_333]);
+    expect(partsByShare(100, [{ category: "food", share: 3_334 }, { category: "fun", share: 3_333 }, { category: "health", share: 3_333 }]).map((p) => p.amount)).toEqual([34, 33, 33]);
+    // The spare cent goes where the most was rounded away, wherever that part sits.
+    expect(partsByShare(10_001, [{ category: "food", share: 3_000 }, { category: "fun", share: 7_000 }]).map((p) => p.amount)).toEqual([3_000, 7_001]);
+    expect(partsByShare(2, [{ category: "food", share: 3_334 }, { category: "fun", share: 3_333 }, { category: "health", share: 3_333 }]).map((p) => p.amount)).toEqual([1, 1]);
+  });
+
+  it("is stored only as a whole, valid split under a key a shop's name could make", () => {
+    expect(validRule(costco)).toEqual(costco);
+    expect(validRule({ ...costco, name: "  Costco\u202e " })).toEqual(costco);
+    for (const bad of [
+      { ...costco, name: "" },
+      { ...costco, split: [{ category: "food", share: 10_000 }] },
+      { ...costco, split: [{ category: "food", share: 7_000 }, { category: "shopping", share: 2_999 }] },
+      { ...costco, split: [{ category: "income", share: 7_000 }, { category: "shopping", share: 3_000 }] },
+      { ...costco, split: [{ category: "food", share: 10_001 }, { category: "shopping", share: -1 }] },
+      { ...costco, split: [{ category: "food", share: 6_999.5 }, { category: "shopping", share: 3_000.5 }] },
+    ]) {
+      expect(validRule(bad)).toBeNull();
+    }
+    const read = validDetails({ v: 1, lines: {}, rules: { costco, "COSTCO #482": costco, target: { name: "Target" }, ["x".repeat(121)]: costco, ["y".repeat(120)]: costco } });
+    expect(read).toEqual({ v: 1, lines: {}, rules: { costco, ["y".repeat(120)]: costco } });
+    expect(validDetails({ v: 1, lines: {}, rules: { costco: { ...costco, split: [] } } })).toEqual(NO_DETAILS);
+    const many = Object.fromEntries(Array.from({ length: DETAIL_LIMITS.rules + 5 }, (_, i) => [`shop-${i}`, costco]));
+    expect(Object.keys(validDetails({ v: 1, lines: {}, rules: many }).rules!)).toHaveLength(DETAIL_LIMITS.rules);
+  });
+
+  it("is kept beside every line's details, and taken away on its own", () => {
+    const both = withDetail(withCostco(), "c1", { tags: ["Party"] });
+    expect(both).toEqual({ v: 1, lines: { c1: { tags: ["Party"] } }, rules: { costco } });
+    expect(withRule(both, "costco", null)).toEqual({ v: 1, lines: { c1: { tags: ["Party"] } } });
+    expect(withRule(NO_DETAILS, "target", { ...costco, name: "Target" })).toEqual({ v: 1, lines: {}, rules: { target: { ...costco, name: "Target" } } });
+    // Kept whole means nothing next to a split of its own.
+    expect(validDetails({ v: 1, lines: { c1: { whole: true, split: [{ category: "food", amount: 1 }, { category: "fun", amount: 1 }] }, c2: { whole: "yes" } } })).toEqual({
+      v: 1,
+      lines: { c1: { split: [{ category: "food", amount: 1 }, { category: "fun", amount: 1 }] } },
+    });
   });
 });
