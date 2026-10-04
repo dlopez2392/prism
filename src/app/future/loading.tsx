@@ -1,4 +1,4 @@
-// Future, while it loads: safe-to-spend beside four tiles, the balance forecast, then what's coming and the calendar card.
+// Future, while it loads: safe-to-spend beside four tiles, the balance forecast, Can I afford it?, then what's coming and the calendar card.
 
 import { Block, CardTitle, Frame, Header, Loading, Rows } from "@/components/skeletons";
 
@@ -15,6 +15,7 @@ export default function FutureLoading() {
         </div>
       </div>
       <Block className="h-96" />
+      <Block className="h-56" />
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <Frame className="lg:col-span-7">
           <CardTitle />

@@ -11,6 +11,7 @@
 // ids, so the model can cite them; and `demo: true` says, every time, that
 // the money is Prism's example household rather than the person's.
 
+import { affordBase, AFFORD_MAX, tryScenario, validScenario, type ScenarioKind } from "@/lib/finance/afford";
 import { budgetTotals, daysLeftInMonth } from "@/lib/finance/budgets";
 import { categoryBreakdown, inRange, isSpending, monthlyCashFlow, sumIncome, sumSpending, topMerchants } from "@/lib/finance/cashflow";
 import { CATEGORIES, isSpendCategory } from "@/lib/finance/categories";
@@ -499,5 +500,31 @@ export function taxes(data: AgentData, args: { year?: number } = {}) {
           },
         }
       : {}),
+  };
+}
+
+// — can_i_afford ————————————————————————————————————————————————
+
+export const AFFORD_KINDS = ["purchase", "monthly_payment", "raise"] as const;
+const AFFORD_KIND: Record<(typeof AFFORD_KINDS)[number], ScenarioKind> = { purchase: "once", monthly_payment: "monthly", raise: "raise" };
+
+export function canIAfford(data: AgentData, args: { kind: (typeof AFFORD_KINDS)[number]; amount: number; date?: string }) {
+  const base = affordBase(analyze(data));
+  if (!base) return { ...frame(data), answer: null, note: "No checking account is linked, so there is no forecast to test against." };
+  const s = validScenario({ kind: AFFORD_KIND[args.kind], amount: Math.round(args.amount * 100), date: args.date ?? data.today }, data.today);
+  if (!s) return { ...frame(data), answer: null, note: `Use an amount above $0 and up to ${usd(AFFORD_MAX).toLocaleString("en-US")} dollars, and a date from ${data.today} to a year after it.` };
+  const v = tryScenario(base, s);
+  const pair = (before: Cents | null, after: Cents | null) => ({ before: before === null ? null : usd(before), after: after === null ? null : usd(after) });
+  return {
+    ...frame(data),
+    tried: { kind: args.kind, amount: usd(s.amount), date: s.date },
+    answer: v.answer === "yes" ? "fits" : v.answer === "tight" ? "tight" : "does_not_fit",
+    headline: v.headline,
+    reasons: v.reasons,
+    checking_lowest_point: { before: { date: v.lowestBefore.date, balance: usd(v.lowestBefore.balance) }, after: { date: v.lowest.date, balance: usd(v.lowest.balance) } },
+    safe_to_spend_today: pair(v.safeBefore, v.safeAfter),
+    usually_kept_per_month: pair(v.keptBefore, v.keptAfter),
+    goals_ask_per_month: usd(v.goalsMonthly),
+    method: `Tested against the next 60 days of the checking forecast (paydays, bills and usual day-to-day spending), safe-to-spend with its ${usd(base.cushion)}-dollar cushion, and what the user kept on average over the last three full months.`,
   };
 }

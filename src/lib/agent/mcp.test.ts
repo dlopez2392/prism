@@ -87,6 +87,7 @@ describe("the MCP endpoint", () => {
     expect(String(init.result?.instructions)).toMatch(/READ-ONLY/);
     const list = await call("tools/list");
     expect(list.result?.tools?.map((t) => t.name).sort()).toEqual([
+      "can_i_afford",
       "fetch",
       "get_budgets",
       "get_cash_flow",

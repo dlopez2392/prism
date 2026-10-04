@@ -219,9 +219,16 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
       marked Sensitive), and the privacy policy names Anthropic as a company
       that handles people's data, because questions and the figures behind
       them are sent to it.
-16. **Next, in the owner's order (2026-10-04):** a **"Can I afford it?"
-    planner** (a purchase, a car payment or a raise tested against the
-    forecast's lowest balance and the goals); **splitting a transaction**
+16. **Can I afford it?** **Built (2026-10-04):** on Future, a purchase, a
+    new monthly bill or a raise is tested as the person types against the
+    60-day checking forecast (its lowest point, against zero and the
+    cushion), safe-to-spend by its own rule, and what they usually keep each
+    month against what their goals ask for: fits, tight or doesn't fit, with
+    the reasons and the figures before and after. The arithmetic runs in the
+    browser and nothing is saved. Claude and ChatGPT ask the same through
+    `can_i_afford`. Next, if people ask for it: drawing the tried line on the
+    forecast chart, and "afford it by when?" (the date a purchase would fit).
+17. **Next, in the owner's order (2026-10-04):** **splitting a transaction**
     across categories, with **tags** ("Vacation 2026", "To be reimbursed")
-    and who owes you; and **browser tests in CI** (Playwright on the example
+    and who owes you; then **browser tests in CI** (Playwright on the example
     household), each its own pull request.

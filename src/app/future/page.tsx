@@ -8,12 +8,14 @@
 import type { Metadata } from "next";
 import { CalendarClock, CreditCard, Repeat, Telescope } from "lucide-react";
 import { AddToCalendar } from "@/components/add-to-calendar";
+import { CanIAfford } from "@/components/afford";
 import { UpcomingList } from "@/components/blocks";
 import { ChartCard } from "@/components/chart-card";
 import { Legend } from "@/components/charts/core";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { CategoryIcon } from "@/components/category-icon";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
+import { affordBase } from "@/lib/finance/afford";
 import { dueReminders, remindable } from "@/lib/finance/calendar";
 import { dueIn, paymentsDue, rateText, statementText } from "@/lib/finance/debts";
 import { addDays } from "@/lib/finance/dates";
@@ -73,6 +75,7 @@ export default async function FuturePage() {
   const personal = data.account ? { path: await ownFeedPath() } : undefined;
   const lowest = forecast.lowest;
   const end = forecast.points.at(-1)!;
+  const afford = affordBase(a);
 
   return (
     <div className="space-y-5">
@@ -138,6 +141,15 @@ export default async function FuturePage() {
         />
         <p className="sr-only">{n} days shown.</p>
       </ChartCard>
+
+      {afford ? (
+        <Card className="p-5 sm:p-6">
+          <CardHeader title="Can I afford it?" subtitle="Try a purchase, a new monthly bill or a raise against everything above. Nothing you try is saved." />
+          <div className="mt-4">
+            <CanIAfford base={afford} />
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <Card className="p-5 sm:p-6 lg:col-span-7">

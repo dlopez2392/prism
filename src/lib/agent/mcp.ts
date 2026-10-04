@@ -1,7 +1,7 @@
 // src/lib/agent/mcp.ts
 //
-// Prism as an MCP server: thirteen read-only tools over the person's money, for
-// Claude, ChatGPT or any MCP client they connect. Eleven answer questions
+// Prism as an MCP server: fourteen read-only tools over the person's money, for
+// Claude, ChatGPT or any MCP client they connect. Twelve answer questions
 // directly; `search` and `fetch` are the pair ChatGPT's deep research reads a
 // connector through (research.ts). The data is loaded lazily, once per
 // request, by the loader the endpoint passes in — a tool list or a handshake
@@ -12,7 +12,9 @@ import * as z from "zod/v4";
 import { BRAND } from "@/lib/brand";
 import { RESEARCH_RESULTS_MAX, researchFetch, researchSearch } from "./research";
 import {
+  AFFORD_KINDS,
   budgets,
+  canIAfford,
   cashFlow,
   CATEGORY_IDS,
   goals,
@@ -36,6 +38,7 @@ export const INSTRUCTIONS = `${BRAND.product} is the user's personal finance app
 - Amounts are US dollars. In transactions, money out is negative and money in is positive.
 - Dates are the user's own calendar; each result says which day "today" is (as_of) and in which time zone.
 - For a broad question ("how am I doing?") start with get_overview; reach for the other tools for detail.
+- For "can I afford…" questions, can_i_afford tests a purchase, a new monthly payment or a raise against the forecast, safe-to-spend and what the user usually keeps; pass on its answer with its reasons, as an observation.
 - For tax questions, get_tax_summary sorts a year into what a US tax return asks about and names the form that holds each official figure. It is not tax advice: point to those forms, and never present a figure as a deduction.
 - search and fetch serve research: search finds documents (summaries, each month and year, each year's taxes, each category and merchant of the last 12 months) and fetch reads one in full, with a link to the page in ${BRAND.product} that shows the same figures.
 - When an answer rests on particular transactions, cite them — merchant, date and amount. Their ids are stable.
@@ -236,6 +239,22 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Tax summary", ...READ_ONLY },
     },
     runWith(taxes),
+  );
+
+  server.registerTool(
+    "can_i_afford",
+    {
+      title: "Can I afford it?",
+      description:
+        "Test a purchase, a new monthly payment (a car, a bigger rent, a subscription) or a raise against what Prism sees coming: the lowest the checking balance would reach over the next 60 days, what would be safe to spend today, and whether what the user usually keeps each month would still cover their goals. Answers fits, tight or does_not_fit, with reasons and the figures before and after. Nothing is saved.",
+      inputSchema: z.object({
+        kind: z.enum(AFFORD_KINDS).describe("purchase: once. monthly_payment: every month from the date. raise: that much more coming in every month from the date."),
+        amount: z.number().positive().max(1_000_000).describe("US dollars: the price, the monthly payment, or how much more a month."),
+        date: day.optional().describe("When it lands or starts, YYYY-MM-DD, from today to a year out. Default today."),
+      }),
+      annotations: { title: "Can I afford it?", ...READ_ONLY },
+    },
+    runWith(canIAfford),
   );
 
   // — Deep research: the two tools ChatGPT reads a connector through, by these exact names and shapes. —
