@@ -270,3 +270,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     snapshot taken after the month ended has it, or a note on the 7th. Next,
     if people ask for it: its own on/off switch (a schema change: the alert
     kinds are checked by the database), and a year-end recap in January.
+22. **Faster splits and reminders.** **Built (2026-10-04):** a split can be
+    kept for every purchase at the same shop (by shares, to the cent, with
+    one purchase still free to be split differently or kept whole), listed
+    with Remove and Undo on Spending; and **Remind** on Owed to you writes
+    the nudge and hands it to the phone's share sheet, or copies it. Next, if
+    people ask for it: tags that follow a shop, and a Venmo request link
+    once there's a way to know the friend's Venmo name.

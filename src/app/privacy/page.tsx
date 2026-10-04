@@ -116,8 +116,9 @@ export default function PrivacyPage() {
             </li>
             <li>Categories you fix, such as &ldquo;everything at this shop is groceries&rdquo;, so Prism files your purchases where you put them. They name the shops, so they&apos;re stored encrypted, like your transactions.</li>
             <li>
-              What you add to a transaction yourself: how you split it across categories, your tags, and who owes you for it (the name you type and the
-              amount), stored encrypted in your account and never shown to your household.
+              What you add to a transaction yourself: how you split it across categories (or every purchase at a shop, which names the shop), your tags,
+              and who owes you for it (the name you type and the amount), stored encrypted in your account and never shown to your household. A
+              reminder about what someone owes is written on your device and goes wherever you send it; {BRAND.product} never sends it.
             </li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
             {alerts ? (

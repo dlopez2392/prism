@@ -177,7 +177,13 @@
   never stretched. Owed is counted once, on part 1. Applied in the person's
   own view and the morning job (so alert emails agree); the household gets
   their lines from BEFORE them (`undetailed` from `moneyFor`), so every member
-  sees the same figures against a shared budget.
+  sees the same figures against a shared budget. A split that follows a shop
+  (`TxnDetails.rules`) is kept as shares summing to exactly `WHOLE_SHARE`,
+  keyed by `ruleKey` (normalizeMerchant, the same grouping as recurring.ts),
+  and applied by largest remainder so parts always add up; a line's own split
+  or `whole: true` always wins over it. Reminders about what's owed are
+  written in the browser and handed to the share sheet or the clipboard:
+  Prism never sends a message to anyone on a person's behalf.
   Tokens come from Supabase Auth's OAuth 2.1 server; `/mcp` accepts only
   tokens with a `client_id` and asks Supabase Auth about each one (so
   Disconnect is immediate). Read-only is a DATABASE rule — restrictive

@@ -13,13 +13,14 @@ vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn.c
 const money = { current: { source: "plaid", today: "2026-10-04", transactions: [] as Transaction[] } };
 vi.mock("./finance", () => ({ getPersonalFinance: async () => money.current }));
 
-const { saveTransactionDetail, markOwedPaid } = await import("./details-actions");
+const { saveTransactionDetail, markOwedPaid, setSplitRule } = await import("./details-actions");
 const { openPacked, sealPacked } = await import("./vault");
 
 const KEY = randomBytes(32);
 const txn = (id: string, amount: number, merchant: string, category: Transaction["category"], over: Partial<Transaction> = {}): Transaction => ({ id, accountId: "chk", date: "2026-09-20", amount, merchant, category, pending: false, ...over });
 const MINE = [
   txn("c1", -15_000, "Costco", "food"),
+  txn("c2", -20_000, "COSTCO #482", "food"),
   txn("pay", 250_000, "Acme Payroll", "income"),
   txn("p1", -4_000, "Pizza Place", "food", { pending: true }),
   // A line already split: its parts, as the person's own view shows them.
@@ -40,7 +41,8 @@ function profileDb(stored: string | null, { readFails = false } = {}) {
   return { db, row, writes };
 }
 const signIn = (db: unknown) => (signedIn.current = { userId: "u1", email: "a@x.test", supabase: db });
-const opened = (row: { sealed_txn_details: string | null }) => openPacked(row.sealed_txn_details!, KEY) as { lines: Record<string, unknown> };
+const opened = (row: { sealed_txn_details: string | null }) => openPacked(row.sealed_txn_details!, KEY) as { lines: Record<string, unknown>; rules?: Record<string, unknown> };
+const COSTCO = { name: "Costco", split: [{ category: "food", share: 6_000 }, { category: "shopping", share: 4_000 }] };
 
 describe("keeping a transaction's details", () => {
   beforeEach(() => {
@@ -108,5 +110,55 @@ describe("keeping a transaction's details", () => {
     expect(opened(row).lines).toEqual({ c1: { tags: ["Party"], owed: { who: "Sam", amount: 7_500, paid: "2026-10-04" } } });
     expect(await markOwedPaid("c1", false)).toMatchObject({ status: "saved", message: "Open again: Sam still owes you." });
     expect(await markOwedPaid("s1", true)).toMatchObject({ status: "error", message: "Nobody owes you for that one." });
+  });
+
+  it("keeps a split for every purchase at the shop, as shares, and this one follows it", async () => {
+    const { db, row } = profileDb(null);
+    signIn(db);
+    expect(await saveTransactionDetail("c1", { ...SPLIT, tags: ["Party"], rule: true })).toMatchObject({ status: "saved", message: "Split into 2 parts, and so is every Costco purchase." });
+    expect(opened(row)).toEqual({ v: 1, lines: { c1: { tags: ["Party"] } }, rules: { costco: COSTCO } });
+    // Another branch's spelling is the same shop; kept whole, it says the others still follow.
+    expect(await saveTransactionDetail("c2", {})).toMatchObject({ status: "saved", message: "Kept whole. Other COSTCO #482 purchases still follow your split." });
+    expect(opened(row).lines).toEqual({ c1: { tags: ["Party"] }, c2: { whole: true } });
+  });
+
+  it("takes the shop's split away when the box is unticked, keeping this one's own", async () => {
+    const { db, row } = profileDb(sealPacked({ v: 1, lines: {}, rules: { costco: COSTCO } }, KEY));
+    signIn(db);
+    expect(await saveTransactionDetail("c1", { ...SPLIT, rule: false })).toMatchObject({ status: "saved", message: "Split into 2 parts. Other Costco purchases aren't split any more." });
+    expect(opened(row)).toEqual({ v: 1, lines: { c1: { split: SPLIT.split } } });
+  });
+
+  it("leaves the shop's split alone when a save doesn't say either way", async () => {
+    const { db, row } = profileDb(sealPacked({ v: 1, lines: {}, rules: { costco: COSTCO } }, KEY));
+    signIn(db);
+    expect(await saveTransactionDetail("c1", SPLIT)).toMatchObject({ status: "saved", message: "Split into 2 parts. Every total now counts them that way." });
+    expect(opened(row)).toEqual({ v: 1, lines: { c1: { split: SPLIT.split } }, rules: { costco: COSTCO } });
+  });
+
+  it("won't keep a shop's split with a part too small for a share of it", async () => {
+    const { db, writes } = profileDb(null);
+    signIn(db);
+    // Three one-cent parts of $150 and two hundredths of a percent left over: one of them gets none.
+    const tiny = { split: [{ category: "food", amount: 14_997 }, { category: "shopping", amount: 1 }, { category: "fun", amount: 1 }, { category: "health", amount: 1 }], rule: true };
+    expect(await saveTransactionDetail("c1", tiny)).toMatchObject({ status: "error", message: expect.stringMatching(/too small/) });
+    expect(writes).toEqual([]);
+  });
+
+  it("removes a shop's split from the list, and puts it back for Undo, only as a whole valid split", async () => {
+    const { db, row, writes } = profileDb(sealPacked({ v: 1, lines: { c1: { tags: ["Party"] } }, rules: { costco: COSTCO } }, KEY));
+    expect(await setSplitRule("costco", null)).toMatchObject({ status: "error", message: expect.stringMatching(/Sign in/) });
+    signIn(db);
+    expect(await setSplitRule("costco", null)).toMatchObject({ status: "saved", message: expect.stringMatching(/back to how the bank sent them/) });
+    expect(opened(row)).toEqual({ v: 1, lines: { c1: { tags: ["Party"] } } });
+    expect(await setSplitRule("costco", COSTCO)).toMatchObject({ status: "saved", message: "Every Costco purchase is split again." });
+    expect(opened(row).rules).toEqual({ costco: COSTCO });
+    const count = writes.length;
+    expect(await setSplitRule("COSTCO", null)).toMatchObject({ status: "error" });
+    expect(await setSplitRule("COSTCO #482", COSTCO)).toMatchObject({ status: "error", message: expect.stringMatching(/isn't one of yours/) });
+    expect(await setSplitRule("costco", { ...COSTCO, split: [{ category: "food", share: 6_000 }, { category: "shopping", share: 3_000 }] })).toMatchObject({ status: "error", message: expect.stringMatching(/add up/) });
+    expect(await setSplitRule("target", null)).toMatchObject({ status: "error", message: expect.stringMatching(/no split/) });
+    expect(await setSplitRule(7, null)).toMatchObject({ status: "error" });
+    expect(writes).toHaveLength(count);
   });
 });

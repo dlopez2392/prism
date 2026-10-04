@@ -369,6 +369,18 @@ A signed-in person opens any of their own transactions on Spending
   totals each over the last 12 months and opens the ledger narrowed to it.
 - **Say who owes them for it**, and how much. **Owed to you** lists what's
   still open, with **Paid back** (and Undo); the ledger shows it on the line.
+  **Remind** writes a friendly nudge ("Hi Sam, a quick reminder about the
+  $25.50 for Pizza Place on Sep 5. Thanks!") and hands it to the phone's
+  share sheet (a text, a chat, a payment app), or copies it on a computer.
+  Prism sends nothing itself.
+- **Split every purchase at a shop the same way.** Ticking "Split every
+  Costco purchase this way" keeps that split as shares of the whole
+  (hundredths of a percent), under the shop's name as `normalizeMerchant`
+  writes it, so every branch's spelling counts. Every purchase there, before
+  and after, is split by those shares to the cent (the cents rounding leaves
+  go to the parts that lost the most) unless the person split it themselves
+  or kept it whole. **Split rules** on Spending lists them, with Remove and
+  Undo.
 
 Kept sealed in `profiles.sealed_txn_details` by the bank's transaction id,
 never shown to a household, and read by the morning check so an alert email
