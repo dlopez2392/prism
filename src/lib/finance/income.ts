@@ -54,7 +54,15 @@ const ORDINAL = (n: number) => {
 };
 const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const NTH = ["", "first", "second", "third", "fourth"];
-const EVERY: Record<Cadence, string> = { weekly: "Every week", biweekly: "Every two weeks", semimonthly: "Twice a month", monthly: "Every month" };
+const EVERY: Record<Cadence, string> = {
+  weekly: "Every week",
+  biweekly: "Every two weeks",
+  semimonthly: "Twice a month",
+  monthly: "Every month",
+  quarterly: "Every three months",
+  semiannual: "Twice a year",
+  annual: "Every year",
+};
 
 /** How a person would say when they're paid. */
 export function scheduleText(cadence: Cadence, schedule: PaySchedule | undefined): string {

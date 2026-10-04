@@ -36,9 +36,23 @@ export function parseReminder(x: string | null | undefined): Reminder {
   return REMINDERS.some((r) => r.id === x) ? (x as Reminder) : "day_before";
 }
 
-/** A year of each series: long enough to be useful, short enough not to outlive a cancelled bill by much. */
-const OCCURRENCES: Record<Cadence, number> = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12 };
-const EVERY: Record<Cadence, string> = { weekly: "every week", biweekly: "every two weeks", semimonthly: "twice a month", monthly: "every month" };
+/**
+ * A year of each series: long enough to be useful, short enough not to
+ * outlive a cancelled bill by much. A yearly bill gets two, so it still reads
+ * as one that repeats.
+ */
+const OCCURRENCES: Record<Cadence, number> = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12, quarterly: 4, semiannual: 2, annual: 2 };
+const EVERY: Record<Cadence, string> = {
+  weekly: "every week",
+  biweekly: "every two weeks",
+  semimonthly: "twice a month",
+  monthly: "every month",
+  quarterly: "every three months",
+  semiannual: "twice a year",
+  annual: "every year",
+};
+/** Months between a series' dates, for the cadences that keep the same day of the month. */
+const INTERVAL: Partial<Record<Cadence, number>> = { quarterly: 3, semiannual: 6 };
 const BYDAY = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
 const WEEKDAYS = "MO,TU,WE,TH,FR";
 /** A calendar series can move a date off a weekend, but has no way to know a bank holiday. */
@@ -153,10 +167,15 @@ export function rruleFor(stream: Pick<RecurringStream, "lastDate" | "cadence" | 
   if (sch?.kind === "monthDays" && sch.days.length === 1) return monthDayRule(sch.days[0]!, "COUNT=12");
   if (stream.cadence === "weekly") return `FREQ=WEEKLY;${count}`;
   if (stream.cadence === "biweekly") return `FREQ=WEEKLY;INTERVAL=2;${count}`;
+  // Every month, every three or six, or every year in the month of the last charge.
+  const freq =
+    stream.cadence === "annual"
+      ? `FREQ=YEARLY;BYMONTH=${Number(stream.lastDate.slice(5, 7))}`
+      : `FREQ=MONTHLY${INTERVAL[stream.cadence] ? `;INTERVAL=${INTERVAL[stream.cadence]}` : ""}`;
   const day = dayOfMonth(stream.lastDate);
-  if (day <= 28) return `FREQ=MONTHLY;BYMONTHDAY=${day};${count}`;
+  if (day <= 28) return `${freq};BYMONTHDAY=${day};${count}`;
   const days = Array.from({ length: day - 27 }, (_, i) => 28 + i).join(",");
-  return `FREQ=MONTHLY;BYMONTHDAY=${days};BYSETPOS=-1;${count}`;
+  return `${freq};BYMONTHDAY=${days};BYSETPOS=-1;${count}`;
 }
 
 const FNV_OFFSET = BigInt("0xcbf29ce484222325");

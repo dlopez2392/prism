@@ -1,4 +1,4 @@
-// Future, while it loads: safe-to-spend beside four tiles, the balance forecast, Can I afford it?, then what's coming and the calendar card.
+// Future, while it loads: safe-to-spend beside four tiles, the balance forecast, Can I afford it?, then what's coming beside the bills that don't come monthly and the subscriptions.
 
 import { Block, CardTitle, Frame, Header, Loading, Rows } from "@/components/skeletons";
 
@@ -21,7 +21,10 @@ export default function FutureLoading() {
           <CardTitle />
           <Rows count={5} />
         </Frame>
-        <Block className="h-72 lg:col-span-5" />
+        <div className="space-y-5 lg:col-span-5">
+          <Block className="h-60" />
+          <Block className="h-72" />
+        </div>
       </div>
     </Loading>
   );

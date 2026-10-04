@@ -366,6 +366,44 @@ counts a split bill the way the app does (`alerts_sources` hands it over).
 Exports carry the split, tags and debts as their own columns, after the ones
 Prism's importer reads.
 
+## Bills that don't come every month
+
+The car insurance renewal, the water bill every three months, a yearly
+membership: Prism finds these from the charges themselves
+(`detectRecurring` in `src/lib/finance/recurring.ts`), over up to two years
+of history (all Plaid sends), so the forecast, safe-to-spend, Can I afford
+it?, the alert emails, the calendar and Claude all expect them. Monthly and
+more frequent bills are still read from the last 200 days, exactly as before;
+only what isn't one of those is tried as a bill that comes less often.
+
+Two lookalike charges a year apart are far easier to come by than a monthly
+rhythm, so the rules are deliberately strict:
+
+- **Money going out only**, and never a transfer, a meal or a trip.
+- **Every three months needs three charges**; twice a year and every year
+  need two, and when there are only two, their amounts must be within 30% of
+  the latest (a renewal that crept up, not two unrelated purchases). From
+  three charges on, the rhythm alone is the evidence (the summer water bill
+  is bigger).
+- **Most gaps must fit** the rhythm (three in four), within 8 days for every
+  three months, 12 for every six and 15 for a year.
+- **A missed renewal means it was cancelled:** two weeks late for every three
+  months, three weeks for every six and a month for a year, and it's no
+  longer expected. Until then, the late charge is expected on the first day
+  ahead (the cautious reading).
+- **The amount expected is the latest one**, since a renewal rarely comes in
+  under the last; a bill whose amounts moved is marked "about" and widens the
+  forecast's band.
+
+Future lists them with their next date, each one's share of a month, and
+the total to **put aside each month** (`setAside`, the same figure
+`upcoming_bills` gives Claude and ChatGPT). Any due from checking within the
+60-day forecast is already in it, and the card says so. They are always
+bills, never subscriptions, even a small fixed yearly plan, so the
+Subscriptions card stays the monthly charges a person might cancel. Detected
+once, they also stop counting as day-to-day spending in the forecast, and a
+yearly renewal is no longer flagged as "a bigger one" among recent purchases.
+
 ## Crypto wallets you hold yourself
 
 A signed-in person adds a wallet on Connections by its **public address**:
@@ -616,7 +654,7 @@ with any key in the ring too, so retiring a key ends those as well.
 | **Cash flow** | Income → categories → saved **Sankey**; **your paychecks** (who pays you, how often, what lands, the next payday) and where your income comes from, by kind; money in vs out by month, what you kept each month, savings-rate trend |
 | **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, **Owed to you** and **Your tags**, and a searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop), **splits** a purchase across categories, **tags** it and notes **who owes them** for it, all kept sealed in their account and applied everywhere, Claude included |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
-| **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
+| **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), **bills that don't come every month** (every three, six or twelve months, each with its next date and what to put aside for it each month), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account |
 | **Your year** | One calendar year on one page: what came in, what went out, what you kept (against the same stretch the year before when Prism holds it), month by month, where it went by category, the ten places you paid most, net worth from the year's start, pay, subscriptions, and the year in a few lines; honest about where the records start and a year still under way; **print or save as PDF** (always in the light theme) and download that year's transactions |

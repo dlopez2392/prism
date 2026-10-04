@@ -6,12 +6,20 @@
 // import would not). A stream is a merchant that repeats on a steady cadence;
 // the amount may be fixed (a subscription) or variable (the electric bill, the
 // card payment), and the difference matters to the forecast's error band.
+//
+// Some bills come only every three, six or twelve months: the car insurance
+// renewal, the water bill, a yearly membership. Those are found over two
+// years of history (all Plaid sends), only among money going out, and only
+// where such a bill lives, because two lookalike charges a year apart are
+// far easier to come by than a monthly rhythm.
 
 import { addDays, addMonths, dayOfMonth, dayOfWeek, daysBetween, daysInMonth, isBusinessDay } from "./dates";
 import { wholeLines } from "./details";
 import type { Cents, CategoryId, ISODate, Transaction } from "./types";
 
-export type Cadence = "weekly" | "biweekly" | "semimonthly" | "monthly";
+export type Cadence = "weekly" | "biweekly" | "semimonthly" | "monthly" | "quarterly" | "semiannual" | "annual";
+/** The cadences that come round less often than once a month. */
+export type LongCadence = Extract<Cadence, "quarterly" | "semiannual" | "annual">;
 
 /**
  * When pay actually lands. Employers pay by a rule — every other Friday, the
@@ -65,6 +73,24 @@ const CADENCES: { cadence: Cadence; days: number; tolerance: number }[] = [
 /** Twice a month is found from the days pay lands on, not the gaps between them; this only says when it stopped. */
 const SEMIMONTHLY = { days: 15.2, tolerance: 3 };
 
+/** Long enough to see a yearly bill twice: Plaid sends up to two years. */
+const LONG_LOOKBACK_DAYS = 800;
+/**
+ * Every three, six and twelve months. `least` is how many charges it takes
+ * to call it a rhythm; `grace` is how late the next one may be before the
+ * bill counts as stopped (a missed renewal is a cancelled one, not a
+ * skipped cycle).
+ */
+const LONG_CADENCES: { cadence: LongCadence; days: number; tolerance: number; least: number; grace: number }[] = [
+  { cadence: "quarterly", days: 91.3, tolerance: 8, least: 3, grace: 14 },
+  { cadence: "semiannual", days: 182.6, tolerance: 12, least: 2, grace: 21 },
+  { cadence: "annual", days: 365.25, tolerance: 15, least: 2, grace: 30 },
+];
+/** Where two charges a year apart are a coincidence, not a bill: money moving between accounts, meals, trips. (Pay comes in, and only money going out is tried.) */
+const NOT_LONG: CategoryId[] = ["transfer", "food", "travel"];
+/** Two charges alone must be within this of the latest: a renewal that crept up, not two unrelated purchases. */
+const LONG_PAIR_SPREAD = 0.3;
+
 /** Where a fixed, modest charge reads as a subscription rather than a bill. */
 const SUBSCRIPTION_CATEGORIES: CategoryId[] = ["fun", "health", "shopping"];
 const SUBSCRIPTION_MAX: Cents = 10_000;
@@ -88,10 +114,11 @@ function median(xs: number[]): number {
 
 export function detectRecurring(txns: Transaction[], today: ISODate): RecurringStream[] {
   const since = addDays(today, -LOOKBACK_DAYS);
+  const longSince = addDays(today, -LONG_LOOKBACK_DAYS);
   const groups = new Map<string, Transaction[]>();
   // A bill the person split is still one bill: its parts are joined back first.
   for (const t of wholeLines(txns)) {
-    if (t.date < since || t.pending || t.amount === 0) continue;
+    if (t.date < longSince || t.pending || t.amount === 0) continue;
     const key = `${t.accountId}|${normalizeMerchant(t.merchant)}|${t.amount > 0 ? "in" : "out"}`;
     const list = groups.get(key);
     if (list) list.push(t);
@@ -99,45 +126,86 @@ export function detectRecurring(txns: Transaction[], today: ISODate): RecurringS
   }
 
   const streams: RecurringStream[] = [];
-  for (const [key, list] of groups) {
-    if (list.length < 3) continue;
-    list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    const gaps = list.slice(1).map((t, i) => daysBetween(list[i]!.date, t.date));
-    const typical = median(gaps);
-    const match = CADENCES.find((c) => Math.abs(typical - c.days) <= c.tolerance);
-    const steady = match ? gaps.filter((g) => Math.abs(g - match.days) <= match.tolerance + 1).length / gaps.length >= 0.75 : false;
-    const last = list.at(-1)!;
-    // Pay follows a rule, and the rule is what makes the next payday exact.
-    const pay = last.category === "income" && last.amount > 0 ? paySchedule(list.map((t) => t.date), steady ? match!.cadence : null, typical) : null;
-    const cadence = pay?.cadence ?? (steady ? match!.cadence : null);
-    if (!cadence) continue;
-
-    // A stream that stopped is not recurring any more: allow one missed cycle.
-    const period = cadence === "semimonthly" ? SEMIMONTHLY : CADENCES.find((c) => c.cadence === cadence)!;
-    if (daysBetween(last.date, today) > period.days * 1.6 + period.tolerance) continue;
-
-    const { variable, priceChange } = amountPattern(list, today);
-    const amount = variable ? Math.round(median(list.slice(-3).map((t) => t.amount))) : last.amount;
-    const shape = { lastDate: last.date, cadence, ...(pay?.schedule ? { schedule: pay.schedule } : {}) };
-
-    streams.push({
-      id: key,
-      merchant: last.merchant,
-      accountId: last.accountId,
-      category: last.category,
-      kind: kindOf(last, variable),
-      cadence,
-      amount,
-      variable,
-      lastDate: last.date,
-      nextDate: nthOccurrence(shape, 1),
-      occurrences: list.length,
-      priceChange,
-      transactionIds: list.map((t) => t.id),
-      ...(pay?.schedule ? { schedule: pay.schedule } : {}),
-    });
+  for (const [key, all] of groups) {
+    all.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    // Monthly and more often, from the last 200 days; only what isn't that is tried as a bill that comes less often.
+    const recent = all.filter((t) => t.date >= since);
+    const stream = (recent.length >= 3 ? frequentStream(key, recent, today) : null) ?? longStream(key, all, today);
+    if (stream) streams.push(stream);
   }
   return streams.sort((a, b) => (a.nextDate < b.nextDate ? -1 : a.nextDate > b.nextDate ? 1 : 0));
+}
+
+/** A merchant that comes round every week, fortnight, half-month or month, from its charges (oldest first). */
+function frequentStream(key: string, list: Transaction[], today: ISODate): RecurringStream | null {
+  const gaps = list.slice(1).map((t, i) => daysBetween(list[i]!.date, t.date));
+  const typical = median(gaps);
+  const match = CADENCES.find((c) => Math.abs(typical - c.days) <= c.tolerance);
+  const steady = match ? gaps.filter((g) => Math.abs(g - match.days) <= match.tolerance + 1).length / gaps.length >= 0.75 : false;
+  const last = list.at(-1)!;
+  // Pay follows a rule, and the rule is what makes the next payday exact.
+  const pay = last.category === "income" && last.amount > 0 ? paySchedule(list.map((t) => t.date), steady ? match!.cadence : null, typical) : null;
+  const cadence = pay?.cadence ?? (steady ? match!.cadence : null);
+  if (!cadence) return null;
+
+  // A stream that stopped is not recurring any more: allow one missed cycle.
+  const period = cadence === "semimonthly" ? SEMIMONTHLY : CADENCES.find((c) => c.cadence === cadence)!;
+  if (daysBetween(last.date, today) > period.days * 1.6 + period.tolerance) return null;
+
+  const { variable, priceChange } = amountPattern(list, today);
+  const amount = variable ? Math.round(median(list.slice(-3).map((t) => t.amount))) : last.amount;
+  return streamOf(key, list, { cadence, kind: kindOf(last, variable), amount, variable, priceChange, ...(pay?.schedule ? { schedule: pay.schedule } : {}) });
+}
+
+/**
+ * A bill that comes every three, six or twelve months, from up to two years
+ * of its charges (oldest first). Money going out only, never where a lookalike
+ * is likely (NOT_LONG); most gaps must fit, as for any stream; and when there
+ * are only two charges, their amounts must be close. The amount expected is
+ * the latest one: a renewal rarely comes in under the last.
+ */
+function longStream(key: string, list: Transaction[], today: ISODate): RecurringStream | null {
+  const last = list.at(-1)!;
+  if (last.amount > 0 || NOT_LONG.includes(last.category)) return null;
+  const gaps = list.slice(1).map((t, i) => daysBetween(list[i]!.date, t.date));
+  const typical = median(gaps);
+  // One charge has no gaps, so nothing matches: every cadence needs at least two.
+  const match = LONG_CADENCES.find((c) => Math.abs(typical - c.days) <= c.tolerance);
+  if (!match || list.length < match.least) return null;
+  if (gaps.filter((g) => Math.abs(g - match.days) <= match.tolerance).length / gaps.length < 0.75) return null;
+  const latest = Math.abs(last.amount);
+  if (list.length === 2 && Math.abs(Math.abs(list[0]!.amount) - latest) > latest * LONG_PAIR_SPREAD) return null;
+  // One missed renewal means it was cancelled: no second cycle of grace.
+  if (daysBetween(last.date, today) > match.days + match.grace) return null;
+
+  const { variable, priceChange } = amountPattern(list, today);
+  return streamOf(key, list, { cadence: match.cadence, kind: "bill", amount: last.amount, variable, priceChange });
+}
+
+function streamOf(
+  key: string,
+  list: Transaction[],
+  found: Pick<RecurringStream, "cadence" | "kind" | "amount" | "variable" | "priceChange" | "schedule">,
+): RecurringStream {
+  const last = list.at(-1)!;
+  const { schedule, ...rest } = found;
+  return {
+    id: key,
+    merchant: last.merchant,
+    accountId: last.accountId,
+    category: last.category,
+    ...rest,
+    lastDate: last.date,
+    nextDate: nthOccurrence({ lastDate: last.date, cadence: found.cadence, ...(schedule ? { schedule } : {}) }, 1),
+    occurrences: list.length,
+    transactionIds: list.map((t) => t.id),
+    ...(schedule ? { schedule } : {}),
+  };
+}
+
+/** True for a stream that comes round less often than once a month. */
+export function isLong(c: Cadence): c is LongCadence {
+  return c === "quarterly" || c === "semiannual" || c === "annual";
 }
 
 const same = (a: number, b: number) => Math.abs(a - b) <= Math.max(a, b) * 0.005;
@@ -201,22 +269,41 @@ export function occurrences(stream: Pick<RecurringStream, "lastDate" | "cadence"
   return out;
 }
 
-export function nthAfter(date: ISODate, cadence: Cadence, n: number): ISODate {
-  return cadence === "monthly" ? addMonths(date, n) : addDays(date, n * cadenceDays(cadence));
-}
+/** How often each cadence comes round: by the calendar (the same day, months apart) or by the day count. */
+const STEP: Record<Cadence, { months: number } | { days: number }> = {
+  weekly: { days: 7 },
+  biweekly: { days: 14 },
+  semimonthly: { days: 15 },
+  monthly: { months: 1 },
+  quarterly: { months: 3 },
+  semiannual: { months: 6 },
+  annual: { months: 12 },
+};
+const PER_YEAR: Record<Cadence, number> = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12, quarterly: 4, semiannual: 2, annual: 1 };
 
-export function cadenceDays(c: Cadence): number {
-  return c === "weekly" ? 7 : c === "biweekly" ? 14 : c === "semimonthly" ? 15 : 30;
+export function nthAfter(date: ISODate, cadence: Cadence, n: number): ISODate {
+  const step = STEP[cadence];
+  return "months" in step ? addMonths(date, n * step.months) : addDays(date, n * step.days);
 }
 
 /** How many times a year a stream comes round. */
 export function perYear(c: Cadence): number {
-  return c === "weekly" ? 52 : c === "biweekly" ? 26 : c === "semimonthly" ? 24 : 12;
+  return PER_YEAR[c];
 }
 
-/** Monthly cost of a stream, for "subscriptions cost you $X a year". */
+/** Monthly cost of a stream, for "subscriptions cost you $X a year", and what a bill that comes less often asks to be put aside each month. */
 export function monthlyCost(stream: RecurringStream): Cents {
   return Math.round((Math.abs(stream.amount) * perYear(stream.cadence)) / 12);
+}
+
+/**
+ * The bills that come less often than monthly (always money going out), in
+ * the order given (detectRecurring's: soonest first), and what putting aside
+ * for all of them each month comes to.
+ */
+export function setAside(streams: RecurringStream[]): { bills: RecurringStream[]; monthly: Cents } {
+  const bills = streams.filter((s) => isLong(s.cadence));
+  return { bills, monthly: bills.reduce((sum, s) => sum + monthlyCost(s), 0) };
 }
 
 type Shape = Pick<RecurringStream, "lastDate" | "cadence" | "schedule">;

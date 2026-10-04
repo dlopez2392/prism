@@ -19,7 +19,7 @@ import { addDays, daysBetween, lastMonths, monthKey } from "@/lib/finance/dates"
 import { paymentsDue } from "@/lib/finance/debts";
 import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
-import { monthlyCost, normalizeMerchant, occurrences } from "@/lib/finance/recurring";
+import { monthlyCost, normalizeMerchant, occurrences, setAside } from "@/lib/finance/recurring";
 import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
 import { defaultTaxYear, taxSummary, taxYears } from "@/lib/finance/taxes";
 import type { Account, CategoryId, Cents, FinanceData, ISODate, Liability, Transaction } from "@/lib/finance/types";
@@ -412,6 +412,7 @@ export function upcomingBills(data: AgentData, args: { days?: number }) {
     .sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
 
   const subscriptions = a.streams.filter((s) => s.kind === "subscription");
+  const lessOften = setAside(a.streams);
   const lowest = a.forecast?.lowest;
   return {
     ...frame(data),
@@ -428,6 +429,17 @@ export function upcomingBills(data: AgentData, args: { days?: number }) {
       ...lenderTerms(liability),
     })),
     subscriptions_per_month: usd(subscriptions.reduce((s, x) => s + monthlyCost(x), 0)),
+    // Every three, six or twelve months: the whole list, however far off, so a yearly bill is never a surprise.
+    bills_less_often_than_monthly: lessOften.bills.map((s) => ({
+      name: s.merchant,
+      amount: usd(s.amount),
+      ...(s.variable ? { estimated: true } : {}),
+      cadence: s.cadence,
+      next: s.nextDate,
+      set_aside_per_month: usd(monthlyCost(s)),
+      account: accountLabel(accounts.get(s.accountId)),
+    })),
+    less_often_set_aside_per_month: usd(lessOften.monthly),
     ...(lowest && a.checking && lowest.date <= to
       ? { lowest_expected_checking_balance: { amount: usd(lowest.balance), date: lowest.date, account: accountLabel(a.checking) } }
       : {}),
