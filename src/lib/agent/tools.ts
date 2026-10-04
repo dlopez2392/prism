@@ -21,6 +21,7 @@ import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences, setAside } from "@/lib/finance/recurring";
 import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
+import { comparePayoff, debtAccounts, PAYOFF_LIMITS, type Debt, type PayoffPlan } from "@/lib/finance/payoff";
 import { defaultTaxYear, taxSummary, taxYears } from "@/lib/finance/taxes";
 import type { Account, CategoryId, Cents, FinanceData, ISODate, Liability, Transaction } from "@/lib/finance/types";
 
@@ -542,5 +543,76 @@ export function canIAfford(data: AgentData, args: { kind: (typeof AFFORD_KINDS)[
     usually_kept_per_month: pair(v.keptBefore, v.keptAfter),
     goals_ask_per_month: usd(v.goalsMonthly),
     method: `Tested against the next 60 days of the checking forecast (paydays, bills and usual day-to-day spending), safe-to-spend with its ${usd(base.cushion)}-dollar cushion, and what the user kept on average over the last three full months.`,
+  };
+}
+
+// — plan_debt_payoff ——————————————————————————————————————————————
+
+export type PayoffArgs = {
+  extra_per_month?: number;
+  debts?: { account_id: string; include?: boolean; apr?: number; monthly_payment?: number }[];
+};
+
+/**
+ * The payoff plan on Net worth, for a connected app: every card and loan
+ * owed on, the two orders side by side and paying only what each asks. The
+ * user's own rate or payment, when they give one, replaces the lender's;
+ * a debt with neither is listed as needing one, never guessed at.
+ */
+export function planDebtPayoff(data: AgentData, args: PayoffArgs) {
+  const rows = debtAccounts(data.accounts, data.transactions, data.today);
+  const given = new Map((args.debts ?? []).map((d) => [d.account_id, d]));
+  const unknown = [...given.keys()].filter((id) => !rows.some((r) => r.id === id));
+  const extra = Math.round((args.extra_per_month ?? 0) * 100);
+  const listed = rows.map((r) => {
+    const g = given.get(r.id);
+    const apr = g?.apr ?? r.apr;
+    const payment = g?.monthly_payment !== undefined ? Math.round(g.monthly_payment * 100) : r.payment;
+    const included = g?.include ?? r.carried;
+    const missing = [...(apr === null ? ["apr"] : []), ...(payment === null ? ["monthly_payment"] : [])];
+    return { r, apr, payment, included, missing };
+  });
+  const debts = listed.map(({ r, apr, payment, included, missing }) => ({
+    account_id: r.id,
+    account: r.mask ? `${r.name} ••${r.mask}` : r.name,
+    kind: r.kind === "credit" ? ("card" as const) : ("loan" as const),
+    owed: usd(r.owed),
+    apr,
+    monthly_payment: payment === null ? null : usd(payment),
+    terms_from: given.get(r.id)?.apr !== undefined || given.get(r.id)?.monthly_payment !== undefined ? ("user" as const) : r.apr !== null || r.payment !== null ? ("lender" as const) : null,
+    in_plan: included && !missing.length,
+    ...(included && missing.length ? { needs: missing } : {}),
+    ...(!included && r.kind === "credit" && !r.carried && given.get(r.id)?.include === undefined ? { left_out: "No interest charged in the last two statements, so it looks paid off each month. Pass include: true to plan for it." } : {}),
+  }));
+  const plan: Debt[] = listed.filter((x) => x.included && !x.missing.length).map((x) => ({ id: x.r.id, name: x.r.name, owed: x.r.owed, apr: x.apr!, payment: x.payment! }));
+  const bad = plan.find((d) => d.apr < 0 || d.apr > PAYOFF_LIMITS.apr || d.payment <= 0 || d.payment > PAYOFF_LIMITS.payment);
+  const note = !rows.length
+    ? "Nothing is owed on a card or a loan Prism can see."
+    : extra < 0 || extra > PAYOFF_LIMITS.payment
+      ? "Use an extra from $0 to $1,000,000 a month."
+      : bad
+        ? `Use a rate from 0 to 100 and a monthly payment above $0 for ${bad.name}.`
+        : !plan.length
+          ? "No debt is in the plan yet: each needs a yearly rate and a monthly payment. Ask the user for the missing ones and pass them in debts."
+          : null;
+  const c = note === null ? comparePayoff(plan, extra, data.today) : null;
+  const label = (id: string) => debts.find((d) => d.account_id === id)!.account;
+  const summary = (p: PayoffPlan) => ({
+    debt_free: p.debtFree,
+    months: p.months,
+    interest: usd(p.interest),
+    order: p.cleared.map((x) => ({ account: label(x.id), paid_off: x.month })),
+    ...(p.stuck.length ? { never_shrinks: p.stuck.map(label) } : {}),
+  });
+  return {
+    ...frame(data),
+    extra_per_month: usd(extra),
+    debts,
+    ...(unknown.length ? { unknown_account_ids: unknown } : {}),
+    plans: c ? { highest_rate_first: summary(c.avalanche), smallest_balance_first: summary(c.snowball), only_what_each_asks: summary(c.minimums) } : null,
+    ...(c ? { same_order: c.same } : {}),
+    ...(note ? { note } : {}),
+    method:
+      "Month by month: interest at a twelfth of each yearly rate on what is still owed, then each debt's own payment; in either order the extra, plus the payment of every debt already paid off, goes to the first in line. Only what each asks pays each its own payment, with no extra and nothing rolled over. Payments are assumed to stay as they are today. It describes both orders and does not recommend one.",
   };
 }

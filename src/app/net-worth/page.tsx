@@ -3,7 +3,8 @@
 //
 // Hero (the one --gradient-prism card): net worth now. Then the 12-month
 // story (assets and debts on one axis — never a second one), every account
-// with its own trend, what the investments are made of, and credit health.
+// with its own trend, what the investments are made of, credit health, and,
+// when anything is owed on a card or a loan, a plan for paying it off.
 
 import type { Metadata } from "next";
 import { Gauge, Landmark } from "lucide-react";
@@ -13,13 +14,18 @@ import { ScoreGauge } from "@/components/charts/radial";
 import { Sparkline } from "@/components/charts/sparkline";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { TreemapChart } from "@/components/charts/treemap-chart";
+import { DebtPlanner } from "@/components/debt-planner";
 import { AddManualItem, ManualItemRow } from "@/components/manual-item-editor";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { Card, CardHeader, Change, EmptyState, PageHeader, StatusPill, type Status } from "@/components/ui";
+import { usualMonthlyKept } from "@/lib/finance/afford";
+import { monthlyCashFlow } from "@/lib/finance/cashflow";
 import { slotColor } from "@/lib/finance/categories";
+import { lastMonths } from "@/lib/finance/dates";
 import { termsLine } from "@/lib/finance/debts";
 import { money0, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
 import { allocation, ASSET_CLASS_SLOT, groupAccounts, netWorthSeries } from "@/lib/finance/networth";
+import { debtAccounts } from "@/lib/finance/payoff";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Net worth" };
@@ -75,6 +81,10 @@ export default async function NetWorthPage() {
     });
   const credit = data.credit;
   const household = data.view === "household";
+  // Every card and loan with something owed, for the payoff plan; and what's usually kept a month, as a guide for the extra.
+  const owed = debtAccounts(data.accounts, data.transactions, data.today);
+  const firstRecord = data.transactions.reduce<string | null>((min, t) => (t.date <= data.today && (min === null || t.date < min) ? t.date : min), null);
+  const kept = usualMonthlyKept(monthlyCashFlow(data.transactions, lastMonths(data.today, 13)), data.today, firstRecord);
 
   return (
     <div className="space-y-5">
@@ -279,6 +289,18 @@ export default async function NetWorthPage() {
           </Card>
         </div>
       </div>
+
+      {owed.length ? (
+        <Card className="p-5 sm:p-6">
+          <CardHeader
+            title="Paying off what you owe"
+            subtitle="Every debt keeps its own payment; the extra goes to one at a time, and each one paid off adds its payment to the next. Nothing you try is saved."
+          />
+          <div className="mt-3">
+            <DebtPlanner debts={owed} today={data.today} kept={kept} />
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }

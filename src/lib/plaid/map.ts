@@ -149,6 +149,7 @@ export function mapTransaction(t: PlaidTransaction): Transaction {
     category: mapCategory(t.personal_finance_category),
     ...(incomeKind ? { incomeKind } : {}),
     ...(taxHint ? { taxHint } : {}),
+    ...(t.personal_finance_category?.detailed === "BANK_FEES_INTEREST_CHARGE" ? { interestCharge: true as const } : {}),
     pending: t.pending,
   };
 }

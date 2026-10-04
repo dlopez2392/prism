@@ -1,4 +1,4 @@
-// Net worth, while it loads: the hero beside the twelve-month chart, then every account beside what the investments hold.
+// Net worth, while it loads: the hero beside the twelve-month chart, then every account beside what the investments hold, then the payoff plan.
 
 import { Block, CardTitle, Frame, Header, Loading, Rows } from "@/components/skeletons";
 
@@ -20,6 +20,10 @@ export default function NetWorthLoading() {
           <Block className="h-48" />
         </div>
       </div>
+      <Frame>
+        <CardTitle />
+        <Rows count={3} mark="hidden" />
+      </Frame>
     </Loading>
   );
 }

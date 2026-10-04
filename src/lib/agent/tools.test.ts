@@ -17,6 +17,7 @@ import {
   spendingBreakdown,
   TAX_LINES_MAX,
   taxes,
+  planDebtPayoff,
   upcomingBills,
   usd,
   type AgentData,
@@ -372,5 +373,50 @@ describe("can_i_afford", () => {
     expect(canIAfford(demo(), { kind: "raise", amount: 500, date: "2020-01-01" })).toMatchObject({ answer: null, note: expect.stringMatching(/a date from 2026-09-18/) });
     const none = { ...demo(), accounts: demo().accounts.filter((x) => x.kind !== "checking") };
     expect(canIAfford(none, { kind: "purchase", amount: 50 })).toMatchObject({ answer: null, note: expect.stringMatching(/No checking account/) });
+  });
+});
+
+describe("plan_debt_payoff", () => {
+  it("plans the two loans with their lenders' terms, both orders and the yardstick, and leaves out the card paid off each month", () => {
+    const r = planDebtPayoff(demo(), { extra_per_month: 200 });
+    expect(r.debts.map((d) => [d.account, d.kind, d.apr, d.monthly_payment, d.terms_from, d.in_plan])).toEqual([
+      ["Auto loan ••3302", "loan", 6.9, 389, "lender", true],
+      ["Student loan ••6614", "loan", 5.05, 210, "lender", true],
+      ["Summit Rewards Visa ••1107", "card", 24.49, 35, "lender", false],
+    ]);
+    expect(r.debts[2]).toMatchObject({ left_out: expect.stringMatching(/paid off each month/) });
+    expect(r.plans!.highest_rate_first.order.map((o) => o.account)).toEqual(["Auto loan ••3302", "Student loan ••6614"]);
+    expect(r.plans!.smallest_balance_first.order.map((o) => o.account)).toEqual(["Student loan ••6614", "Auto loan ••3302"]);
+    expect(r.same_order).toBe(false);
+    expect(r.plans!.highest_rate_first.interest).toBeLessThan(r.plans!.smallest_balance_first.interest);
+    expect(r.plans!.highest_rate_first.months!).toBeLessThan(r.plans!.only_what_each_asks.months!);
+    expect(r.plans!.highest_rate_first.debt_free).toMatch(/^\d{4}-\d{2}$/);
+    expect(r.method).toMatch(/does not recommend/);
+  });
+
+  it("takes the user's own rate, payment and choices over the lender's, and names ids it doesn't know", () => {
+    const r = planDebtPayoff(demo(), { debts: [{ account_id: "demo-card", include: true }, { account_id: "demo-auto", monthly_payment: 500 }, { account_id: "nope" }] });
+    const card = r.debts.find((d) => d.account_id === "demo-card")!;
+    expect(card).toMatchObject({ in_plan: true });
+    expect(card).not.toHaveProperty("left_out");
+    expect(r.debts.find((d) => d.account_id === "demo-auto")).toMatchObject({ monthly_payment: 500, terms_from: "user" });
+    expect(r.unknown_account_ids).toEqual(["nope"]);
+    // The card has the highest rate and the smallest balance: first either way.
+    expect(r.plans!.highest_rate_first.order[0]!.account).toBe("Summit Rewards Visa ••1107");
+  });
+
+  it("asks for what's missing instead of guessing, and says when nothing is owed", () => {
+    const data = demo();
+    const bare = { ...data, accounts: data.accounts.map((a) => ({ ...a, liability: undefined })) };
+    const r = planDebtPayoff(bare, {});
+    expect(r.plans).toBeNull();
+    expect(r.debts.filter((d) => d.in_plan)).toEqual([]);
+    expect(r.debts[0]).toMatchObject({ needs: ["apr", "monthly_payment"], terms_from: null });
+    // The card left out of the plan isn't asked about.
+    expect(r.debts.find((d) => d.kind === "card")).not.toHaveProperty("needs");
+    expect(r.note).toMatch(/Ask the user/);
+    const given = planDebtPayoff(bare, { debts: [{ account_id: "demo-student", apr: 5, monthly_payment: 210 }] });
+    expect(given.plans!.highest_rate_first.order.map((o) => o.account)).toEqual(["Student loan ••6614"]);
+    expect(planDebtPayoff({ ...data, accounts: data.accounts.filter((a) => a.balance >= 0) }, {})).toMatchObject({ debts: [], note: expect.stringMatching(/Nothing is owed/) });
   });
 });
