@@ -105,6 +105,11 @@ export default function PrivacyPage() {
               amount and category), stored encrypted in your account. The file itself is read on your device and never sent to {BRAND.product}.
             </li>
             <li>
+              If you add a Venmo, PayPal or Cash App activity file: for each payment that matches a line from your bank, who it was to or from (another
+              person&apos;s name, as that app shows it) and the note on it, stored encrypted in your account and never shown to your household. The file
+              itself is read on your device and never sent to {BRAND.product}, and payments that don&apos;t match a line from your bank aren&apos;t kept.
+            </li>
+            <li>
               The public address of each crypto wallet you add, or for a whole Bitcoin wallet its extended public key, and what it last held, stored encrypted and never
               shared with your household. A public address is the one you&apos;d give someone to pay you, and an extended public key shows every address in a wallet:
               {BRAND.product} can see what they hold and can never move it, and never asks for a recovery phrase or private key.

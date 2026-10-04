@@ -473,12 +473,13 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealJson({ token: "t" }, ring(newKey)),
       JSON.stringify({ v: 2, sealed: sealJson({ bills: [] }, ring(newKey)) }),
     ]);
-    await rows(`update public.profiles set sealed_category_rules = $2, sealed_manual_items = $3, sealed_home_values = $4, sealed_wallets = $5 where user_id = $1`, [
+    await rows(`update public.profiles set sealed_category_rules = $2, sealed_manual_items = $3, sealed_home_values = $4, sealed_wallets = $5, sealed_p2p_notes = $6 where user_id = $1`, [
       D,
       sealPacked({ v: 1, merchants: {}, transactions: {} }, ring(oldKey)),
       sealPacked([], ring(newKey)),
       sealPacked({ v: 1, homes: [] }, ring(oldKey)),
       sealPacked({ v: 1, wallets: [] }, ring(newKey)),
+      sealPacked({ v: 1, notes: {} }, ring(oldKey)),
     ]);
     await rows(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, gen_random_uuid(), 0, $2)`, [D, sealPacked({ v: 1, transactions: [] }, ring(oldKey))]);
     // A device is kept only while alerts are on.
@@ -498,15 +499,16 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       delta("added by hand", n),
       delta("home addresses", o),
       delta("wallets", n),
+      delta("payment notes", o),
       delta("imported history", o),
       delta("phone notifications", n),
-    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
     for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
     await rows(`delete from auth.users where id = $1`, [D]);
   });
 });
 
-describe.each(["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets"])("a person's %s", (column) => {
+describe.each(["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets", "sealed_p2p_notes"])("a person's %s", (column) => {
   const E = "e0e0e0e0-0000-4000-8000-00000000f1c5";
   const fixes = "z1." + "c".repeat(40);
 

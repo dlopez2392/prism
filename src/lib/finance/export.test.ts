@@ -60,7 +60,7 @@ describe("the transactions file", () => {
   it("lists newest first, names the account and its bank, and says what's still pending", () => {
     const text = transactionsCsv(data);
     const rows = parseCsv(text, 100_000);
-    expect(rows[0]).toEqual(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income"]);
+    expect(rows[0]).toEqual(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note"]);
     const dates = rows.slice(1).map((r) => r[0]!);
     expect(dates).toEqual([...dates].sort().reverse());
     const first = data.accounts[0]!;
@@ -73,6 +73,17 @@ describe("the transactions file", () => {
     const [, row] = parseCsv(transactionsCsv(fixed));
     expect(row!.slice(3, 4)).toEqual(["Food & dining"]);
     expect(row![7]).toBe("Shopping");
+  });
+
+  it("says who a Venmo, PayPal or Cash App payment was for, with another person's note written as words", () => {
+    const paid: FinanceData = {
+      ...data,
+      transactions: [{ ...tx("2026-09-13", -4_500, "Venmo", "transfer"), p2p: { app: "venmo", dir: "to", name: "Alex Kim", note: "=SUM(A1:A9)", date: "2026-09-12" } }],
+    };
+    const [header, row] = parseCsv(transactionsCsv(paid));
+    expect(row!.slice(header!.indexOf("Paid to or from"))).toEqual(["To Alex Kim", "'=SUM(A1:A9)"]);
+    const [t] = everythingJson(paid, { wallets: [], manual: [], homes: [] }, { email: "a@x.test", firstName: null }, "2026-10-01T00:00:00Z").transactions;
+    expect(t).toMatchObject({ payment: { app: "Venmo", who: "To Alex Kim", note: "=SUM(A1:A9)" } });
   });
 
   it("keeps one year, for the year page", () => {

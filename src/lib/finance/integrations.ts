@@ -127,9 +127,9 @@ export const INTEGRATIONS: IntegrationGroup[] = [
       {
         id: "p2p",
         name: "Venmo, PayPal and Cash App",
-        adds: "Who a transfer was really for, not just \"Venmo\".",
-        how: "None offer a public consumer-data API. Transfers appear through your linked bank today.",
-        status: "limited",
+        adds: "Who each payment was really for, and its note, not just \"Venmo\".",
+        how: "None lets another app read your account, so you add each app's own activity file. Prism reads it in your browser, never uploads it, and puts each payment's name and note on the bank line it matches.",
+        status: "live",
       },
     ],
   },

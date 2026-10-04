@@ -24,6 +24,7 @@ import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
 import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiability, type StoredLiability } from "@/lib/plaid/liabilities";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
+import { applyP2pNotes, NO_P2P_NOTES, type P2pNotes } from "@/lib/finance/p2p";
 import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
@@ -153,6 +154,8 @@ export type Sources = {
   wallets: WalletSource;
   /** History they imported from a file. A device keeps none. */
   imports: ImportedHistory[];
+  /** Who their Venmo, PayPal and Cash App payments were for (finance/p2p.ts). A device keeps none. */
+  p2p: P2pNotes;
   /** Imports that won't open under any key this deployment has. A device keeps none. */
   lockedImports: LockedImport[];
   /** They're in a household. A device never is. */
@@ -194,7 +197,8 @@ type WalletSource = {
   offline?: boolean;
 };
 
-export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets">;
+/** `p2p` is left out where nothing reads a person's payment notes: the morning check never does. */
+export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets"> & { p2p?: P2pNotes };
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -258,6 +262,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
         scan: key ? (wallets) => after(() => refreshWholeWallets(account, wallets, key)) : null,
       },
       imports: a.imports,
+      p2p: a.p2pNotes,
       lockedImports: a.lockedImports,
       inHousehold: a.inHousehold,
       coinbaseShared: a.coinbaseShared,
@@ -301,6 +306,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     homeValues: [],
     wallets: { list: [], save: null, scan: null },
     imports: [],
+    p2p: NO_P2P_NOTES,
     lockedImports: [],
     inHousehold: false,
     coinbaseShared: null,
@@ -364,7 +370,9 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
   const money = crypto ? withCoinbase(banks, crypto) : banks;
   const owned = withManual(money, src.manual, today, none.banks && none.imports && none.wallets);
   const imported = withImports(owned, src.imports, src.categories, none.banks && none.manual && none.wallets);
-  return { money: withWallets(imported, read.wallets, none.banks && none.manual && none.imports), wallets: read.wallets };
+  const all = withWallets(imported, read.wallets, none.banks && none.manual && none.imports);
+  // Who each Venmo, PayPal or Cash App line was for: the person's own notes, on their own lines.
+  return { money: src.p2p ? { ...all, transactions: applyP2pNotes(all.transactions, src.p2p) } : all, wallets: read.wallets };
 }
 
 /** Wallets added by address, as accounts under "Your wallets", each with a holding per asset. */
@@ -634,6 +642,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     categories: a.categories,
     manual: a.manual,
     imports: a.imports,
+    p2p: a.p2pNotes,
     // Read again in memory when stale; a connected app never saves (and the database wouldn't let it).
     wallets: { list: a.wallets, save: null, scan: null },
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
