@@ -20,7 +20,7 @@ export const LOCALE_NAMES: Record<Locale, string> = { en: "English", es: "Españ
  * so a screen reader reads it in an English voice. Each comes off this list
  * when its Spanish is done, and the list goes when it's empty.
  */
-export const ENGLISH_ONLY = ["/goals", "/net-worth", "/future", "/year", "/taxes", "/connections", "/account", "/household", "/oauth", "/alerts", "/privacy", "/terms"];
+export const ENGLISH_ONLY = ["/connections", "/account", "/household", "/oauth", "/alerts", "/privacy", "/terms"];
 
 /** Whether a screen's words are still only in English. */
 export function englishOnly(pathname: string): boolean {

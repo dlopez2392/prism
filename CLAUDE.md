@@ -196,7 +196,8 @@
   presented to connected apps as data, never instructions.
 - Spanish (`src/lib/i18n`): every sentence a person reads goes through a
   translator `t`, and its English IS the key (`t("Spent this month")`); the
-  Spanish is in `es.ts`. Server components and actions take `await getT()`,
+  Spanish is in `es/`, one file per part of the app (a sentence two parts
+  share goes in `es/core.ts`; the test refuses one given twice). Server components and actions take `await getT()`,
   client components `useT()`, and shared server-safe components and pure
   functions take a `t` prop or argument that defaults to English (`EN`), so
   emails, connected apps and tests stay English until they're asked
@@ -214,7 +215,7 @@
   Sankey labels cut short). The choice is the `prism-lang` cookie, set by a
   server action (`language-actions.ts`), else the browser's
   Accept-Language. Translated so far: the shell, sign-in, Overview, Spending,
-  Cash flow and Budgets. A screen still only in English is listed in
+  Cash flow, Budgets, Goals, Net worth, Future, Your year and Taxes. A screen still only in English is listed in
   `ENGLISH_ONLY` (`locale.ts`), which marks its content `lang="en"` inside a
   Spanish page so a screen reader reads it in an English voice: take it off
   the list in the same change that translates it.

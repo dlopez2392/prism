@@ -39,6 +39,11 @@ test.describe("a browser that asks for Spanish first", () => {
     { path: "/spending", title: /^Gastos$/, says: /^Gastado en 6 meses$/ },
     { path: "/cash-flow", title: /^Flujo de efectivo$/, says: /Ahorraste/ },
     { path: "/budgets", title: /^Presupuestos$/, says: /Te queda para gastar en/ },
+    { path: "/goals", title: /^Metas$/, says: /./ },
+    { path: "/net-worth", title: /^Patrimonio neto$/, says: /Activos/ },
+    { path: "/future", title: /^Futuro$/, says: /Disponible para gastar/ },
+    { path: "/year", title: /^Tu \d{4}$/, says: /./ },
+    { path: "/taxes", title: /^Tus impuestos de \d{4}$/, says: /./ },
   ];
 
   for (const s of SCREENS) {
@@ -63,9 +68,9 @@ test.describe("a browser that asks for Spanish first", () => {
   });
 
   test("a screen not yet in Spanish says its words are English, so a screen reader reads them in an English voice", async ({ page }) => {
-    await page.goto("/goals");
+    await page.goto("/connections");
     await expect(page.locator("html")).toHaveAttribute("lang", "es");
-    await expect(page.getByRole("main").locator("[lang=en]").first()).toContainText("Goals");
+    await expect(page.getByRole("main").locator("[lang=en]").first()).toContainText("Connections");
     await page.goto("/budgets");
     await expect(page.getByRole("main").locator("[lang=en]")).toHaveCount(0);
   });

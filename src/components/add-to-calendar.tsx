@@ -12,8 +12,18 @@ import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, Check, Copy, Download, ExternalLink, RotateCcw } from "lucide-react";
 import { buttonPrimary, buttonSmall, Dialog } from "@/components/dialog";
+import { useT } from "@/components/locale";
 import { REMINDERS, type Reminder } from "@/lib/finance/calendar";
 import { calendarFeed, type FeedState } from "@/lib/server/calendar-actions";
+import { msg } from "@/lib/i18n/t";
+
+/** REMINDERS' choices as the dialog says them, in the page's language (the calendar file itself stays English). */
+const REMINDER_LABELS: Record<Reminder, string> = {
+  day_before: msg("The day before, 9 AM"),
+  same_day: msg("On the day, 9 AM"),
+  three_days: msg("Three days before, 9 AM"),
+  none: msg("No alerts"),
+};
 
 type Props = {
   demo: boolean;
@@ -25,6 +35,7 @@ type Props = {
 };
 
 export function AddToCalendar({ demo, count, personal, signIn }: Props) {
+  const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const [reminder, setReminder] = useState<Reminder>("day_before");
   const [paydays, setPaydays] = useState(true);
@@ -47,21 +58,21 @@ export function AddToCalendar({ demo, count, personal, signIn }: Props) {
     <>
       <button type="button" onClick={open} className={buttonSmall}>
         <CalendarPlus aria-hidden className="size-4" />
-        Add to calendar
+        {t("Add to calendar")}
       </button>
       <Dialog
         dialogRef={dialog}
-        title="Bill reminders in your calendar"
-        description={`${count} repeating ${count === 1 ? "bill" : "bills and paydays"}, in Google, Apple or Outlook.`}
+        title={t("Bill reminders in your calendar")}
+        description={count === 1 ? t("1 repeating bill, in Google, Apple or Outlook.") : t("{n} repeating bills and paydays, in Google, Apple or Outlook.", { n: count })}
         icon={CalendarPlus}
       >
         <fieldset>
-          <legend className="mb-1.5 text-[13px] font-semibold text-ink-2">Alert me</legend>
+          <legend className="mb-1.5 text-[13px] font-semibold text-ink-2">{t("Alert me")}</legend>
           <div className="grid gap-1.5 sm:grid-cols-2">
             {REMINDERS.map((r) => (
               <label key={r.id} className="flex h-10 cursor-pointer items-center gap-2.5 rounded-ctl border border-line px-3 text-sm font-medium text-ink-1 hover:bg-surface-3 has-checked:border-accent has-checked:bg-accent-soft">
                 <input type="radio" name="reminder" value={r.id} checked={reminder === r.id} onChange={() => setReminder(r.id)} className="accent-button" />
-                {r.label}
+                {t(REMINDER_LABELS[r.id])}
               </label>
             ))}
           </div>
@@ -70,41 +81,41 @@ export function AddToCalendar({ demo, count, personal, signIn }: Props) {
         <div className="mt-4 space-y-2.5">
           <label className="flex items-start gap-2.5 text-sm text-ink-1">
             <input type="checkbox" checked={paydays} onChange={(e) => setPaydays(e.target.checked)} className="mt-0.5 size-4 accent-button" />
-            <span>Include paydays</span>
+            <span>{t("Include paydays")}</span>
           </label>
           <label className="flex items-start gap-2.5 text-sm text-ink-1">
             <input type="checkbox" checked={amounts} onChange={(e) => setAmounts(e.target.checked)} className="mt-0.5 size-4 accent-button" />
             <span>
-              Show amounts in event titles
-              <span className="block text-xs text-ink-3">Titles can show on your lock screen. Amounts always stay in the event notes.</span>
+              {t("Show amounts in event titles")}
+              <span className="block text-xs text-ink-3">{t("Titles can show on your lock screen. Amounts always stay in the event notes.")}</span>
             </span>
           </label>
         </div>
 
         {personal ? (
           <section className="mt-5 rounded-ctl bg-surface-2 p-4">
-            <h3 className="text-sm font-bold text-ink-1">Your calendar link</h3>
+            <h3 className="text-sm font-bold text-ink-1">{t("Your calendar link")}</h3>
             {feed.path ? (
               <>
-                <p className="mt-0.5 text-xs text-ink-3">Your calendar app checks it every few hours, so new bills and changed amounts appear on their own.</p>
+                <p className="mt-0.5 text-xs text-ink-3">{t("Your calendar app checks it every few hours, so new bills and changed amounts appear on their own.")}</p>
                 <Subscribe url={`${origin}${feed.path}?${params}`} />
                 <form action={feedAction} className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                  <span className="text-ink-3">Anyone with this link can see your bill names and amounts.</span>
+                  <span className="text-ink-3">{t("Anyone with this link can see your bill names and amounts.")}</span>
                   <button type="submit" name="intent" value="reset" disabled={feedPending} className="inline-flex items-center gap-1 font-semibold text-accent-ink hover:underline disabled:opacity-60">
                     <RotateCcw aria-hidden className="size-3.5" />
-                    Reset link
+                    {t("Reset link")}
                   </button>
                   <button type="submit" name="intent" value="off" disabled={feedPending} className="font-semibold text-ink-2 hover:underline disabled:opacity-60">
-                    Turn off
+                    {t("Turn off")}
                   </button>
                 </form>
               </>
             ) : (
               <form action={feedAction}>
-                <p className="mt-0.5 text-xs text-ink-3">A private link your calendar app follows, so reminders keep themselves up to date.</p>
+                <p className="mt-0.5 text-xs text-ink-3">{t("A private link your calendar app follows, so reminders keep themselves up to date.")}</p>
                 <button type="submit" name="intent" value="create" disabled={feedPending} className={`${buttonPrimary} mt-3 w-full`}>
                   <CalendarPlus aria-hidden className="size-4" />
-                  {feedPending ? "Creating…" : "Create my calendar link"}
+                  {feedPending ? t("Creating…") : t("Create my calendar link")}
                 </button>
               </form>
             )}
@@ -118,26 +129,25 @@ export function AddToCalendar({ demo, count, personal, signIn }: Props) {
 
         <a href={download} download="prism-bills.ics" className={`${personal ? buttonSmall : buttonPrimary} mt-5 w-full justify-center`}>
           <Download aria-hidden className="size-4" />
-          Download calendar file
+          {t("Download calendar file")}
         </a>
         <p className="mt-2 text-xs text-ink-3">
-          The file adds a year of reminders. On a computer, Google Calendar takes it under Settings → Import &amp; export. Download again any time to refresh the
-          amounts.
+          {t("The file adds a year of reminders. On a computer, Google Calendar takes it under Settings → Import & export. Download again any time to refresh the amounts.")}
         </p>
 
         {!personal && demo ? (
           <div className="mt-5 border-t border-line pt-4">
-            <h3 className="text-sm font-bold text-ink-1">Or subscribe to the demo calendar</h3>
-            <p className="mt-0.5 text-xs text-ink-3">It follows Alex&apos;s made-up bills and keeps itself up to date.</p>
+            <h3 className="text-sm font-bold text-ink-1">{t("Or subscribe to the demo calendar")}</h3>
+            <p className="mt-0.5 text-xs text-ink-3">{t("It follows Alex's made-up bills and keeps itself up to date.")}</p>
             <Subscribe url={`${origin}/calendar/demo.ics?${params}`} />
           </div>
         ) : null}
         {!personal && signIn ? (
           <p className="mt-4 text-xs text-ink-2">
             <Link href="/sign-in" className="font-semibold text-accent-ink hover:underline">
-              Sign in
+              {t("Sign in")}
             </Link>{" "}
-            for a private calendar link that keeps your own reminders up to date.
+            {t("for a private calendar link that keeps your own reminders up to date.")}
           </p>
         ) : null}
       </Dialog>
@@ -147,6 +157,7 @@ export function AddToCalendar({ demo, count, personal, signIn }: Props) {
 
 /** Google, Apple and a copyable link (for Outlook) for one calendar URL. */
 function Subscribe({ url }: { url: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const webcal = url.replace(/^https?:/, "webcal:");
   async function copy() {
@@ -169,10 +180,10 @@ function Subscribe({ url }: { url: string }) {
       </a>
       <button type="button" onClick={copy} className={buttonSmall}>
         {copied ? <Check aria-hidden className="size-4" /> : <Copy aria-hidden className="size-4" />}
-        {copied ? "Link copied" : "Copy link for Outlook"}
+        {copied ? t("Link copied") : t("Copy link for Outlook")}
       </button>
       <span role="status" className="sr-only">
-        {copied ? "Calendar link copied." : ""}
+        {copied ? t("Calendar link copied.") : ""}
       </span>
     </div>
   );

@@ -27,13 +27,14 @@ describe("which language a visit gets", () => {
 
 describe("screens still only in English", () => {
   it("are the ones listed, and everything under them, and no other", () => {
-    expect(englishOnly("/goals")).toBe(true);
+    expect(englishOnly("/connections")).toBe(true);
     expect(englishOnly("/connections/amazon")).toBe(true);
+    expect(englishOnly("/goals")).toBe(false);
     expect(englishOnly("/")).toBe(false);
     expect(englishOnly("/spending")).toBe(false);
     expect(englishOnly("/sign-in/two-step")).toBe(false);
     // A prefix of a name is not the screen.
-    expect(englishOnly("/goalsx")).toBe(false);
+    expect(englishOnly("/connectionsx")).toBe(false);
   });
 });
 

@@ -19,6 +19,7 @@ import { money0, monthLong, shortDate } from "./format";
 import type { Analysis } from "./model";
 import { projectGoal } from "./networth";
 import type { Cents, Goal, ISODate } from "./types";
+import { EN, type T } from "@/lib/i18n/t";
 
 export type ScenarioKind = "once" | "monthly" | "raise";
 
@@ -63,8 +64,6 @@ export const AFFORD_MAX: Cents = 100_000_000;
 export const AFFORD_HORIZON_DAYS = 366;
 
 const fmt = money0;
-const day = shortDate;
-const monthYear = (d: ISODate) => `${monthLong(d)} ${d.slice(0, 4)}`;
 
 /** A scenario a person typed, or null when it isn't one Prism can try. */
 export function validScenario(x: unknown, today: ISODate): Scenario | null {
@@ -92,7 +91,9 @@ export function scenarioFlows(s: Scenario, until: ISODate): { date: ISODate; amo
 const lowestOf = (points: { date: ISODate; expected: Cents }[]) =>
   points.reduce((low, p) => (p.expected < low.balance ? { date: p.date, balance: p.expected } : low), { date: points[0]!.date, balance: points[0]!.expected });
 
-export function tryScenario(base: AffordBase, s: Scenario): Verdict {
+/** The verdict, its sentences in the language of `t` (English for connected apps). */
+export function tryScenario(base: AffordBase, s: Scenario, t: T = EN): Verdict {
+  const day = (d: ISODate) => shortDate(d, t.locale);
   const end = base.points.at(-1)!.date;
   const flows = scenarioFlows(s, end);
 
@@ -122,36 +123,64 @@ export function tryScenario(base: AffordBase, s: Scenario): Verdict {
   const goalsFitAfter = keptAfter !== null && keptAfter >= goalsMonthly;
 
   if (s.kind === "raise") {
-    reasons.push(keptAfter === null ? `That's ${fmt(s.amount)} more each month.` : `You'd usually keep about ${fmt(keptAfter)} a month, up from ${fmt(keptBefore!)}.`);
+    reasons.push(
+      keptAfter === null
+        ? t("That's {amount} more each month.", { amount: fmt(s.amount) })
+        : t("You'd usually keep about {after} a month, up from {before}.", { after: fmt(keptAfter), before: fmt(keptBefore!) }),
+    );
     const behind = base.goals.map((g) => ({ g, now: projectGoal(g, base.today), then: projectGoal(g, base.today, g.monthlyContribution + s.amount) })).filter((x) => x.now.remaining > 0);
     // The goal that gains the most: the furthest behind.
     const pick = behind.sort((a, b) => Number(a.now.onTrack) - Number(b.now.onTrack) || (b.now.monthsToGo ?? Infinity) - (a.now.monthsToGo ?? Infinity))[0];
     if (pick && pick.then.projectedDate) {
       const sooner = pick.now.monthsToGo === null ? null : pick.now.monthsToGo - pick.then.monthsToGo!;
-      reasons.push(`Put into ${pick.g.name}, it would be done by ${monthYear(pick.then.projectedDate)}${sooner ? `, ${sooner} ${sooner === 1 ? "month" : "months"} sooner` : ""}.`);
+      const when = { goal: pick.g.name, date: t("{month} {year}", { month: monthLong(pick.then.projectedDate, t.locale), year: pick.then.projectedDate.slice(0, 4) }) };
+      reasons.push(
+        !sooner
+          ? t("Put into {goal}, it would be done by {date}.", when)
+          : sooner === 1
+            ? t("Put into {goal}, it would be done by {date}, 1 month sooner.", when)
+            : t("Put into {goal}, it would be done by {date}, {n} months sooner.", { ...when, n: sooner }),
+      );
     }
-    return { answer: "yes", headline: `That's ${fmt(s.amount)} more a month to plan with.`, reasons, lowest, lowestBefore, safeBefore, safeAfter, keptBefore, keptAfter, goalsMonthly };
+    return { answer: "yes", headline: t("That's {amount} more a month to plan with.", { amount: fmt(s.amount) }), reasons, lowest, lowestBefore, safeBefore, safeAfter, keptBefore, keptAfter, goalsMonthly };
   }
 
-  if (dips) reasons.push(`Checking would drop to ${fmt(lowest.balance)} around ${day(lowest.date)}, below zero.`);
-  else if (thin) reasons.push(`Checking would get down to ${fmt(lowest.balance)} around ${day(lowest.date)}, under the ${fmt(base.cushion)} cushion.`);
-  else reasons.push(`Checking would stay above ${fmt(lowest.balance)}, its lowest around ${day(lowest.date)}.`);
+  const low = { amount: fmt(lowest.balance), date: day(lowest.date) };
+  if (dips) reasons.push(t("Checking would drop to {amount} around {date}, below zero.", low));
+  else if (thin) reasons.push(t("Checking would get down to {amount} around {date}, under the {cushion} cushion.", { ...low, cushion: fmt(base.cushion) }));
+  else reasons.push(t("Checking would stay above {amount}, its lowest around {date}.", low));
 
   if (s.kind === "monthly" && keptAfter !== null) {
-    if (keptAfter < 0) reasons.push(`Each month you'd spend about ${fmt(-keptAfter)} more than comes in.`);
+    if (keptAfter < 0) reasons.push(t("Each month you'd spend about {amount} more than comes in.", { amount: fmt(-keptAfter) }));
     else if (goalsMonthly > 0 && !goalsFitAfter)
       reasons.push(
         goalsFitBefore
-          ? `Your goals ask for ${fmt(goalsMonthly)} a month; you'd usually keep about ${fmt(keptAfter)}.`
-          : `Your goals already ask for more than you usually keep (${fmt(goalsMonthly)} against ${fmt(keptBefore!)}); this would leave about ${fmt(keptAfter)}.`,
+          ? t("Your goals ask for {goals} a month; you'd usually keep about {kept}.", { goals: fmt(goalsMonthly), kept: fmt(keptAfter) })
+          : t("Your goals already ask for more than you usually keep ({goals} against {before}); this would leave about {after}.", {
+              goals: fmt(goalsMonthly),
+              before: fmt(keptBefore!),
+              after: fmt(keptAfter),
+            }),
       );
-    else reasons.push(`You'd still usually keep about ${fmt(keptAfter)} a month${goalsMonthly > 0 ? `, enough for your goals' ${fmt(goalsMonthly)}` : ""}.`);
+    else
+      reasons.push(
+        goalsMonthly > 0
+          ? t("You'd still usually keep about {amount} a month, enough for your goals' {goals}.", { amount: fmt(keptAfter), goals: fmt(goalsMonthly) })
+          : t("You'd still usually keep about {amount} a month.", { amount: fmt(keptAfter) }),
+      );
   }
   if (s.kind === "once" && keptBefore !== null && keptBefore > 0) {
     const months = s.amount / keptBefore;
-    reasons.push(months < 1 ? `It's less than one month of what you usually keep (${fmt(keptBefore)}).` : `It's about ${months < 10 ? months.toFixed(1).replace(/\.0$/, "") : Math.round(months)} months of what you usually keep (${fmt(keptBefore)} a month).`);
+    const n = months < 10 ? months.toFixed(1).replace(/\.0$/, "") : String(Math.round(months));
+    reasons.push(
+      months < 1
+        ? t("It's less than one month of what you usually keep ({kept}).", { kept: fmt(keptBefore) })
+        : n === "1"
+          ? t("It's about one month of what you usually keep ({kept} a month).", { kept: fmt(keptBefore) })
+          : t("It's about {n} months of what you usually keep ({kept} a month).", { n, kept: fmt(keptBefore) }),
+    );
   }
-  if (s.date > end) reasons.push("It starts after the 60 days the forecast covers, so checking is shown as it stands.");
+  if (s.date > end) reasons.push(t("It starts after the 60 days the forecast covers, so checking is shown as it stands."));
 
   const unsustainable = s.kind === "monthly" && keptAfter !== null && keptAfter < 0;
   // Goals it would crowd out, or goals already short that it would leave shorter still.
@@ -159,12 +188,12 @@ export function tryScenario(base: AffordBase, s: Scenario): Verdict {
   const answer: Verdict["answer"] = dips || unsustainable ? "no" : thin || crowds ? "tight" : "yes";
   const headline =
     answer === "yes"
-      ? "Yes, it fits."
+      ? t("Yes, it fits.")
       : answer === "tight"
-        ? "It fits, but it's tight."
+        ? t("It fits, but it's tight.")
         : dips
-          ? "Not yet: checking would run out."
-          : "Not as things stand: it costs more than you usually keep.";
+          ? t("Not yet: checking would run out.")
+          : t("Not as things stand: it costs more than you usually keep.");
   return { answer, headline, reasons, lowest, lowestBefore, safeBefore, safeAfter, keptBefore, keptAfter, goalsMonthly };
 }
 

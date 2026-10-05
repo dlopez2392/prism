@@ -757,13 +757,14 @@ Spanish. Dates read the Spanish way ("lun, 5 oct"); amounts stay `$1,234.56`,
 as U.S. banks write them in either language.
 
 - Every sentence on screen goes through a translator whose key is the English
-  sentence (`src/lib/i18n/t.ts`); the Spanish is in `src/lib/i18n/es.ts`,
-  written in "tú", in the voice of bis-rgv.com. A sentence with no Spanish
+  sentence (`src/lib/i18n/t.ts`); the Spanish is in `src/lib/i18n/es/`, one
+  file per part of the app, written in "tú", in the voice of bis-rgv.com. A sentence with no Spanish
   shows in English, and `pnpm test` names it.
 - The browser is handed the Spanish only on a page that's in Spanish, so an
   English page downloads none of it.
-- In Spanish so far: the shell, sign-in, Overview, Spending, Cash flow and
-  Budgets. The other screens, emails and push follow (`docs/ROADMAP.md`,
+- In Spanish so far: the shell, sign-in, Overview, Spending, Cash flow,
+  Budgets, Goals, Net worth, Future, Your year and Taxes. Connections,
+  Account, emails and push follow (`docs/ROADMAP.md`,
   item 29); connected apps (MCP) answer in English.
 
 ## Screens

@@ -343,8 +343,9 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     it before anyone picks. Dates read in Spanish ("lun, 5 oct"); amounts stay
     as a U.S. bank writes them. Done: the shell, sign-in, Overview, Spending
     (with the transaction dialog), Cash flow and Budgets, every message their
-    saves return, and the insights and alerts they show. Next: Goals, Net
-    worth, Future, Your year and Taxes; then Connections, Account and its
+    saves return, and the insights and alerts they show; then Goals, Net
+    worth (with the debt planner and what you own or owe), Future (with "Can
+    I afford it?"), Your year and Taxes. Next: Connections, Account and its
     settings, alert and recap emails and push in the person's language, and
     the privacy policy and terms (with a note that the English text governs,
     once a lawyer has read the Spanish).
