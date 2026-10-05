@@ -6,6 +6,8 @@
 // flash and the same addresses in both. Until they pick, a browser that asks
 // for Spanish first gets Spanish.
 
+import { LEGAL_PATHS, spanishPublished, type LegalPage } from "@/lib/legal-languages";
+
 export const LOCALES = ["en", "es"] as const;
 export type Locale = (typeof LOCALES)[number];
 
@@ -22,10 +24,11 @@ export function isLocale(x: unknown): x is Locale {
 /**
  * The screens whose words are still only in English (docs/ROADMAP.md, item
  * 29). In Spanish, their content is marked English (components/locale.tsx),
- * so a screen reader reads it in an English voice. Each comes off this list
- * when its Spanish is done, and the list goes when it's empty.
+ * so a screen reader reads it in an English voice. Only the legal pages are
+ * left, and each comes off the list on its own once a lawyer has approved its
+ * Spanish against the English in force (legal-languages.ts).
  */
-export const ENGLISH_ONLY = ["/privacy", "/terms"];
+export const ENGLISH_ONLY: string[] = (Object.keys(LEGAL_PATHS) as LegalPage[]).filter((page) => !spanishPublished(page)).map((page) => LEGAL_PATHS[page]);
 
 /** Whether a screen's words are still only in English. */
 export function englishOnly(pathname: string): boolean {

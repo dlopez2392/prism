@@ -225,11 +225,20 @@
   Accept-Language. Translated so far: the shell, sign-in, Overview, Spending,
   Cash flow, Budgets, Goals, Net worth, Future, Your year, Taxes, Connections
   (with its imports), Account, the household, app consent, unsubscribe, and
-  alert and recap emails and push; the privacy policy and terms wait for a
-  lawyer. A screen still only in English is listed in
-  `ENGLISH_ONLY` (`locale.ts`), which marks its content `lang="en"` inside a
-  Spanish page so a screen reader reads it in an English voice: take it off
-  the list in the same change that translates it.
+  alert and recap emails and push. The privacy policy and terms are
+  translated whole, not sentence by sentence (`app/privacy/policy-es.tsx`,
+  `app/terms/terms-es.tsx`, beside their English `-en` files; the Spanish of
+  privacy.ts's lists is in `lib/legal-es.ts`), and HELD: each shows only when
+  `SPANISH_APPROVED` in `lib/legal-languages.ts` names the English version it
+  was translated from. Set that entry only on the owner's word that a lawyer
+  approved that version; never to get a test green. A change to the English
+  legal text changes its Spanish in the same commit (`legal-spanish.test.ts`
+  checks the dates, and that both say the same thing, section by section,
+  under every combination of the operator's switches), which un-publishes
+  that page until the new Spanish is approved. A screen still only in English
+  is listed in `ENGLISH_ONLY` (`locale.ts`, now derived from the legal pages
+  still held), which marks its content `lang="en"` inside a Spanish page so a
+  screen reader reads it in an English voice.
 - Amazon orders (`src/lib/finance/orders.ts`): the same shape as the payment
   notes above. The order history is read in the browser and never uploaded;
   only matches travel, a batch at a time (`ORDER_LIMITS.batch`), and the
