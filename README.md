@@ -779,6 +779,13 @@ as U.S. banks write them in either language.
   their account, `profiles.language`). Still English: the privacy policy and
   terms (a lawyer reads the Spanish first; `docs/ROADMAP.md`, item 29), and
   connected apps (MCP) answer in English.
+- The calendar file speaks the person's language too: its bills, paydays and
+  card or loan payments, their notes, and the calendar's name. A download
+  follows the page. A person's own calendar link follows the language their
+  visits are in, because the link's sealed snapshot records it, and a visit in
+  a new language writes it again at once. The demo feed's link carries
+  `?lang=es` from a Spanish page. Event IDs don't depend on the language, so
+  a calendar that changes language renames its events instead of adding more.
 
 ## Screens
 

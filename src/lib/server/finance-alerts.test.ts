@@ -28,10 +28,12 @@ const state = {
   alerts: { on: true, kinds: ["bank", "bill-short", "price-rise", "weekly"], amounts: true, takenAt: null as string | null, stale: false },
   linked: true,
   language: "en",
+  feedUpdatedAt: null as string | null,
 };
 const saveAlertSnapshot = vi.fn<(account: unknown, snapshot: unknown, key: unknown) => Promise<void>>(async () => undefined);
 const forgetAlertSnapshot = vi.fn(async () => undefined);
 const saveAccountLanguage = vi.fn<(account: unknown, language: unknown) => Promise<void>>(async () => undefined);
+const saveFeedSnapshot = vi.fn<(account: unknown, snapshot: unknown, key: unknown) => Promise<void>>(async () => undefined);
 vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: null,
@@ -51,7 +53,7 @@ vi.mock("./account-store", () => ({
       state.linked ? [["item-1", { state: { v: 1, cursor: "c-1", ready: true, accounts: [checking], transactions: [] }, version: 3, syncedAt: ago(60_000), changedAt: null }]] : [],
     ),
     coinbase: null,
-    feedUpdatedAt: null,
+    feedUpdatedAt: state.feedUpdatedAt,
     alerts: state.alerts,
     reseal: null,
   }),
@@ -62,7 +64,7 @@ vi.mock("./account-store", () => ({
   saveAccountPlaidSync: vi.fn(async () => true),
   saveAccountLanguage,
   saveAccountTimeZone: vi.fn(),
-  saveFeedSnapshot: vi.fn(async () => undefined),
+  saveFeedSnapshot,
   saveCoinbaseValue: vi.fn(),
   saveWalletReadings: vi.fn(),
 }));
@@ -83,6 +85,7 @@ describe("what a visit leaves for alert emails", () => {
     state.alerts = { on: true, kinds: ["bank", "bill-short", "price-rise", "weekly"], amounts: true, takenAt: null, stale: false };
     state.linked = true;
     state.language = "en";
+    state.feedUpdatedAt = null;
     browser.language = "";
   });
   afterEach(() => {
@@ -90,6 +93,7 @@ describe("what a visit leaves for alert emails", () => {
     saveAlertSnapshot.mockClear();
     forgetAlertSnapshot.mockClear();
     saveAccountLanguage.mockClear();
+    saveFeedSnapshot.mockClear();
     scheduled.length = 0;
   });
 
@@ -155,6 +159,26 @@ describe("what a visit leaves for alert emails", () => {
     state.language = "es";
     await ownVisit();
     expect(saveAlertSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("rewrites the calendar feed in the language they've just changed to, and otherwise every six hours", async () => {
+    // No feed, nothing to write.
+    browser.language = "es";
+    await ownVisit();
+    expect(saveFeedSnapshot).not.toHaveBeenCalled();
+    // A feed written a minute ago in English, and a visit in Spanish: at once, in Spanish.
+    state.feedUpdatedAt = ago(60_000);
+    await ownVisit();
+    expect(saveFeedSnapshot).toHaveBeenCalledTimes(1);
+    expect(saveFeedSnapshot.mock.calls[0]![1]).toMatchObject({ v: 1, lang: "es" });
+    // Once the account has it, a recent feed is left alone, and a stale one is written in it.
+    state.language = "es";
+    await ownVisit();
+    expect(saveFeedSnapshot).toHaveBeenCalledTimes(1);
+    state.feedUpdatedAt = ago(7 * 60 * 60_000);
+    await ownVisit();
+    expect(saveFeedSnapshot).toHaveBeenCalledTimes(2);
+    expect(saveFeedSnapshot.mock.calls[1]![1]).toMatchObject({ lang: "es" });
   });
 
   it("is never left by a connected app", async () => {

@@ -12,12 +12,12 @@ import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, Check, Copy, Download, ExternalLink, RotateCcw } from "lucide-react";
 import { buttonPrimary, buttonSmall, Dialog } from "@/components/dialog";
-import { useT } from "@/components/locale";
+import { useLocale, useT } from "@/components/locale";
 import { REMINDERS, type Reminder } from "@/lib/finance/calendar";
 import { calendarFeed, type FeedState } from "@/lib/server/calendar-actions";
 import { msg } from "@/lib/i18n/t";
 
-/** REMINDERS' choices as the dialog says them, in the page's language (the calendar file itself stays English). */
+/** REMINDERS' choices as the dialog says them, in the page's language (the calendar file is written in it too). */
 const REMINDER_LABELS: Record<Reminder, string> = {
   day_before: msg("The day before, 9 AM"),
   same_day: msg("On the day, 9 AM"),
@@ -36,6 +36,7 @@ type Props = {
 
 export function AddToCalendar({ demo, count, personal, signIn }: Props) {
   const t = useT();
+  const locale = useLocale();
   const dialog = useRef<HTMLDialogElement>(null);
   const [reminder, setReminder] = useState<Reminder>("day_before");
   const [paydays, setPaydays] = useState(true);
@@ -48,6 +49,9 @@ export function AddToCalendar({ demo, count, personal, signIn }: Props) {
   if (!paydays) params.set("paydays", "0");
   if (!amounts) params.set("amounts", "0");
   const download = `/calendar/bills.ics?${params}`;
+  // A calendar app asks for the demo feed without a language, so its link carries the page's.
+  const demoParams = new URLSearchParams(params);
+  if (locale !== "en") demoParams.set("lang", locale);
 
   function open() {
     setOrigin(window.location.origin);
@@ -139,7 +143,7 @@ export function AddToCalendar({ demo, count, personal, signIn }: Props) {
           <div className="mt-5 border-t border-line pt-4">
             <h3 className="text-sm font-bold text-ink-1">{t("Or subscribe to the demo calendar")}</h3>
             <p className="mt-0.5 text-xs text-ink-3">{t("It follows Alex's made-up bills and keeps itself up to date.")}</p>
-            <Subscribe url={`${origin}/calendar/demo.ics?${params}`} />
+            <Subscribe url={`${origin}/calendar/demo.ics?${demoParams}`} />
           </div>
         ) : null}
         {!personal && signIn ? (

@@ -204,7 +204,12 @@
   alert job has no request to ask: it writes in `profiles.language`, which
   the person's own visit keeps in step with the page (`rememberLanguage` in
   `finance.ts`, only when it moved, never a connected app), and a snapshot's
-  pre-worded alerts carry the language they're in (`AlertSnapshot.lang`). Write WHOLE sentences with `{names}` (`t("{who} owes you
+  pre-worded alerts carry the language they're in (`AlertSnapshot.lang`).
+  The calendar feed is the same: a calendar app asks without cookies, so its
+  sealed snapshot carries `lang`, written by the person's own visit (again at
+  once when they change language, `refreshFeedIfStale`); a download follows
+  the page, and the public demo feed takes `?lang=` from the page offering it.
+  Write WHOLE sentences with `{names}` (`t("{who} owes you
   {amount}", …)`), never English fragments glued together, and a separate
   sentence for one and for many. A month mid-sentence is lower case in
   Spanish: pass `monthLong(d, t.locale)` and let a Spanish sentence that

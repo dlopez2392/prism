@@ -82,6 +82,17 @@ describe("the feed a calendar app fetches", () => {
     expect(await res.text()).toContain("Rent");
   });
 
+  it("is written in the language the snapshot names, and in English for one from before languages", async () => {
+    rpc.mockResolvedValue({ data: sealFeedSnapshot({ ...snapshot, lang: "es" }, vaultKey()!), error: null });
+    const es = (await (await get()).text()).replace(/\r\n /g, "");
+    expect(es).toContain("Salida esperada: $1\\,450.00 · Checking ••0001 · cada mes.");
+    expect(es).toContain("X-WR-CALNAME:Prism: facturas y días de pago");
+    rpc.mockResolvedValue({ data: sealFeedSnapshot({ ...snapshot, lang: "fr" }, vaultKey()!), error: null });
+    expect(await (await get()).text()).toContain("X-WR-CALNAME:Prism: bills & paydays");
+    rpc.mockResolvedValue({ data: sealFeedSnapshot(snapshot, vaultKey()!), error: null });
+    expect(await (await get()).text()).toContain("Expected out: $1\\,450.00");
+  });
+
   it("serves nothing from an unsealed one, or one sealed with another key", async () => {
     rpc.mockResolvedValue({ data: snapshot, error: null });
     expect((await get()).status).toBe(404);
@@ -93,5 +104,16 @@ describe("the feed a calendar app fetches", () => {
     vi.stubEnv("PRISM_VAULT_KEY", "");
     rpc.mockResolvedValue({ data: sealFeedSnapshot(snapshot, randomBytes(32)), error: null });
     expect((await get()).status).toBe(404);
+  });
+});
+
+describe("the demo feed", () => {
+  it("is in the language its link names, and English for anything else", async () => {
+    const { GET: demo } = await import("@/app/calendar/demo.ics/route");
+    const name = async (q: string) => /X-WR-CALNAME:([^\r]*)/.exec(await demo(new Request(`https://prism.example/calendar/demo.ics${q}`)).text())?.[1];
+    expect(await name("?lang=es")).toBe("Prism (ejemplo): facturas y días de pago");
+    expect(await name("?lang=es&paydays=0")).toBe("Prism (ejemplo): facturas");
+    expect(await name("")).toBe("Prism demo: bills & paydays");
+    expect(await name("?lang=fr")).toBe("Prism demo: bills & paydays");
   });
 });

@@ -513,7 +513,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
   const own = await moneyFor(src, today);
   let base = own.money;
   if (src.account) {
-    if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
+    if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base, t.locale, src.language !== t.locale);
     base = greeted(base, src.firstName, isLive(src));
     rememberZone(src.account, src.timeZone, zone);
     rememberLanguage(src.account, src.language, t.locale);
@@ -729,13 +729,18 @@ export async function morningFinance(src: Money, plan: Plan, today: ISODate): Pr
 
 const FEED_STALE_MS = 6 * 60 * 60_000;
 
-async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live): Promise<void> {
-  if (!updatedAt || Date.now() - Date.parse(updatedAt) < FEED_STALE_MS) return;
+/**
+ * The calendar feed's snapshot, written again every six hours of visits, in
+ * the language of the page, and at once when they've just changed language,
+ * so their calendar follows them. Only for someone who has a feed.
+ */
+async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live, lang: Locale, newLanguage: boolean): Promise<void> {
+  if (!updatedAt || (!newLanguage && Date.now() - Date.parse(updatedAt) < FEED_STALE_MS)) return;
   // No key, no refresh: a snapshot is only ever stored sealed.
   const key = safeVaultKey();
   if (!key) return;
   try {
-    await saveFeedSnapshot(account, feedSnapshot(data), key);
+    await saveFeedSnapshot(account, feedSnapshot(data, lang), key);
   } catch {
     // A stale calendar is better than a broken page.
   }
