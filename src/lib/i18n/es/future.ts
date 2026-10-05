@@ -4,7 +4,7 @@
 // its answers say whether it "alcanza"; what a person usually keeps a month is
 // what they "suelen ahorrar"; a bill that comes every few months is still a
 // "factura"; the calendar link is an "enlace de calendario". The calendar
-// file itself stays English (finance/calendar.ts).
+// file's own words (finance/calendar.ts) are in calendar.ts.
 
 export const FUTURE: Record<string, string> = {
   "1 bill or transfer": "1 factura o transferencia",

@@ -778,6 +778,13 @@ as U.S. banks write them in either language.
   phone alerts, in the language the person last used Prism in (kept with
   their account, `profiles.language`). Connected apps (MCP) answer in
   English.
+- The calendar file speaks the person's language too: its bills, paydays and
+  card or loan payments, their notes, and the calendar's name. A download
+  follows the page. A person's own calendar link follows the language their
+  visits are in, because the link's sealed snapshot records it, and a visit in
+  a new language writes it again at once. The demo feed's link carries
+  `?lang=es` from a Spanish page. Event IDs don't depend on the language, so
+  a calendar that changes language renames its events instead of adding more.
 - The privacy policy and the terms are translated too, but **held**: the
   English governs, so each Spanish page shows only once a lawyer has approved
   it against the English in force (`src/lib/legal-languages.ts`). Until then

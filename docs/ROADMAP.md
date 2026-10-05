@@ -349,8 +349,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     Account (with a Language · Idioma setting), the household, app consent
     and unsubscribe; then alert and recap emails and push, in the language
     the person last used Prism in (the morning job has no browser to ask, so
-    their visits keep it with the account: `profiles.language`). The privacy
-    policy and terms are translated and held (`src/lib/legal-languages.ts`):
-    each goes live when a lawyer approves its Spanish against the English in
-    force, opening with a note that the English governs. Next: that review,
-    and the calendar feed's event titles, which can read the same column.
+    their visits keep it with the account: `profiles.language`); then the
+    calendar file, in the language of the page that downloads it, or for a
+    private calendar link, of the person's visits (its sealed snapshot
+    records it). The privacy policy and terms are translated and held
+    (`src/lib/legal-languages.ts`): each goes live when a lawyer approves its
+    Spanish against the English in force, opening with a note that the
+    English governs. Next: that review.
