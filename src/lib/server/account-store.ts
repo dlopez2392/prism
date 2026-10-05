@@ -15,6 +15,7 @@ import { storedHomeValues, validHomeValues, type HomeValuation } from "@/lib/fin
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { hasDetails, NO_DETAILS, validDetails, type TxnDetails } from "@/lib/finance/details";
 import { NO_P2P_NOTES, validP2pNotes, type P2pNotes } from "@/lib/finance/p2p";
+import { NO_ORDER_NOTES, validOrderNotes, type OrderNotes } from "@/lib/finance/orders";
 import { storedWallets, validWallets, walletStale, type Reading, type Script, type Wallet } from "@/lib/crypto/wallets";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
 import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
@@ -37,6 +38,7 @@ type ProfileRow = {
   sealed_wallets: string | null;
   sealed_p2p_notes?: string | null;
   sealed_txn_details?: string | null;
+  sealed_order_notes?: string | null;
   alert_email?: boolean;
   alert_kinds?: unknown;
   alert_amounts?: boolean;
@@ -79,6 +81,8 @@ export type AccountSources = {
   wallets: Wallet[];
   /** Who their Venmo, PayPal and Cash App payments were for, by bank transaction; never shared with a household. */
   p2pNotes: P2pNotes;
+  /** What their Amazon charges paid for, by bank transaction; never shared with a household. */
+  orderNotes: OrderNotes;
   /** Their splits, tags and who owes them, by bank transaction; never shared with a household. */
   details: TxnDetails;
   /** History they imported from a file, finished imports only — empty unless asked for. */
@@ -125,7 +129,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const [profile, plaid, coinbase, feed, household, coinbaseShare, imported, alertSnapshot] = await Promise.all([
     db
       .from("profiles")
-      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, sealed_p2p_notes, sealed_txn_details, alert_email, alert_kinds, alert_amounts, alert_refresh, updated_at")
+      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, sealed_p2p_notes, sealed_txn_details, sealed_order_notes, alert_email, alert_kinds, alert_amounts, alert_refresh, updated_at")
       .eq("user_id", account.userId)
       .maybeSingle<ProfileRow>(),
     db
@@ -177,8 +181,17 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const rawWallets = key && profile.data?.sealed_wallets ? openPacked(profile.data.sealed_wallets, key) : null;
   const rawP2p = key && profile.data?.sealed_p2p_notes ? openPacked(profile.data.sealed_p2p_notes, key) : null;
   const rawDetails = key && profile.data?.sealed_txn_details ? openPacked(profile.data.sealed_txn_details, key) : null;
+  const rawOrders = key && profile.data?.sealed_order_notes ? openPacked(profile.data.sealed_order_notes, key) : null;
   if (profile.data)
-    stale.profile(profile.data, { sealed_category_rules: rawRules, sealed_manual_items: rawManual, sealed_home_values: rawHomes, sealed_wallets: rawWallets, sealed_p2p_notes: rawP2p, sealed_txn_details: rawDetails });
+    stale.profile(profile.data, {
+      sealed_category_rules: rawRules,
+      sealed_manual_items: rawManual,
+      sealed_home_values: rawHomes,
+      sealed_wallets: rawWallets,
+      sealed_p2p_notes: rawP2p,
+      sealed_txn_details: rawDetails,
+      sealed_order_notes: rawOrders,
+    });
   // A part that won't open under any key in the ring counts as missing, and its import as unfinished.
   const parts = (imported.data ?? []).map((r) => {
     const opened = key ? openPacked(r.sealed, key) : null;
@@ -197,6 +210,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     homeValues: rawHomes === null ? [] : validHomeValues(rawHomes),
     wallets: rawWallets === null ? [] : validWallets(rawWallets),
     p2pNotes: rawP2p === null ? NO_P2P_NOTES : validP2pNotes(rawP2p),
+    orderNotes: rawOrders === null ? NO_ORDER_NOTES : validOrderNotes(rawOrders),
     details: rawDetails === null ? NO_DETAILS : validDetails(rawDetails),
     imports,
     // Without a key nothing opens, so none is known to be locked for good: none is offered for removal.
@@ -269,10 +283,13 @@ function staleSeals(account: Account, key: VaultKey | null) {
      * too big to send as a filter. One write, because a second guarded by
      * the same updated_at would always find it moved by the first.
      */
-    profile(row: ProfileRow, opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values" | "sealed_wallets" | "sealed_p2p_notes" | "sealed_txn_details">) {
+    profile(
+      row: ProfileRow,
+      opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values" | "sealed_wallets" | "sealed_p2p_notes" | "sealed_txn_details" | "sealed_order_notes">,
+    ) {
       const k = key!;
       const patch: Record<string, string> = {};
-      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets", "sealed_p2p_notes", "sealed_txn_details"] as const) {
+      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets", "sealed_p2p_notes", "sealed_txn_details", "sealed_order_notes"] as const) {
         if (opened[column] !== null && due(row[column])) patch[column] = sealPacked(opened[column], k);
       }
       if (Object.keys(patch).length === 0) return;
@@ -373,6 +390,27 @@ export async function loadAccountP2pNotes(account: Account, key: VaultKey): Prom
 /** Sealed: other people's names and notes about the person's money. Null when there are none left. */
 export function saveAccountP2pNotes(account: Account, notes: P2pNotes, key: VaultKey) {
   return upsertProfile(account, { sealed_p2p_notes: Object.keys(notes.notes).length ? sealPacked(notes, key) : null });
+}
+
+/** What their Amazon charges paid for, read strictly before a save: a failed read never passes for "none". */
+export async function loadAccountOrderNotes(account: Account, key: VaultKey): Promise<OrderNotes> {
+  const { data, error } = await account.supabase.from("profiles").select("sealed_order_notes").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_order_notes">>();
+  if (error) throw new Error("Couldn't read your Amazon orders.");
+  return data?.sealed_order_notes ? validOrderNotes(openPacked(data.sealed_order_notes, key)) : NO_ORDER_NOTES;
+}
+
+/** The longest sealed value the column takes (its check allows 2,000,000): past it, the oldest orders give way. */
+const ORDER_SEALED_MAX = 1_950_000;
+
+/** Sealed: sellers' names for what the person bought. The oldest orders go first if it won't fit; null when there are none left. */
+export async function saveAccountOrderNotes(account: Account, notes: OrderNotes, key: VaultKey): Promise<void> {
+  let kept = Object.entries(notes.notes).sort((a, b) => (a[1].date < b[1].date ? 1 : a[1].date > b[1].date ? -1 : 0));
+  let sealed = kept.length ? sealPacked({ v: 1, notes: Object.fromEntries(kept) }, key) : null;
+  while (sealed !== null && sealed.length > ORDER_SEALED_MAX) {
+    kept = kept.slice(0, Math.floor(kept.length * 0.8));
+    sealed = kept.length ? sealPacked({ v: 1, notes: Object.fromEntries(kept) }, key) : null;
+  }
+  await upsertProfile(account, { sealed_order_notes: sealed });
 }
 
 /** Their splits, tags and who owes them, read strictly before a save: a failed read never passes for "none". */

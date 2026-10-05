@@ -18,6 +18,7 @@ import { openedFrom, TransactionDialog, type Opened } from "@/components/transac
 import { CATEGORIES } from "@/lib/finance/categories";
 import { money, shortDate } from "@/lib/finance/format";
 import { p2pLabel } from "@/lib/finance/p2p";
+import { orderLabel } from "@/lib/finance/orders";
 import { normalizeMerchant } from "@/lib/finance/recurring";
 import type { CategoryId, Transaction } from "@/lib/finance/types";
 import { readLedgerHash } from "@/lib/finance/view";
@@ -77,6 +78,8 @@ export function TransactionsTable({
           normalizeMerchant(t.merchant).includes(q) ||
           money(t.amount).includes(q) ||
           (t.p2p !== undefined && `${t.p2p.name} ${t.p2p.note ?? ""}`.toLowerCase().includes(q)) ||
+          // What an Amazon charge paid for: "dog food".
+          (t.order?.items ?? []).some((i) => i.name.toLowerCase().includes(q)) ||
           // The person's own tags, and who owes them: "vacation", "sam".
           (t.tags ?? []).some((tag) => tag.toLowerCase().includes(q)) ||
           (t.owed !== undefined && t.owed.who.toLowerCase().includes(q))),
@@ -167,6 +170,7 @@ export function TransactionsTable({
                       {t.p2p.note ? ` · ${t.p2p.note}` : ""}
                     </div>
                   ) : null}
+                  {t.order ? <div className="truncate text-xs text-ink-2">{orderLabel(t.order)}</div> : null}
                   <div className="truncate text-xs text-ink-3">
                     {CATEGORIES[t.category].label}
                     {t.split ? ` · part ${t.split.part} of ${t.split.parts}, split by you` : t.bankCategory ? " (changed by you)" : ""} · {accountNames[t.accountId] ?? "Account"}
@@ -203,7 +207,7 @@ export function TransactionsTable({
                   <button
                     type="button"
                     onClick={() => fix(t)}
-                    aria-label={`Open ${t.merchant}${t.p2p ? `, ${p2pLabel(t.p2p)}` : ""}, ${money(t.amount)} on ${shortDate(t.date)}: ${CATEGORIES[t.category].label}${t.split ? `, part ${t.split.part} of ${t.split.parts}` : t.bankCategory ? ", changed by you" : ""}${t.excluded ? ", left out of your totals" : ""}. Change its category, split it, tag it, note who owes you, or leave it out of your totals.`}
+                    aria-label={`Open ${t.merchant}${t.p2p ? `, ${p2pLabel(t.p2p)}` : ""}${t.order ? `, ${orderLabel(t.order)}` : ""}, ${money(t.amount)} on ${shortDate(t.date)}: ${CATEGORIES[t.category].label}${t.split ? `, part ${t.split.part} of ${t.split.parts}` : t.bankCategory ? ", changed by you" : ""}${t.excluded ? ", left out of your totals" : ""}. Change its category, split it, tag it, note who owes you, or leave it out of your totals.`}
                     className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-ctl px-2 py-2.5 text-left transition-colors duration-150 hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
                   >
                     {content}

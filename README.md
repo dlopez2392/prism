@@ -366,6 +366,41 @@ bank transaction's id, who it was to or from, and the note.
 - Payments that stayed in the app's own balance never reached the bank; the
   review says how many, and Prism doesn't count them yet.
 
+## Amazon orders
+
+A bank shows "AMZN Mktp US −$86.40" and nothing more, and Amazon lets no
+other app read an account. On **Connections → Amazon orders**
+(`/connections/amazon`) a signed-in person adds their own order history:
+Amazon → Account → Request your data → Your Orders sends a zip a day or two
+later, and they choose `Retail.OrderHistory.1.csv` from inside it (one row
+per item). Prism reads it **in the browser and never uploads it**
+(`src/lib/finance/orders.ts`). Amazon charges a card as each shipment
+leaves, so a charge is a shipment's items added up (or the whole order's,
+where it was charged once), matched to an Amazon line for exactly that
+amount, dated a day before the shipment to six days after, closest first; an
+item is never counted in two charges. Only the matches are kept: the bank
+transaction's id, the order number, the day it was placed, and each item's
+name, quantity and cost.
+
+- The server trusts no match: each must name one of the person's OWN Amazon
+  lines (money out, after the order, within 120 days of it), and its items
+  must add up to the bank's amount to the cent (`validOrderMatch`). Matches
+  arrive a batch of 150 at a time (`src/lib/server/orders-actions.ts`), so no
+  request nears the size a server action takes.
+- Kept sealed in `profiles.sealed_order_notes` (the profile's policies govern
+  it; no household function names it, and the morning job never reads it),
+  applied where money is assembled (`moneyFor`), so the ledger shows "Dog
+  food, USB-C cable and 2 more" under the charge, its search finds an item
+  by name, the downloads list the items, and connected apps get
+  `amazon_order`. A charge with two or more items offers "Split by its
+  items" in its own dialog: one part per item (the smallest added up past
+  eight), each named, in the line's category until the person picks.
+- Item names are sellers' words: cleaned, length-capped, written as words in
+  spreadsheets, and the MCP instructions tell connected apps they're data,
+  never instructions. The addresses in the file are never read.
+- Orders paid with a gift card or points, charged to a card that isn't
+  linked, or refunded match nothing; the review says how many.
+
 ## Splits, tags and who owes you
 
 A signed-in person opens any of their own transactions on Spending
@@ -696,6 +731,8 @@ select what, key_id, count(*) from (
   select 'wallets', case when sealed_wallets like 'z2.%' then substr(sealed_wallets, 4, 8) else 'unnamed' end from profiles where sealed_wallets is not null
   union all
   select 'payment notes', case when sealed_p2p_notes like 'z2.%' then substr(sealed_p2p_notes, 4, 8) else 'unnamed' end from profiles where sealed_p2p_notes is not null
+  union all
+  select 'amazon orders', case when sealed_order_notes like 'z2.%' then substr(sealed_order_notes, 4, 8) else 'unnamed' end from profiles where sealed_order_notes is not null
   union all
   select 'splits and tags', case when sealed_txn_details like 'z2.%' then substr(sealed_txn_details, 4, 8) else 'unnamed' end from profiles where sealed_txn_details is not null
   union all

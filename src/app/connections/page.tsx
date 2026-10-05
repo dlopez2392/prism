@@ -7,7 +7,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Banknote, Wallet as WalletIcon, FileUp, Gauge, HandCoins, House, KeyRound, Landmark, Lock, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, type LucideIcon } from "lucide-react";
+import { Banknote, FileUp, Gauge, HandCoins, House, KeyRound, Landmark, Lock, Package, Plus, RotateCw, ShieldCheck, Sparkles, TrendingUp, Unplug, Wallet as WalletIcon, type LucideIcon } from "lucide-react";
 import { ConnectBank } from "@/components/connect-bank";
 import { DisconnectButton } from "@/components/disconnect-button";
 import { RemoveImport } from "@/components/remove-import";
@@ -429,6 +429,15 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                           >
                             <HandCoins aria-hidden className="size-4" />
                             {signInFirst ? "Sign in to add your payments" : "Add who you paid"}
+                          </Link>
+                        ) : null}
+                        {it.id === "amazon" && data.accountsEnabled ? (
+                          <Link
+                            href={signInFirst ? "/sign-in?next=%2Fconnections%2Famazon" : "/connections/amazon"}
+                            className="mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-ctl border border-line-strong px-3.5 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
+                          >
+                            <Package aria-hidden className="size-4" />
+                            {signInFirst ? "Sign in to add your orders" : "Add your Amazon orders"}
                           </Link>
                         ) : null}
                         {it.id === "mcp" && data.accountsEnabled ? (

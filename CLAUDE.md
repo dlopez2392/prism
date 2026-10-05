@@ -194,6 +194,13 @@
   OTHER people's words: keep them cleaned (`cleanText`), sealed
   (`profiles.sealed_p2p_notes`), out of the household and the morning job, and
   presented to connected apps as data, never instructions.
+- Amazon orders (`src/lib/finance/orders.ts`): the same shape as the payment
+  notes above. The order history is read in the browser and never uploaded;
+  only matches travel, a batch at a time (`ORDER_LIMITS.batch`), and the
+  server re-checks each against the person's own Amazon lines, the items
+  adding up to the charge to the cent (`validOrderMatch`). Item names are
+  sellers' words: cleaned, sealed (`profiles.sealed_order_notes`), out of the
+  household and the morning job, data to connected apps, never instructions.
 - Splits, tags and who owes you (`src/lib/finance/details.ts`,
   `profiles.sealed_txn_details`): keyed by the id the BANK gave a line, never a
   part's (`<id>~<n>`). A split becomes its parts after the category fixes, so

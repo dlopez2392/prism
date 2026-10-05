@@ -100,10 +100,12 @@ export function transactionsCsv(data: Money, year?: number): string {
         t.owed ? t.owed.who : "",
         t.owed ? amount(t.owed.amount) : null,
         t.owed?.paid ?? "",
+        // What an Amazon charge paid for, from the person's own order history. Last, so the importer reads the file as before.
+        t.order ? t.order.items.map((i) => (i.qty > 1 ? `${i.qty} × ${i.name}` : i.name)).join("; ") : "",
       ];
     });
   return csv(
-    ["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note", "Split", "Tags", "Owed by", "Owed amount", "Paid back on"],
+    ["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note", "Split", "Tags", "Owed by", "Owed amount", "Paid back on", "Amazon items"],
     rows,
   );
 }
@@ -223,6 +225,7 @@ export function everythingJson(data: FinanceData, extras: Extras, profile: Profi
       ...(t.split ? { split: { part: t.split.part, of_parts: t.split.parts, whole_transaction_id: t.split.of, whole_amount: money(t.split.total) } } : {}),
       ...(t.tags ? { tags: t.tags } : {}),
       ...(t.owed ? { owed: { by: t.owed.who, amount: money(t.owed.amount), paid_back_on: t.owed.paid } } : {}),
+      ...(t.order ? { amazon_order: { order_number: t.order.order, ordered_on: t.order.date, items: t.order.items.map((i) => ({ name: i.name, quantity: i.qty, amount: money(i.amount) })) } } : {}),
       account_id: t.accountId,
       pending: t.pending,
     })),
