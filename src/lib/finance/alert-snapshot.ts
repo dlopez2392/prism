@@ -1,7 +1,8 @@
 // src/lib/finance/alert-snapshot.ts
 //
 // What a person's visit leaves for the alert email job, which can't read
-// their money itself: the alerts the visit found (alerts.ts), the week's
+// their money itself: the alerts the visit found (alerts.ts), already in
+// words, in the language the person reads Prism in; the week's
 // numbers for a Monday summary, the last whole month's for the recap early in
 // the month, and the next two weeks' bills. Sealed with
 // the vault key before it's stored, and kept only while their alert emails
@@ -15,6 +16,8 @@ import { categoryTotals, sumIncome, sumSpending } from "./cashflow";
 import { CATEGORIES } from "./categories";
 import type { Analysis } from "./model";
 import type { Cents, ISODate } from "./types";
+import { isLocale, type Locale } from "@/lib/i18n/locale";
+import { EN, type T } from "@/lib/i18n/t";
 
 export type WeeklyNumbers = {
   /** The seven days before the visit's day. */
@@ -57,6 +60,8 @@ export type AlertSnapshot = {
   by: "visit" | "morning";
   /** The visit's own day. */
   today: ISODate;
+  /** The language its alerts' words are in. */
+  lang: Locale;
   /** Bills short and price rises: a bank's warnings come fresher from the database itself. */
   alerts: Alert[];
   weekly: WeeklyNumbers;
@@ -72,7 +77,7 @@ const TOP_CATEGORIES = 3;
 const MAX_UPCOMING = 20;
 const MAX_ALERTS = 20;
 
-export function alertSnapshot(a: Analysis, at: string, by: AlertSnapshot["by"] = "visit"): AlertSnapshot {
+export function alertSnapshot(a: Analysis, at: string, by: AlertSnapshot["by"] = "visit", tr: T = EN): AlertSnapshot {
   const txns = a.data.transactions;
   const t = a.today;
   const nw = a.netWorth;
@@ -81,7 +86,8 @@ export function alertSnapshot(a: Analysis, at: string, by: AlertSnapshot["by"] =
     at,
     by,
     today: t,
-    alerts: alertsFor(a)
+    lang: tr.locale,
+    alerts: alertsFor(a, tr)
       .filter((x) => x.kind !== "bank")
       .slice(0, MAX_ALERTS),
     weekly: {
@@ -188,6 +194,8 @@ export function validSnapshot(x: unknown): AlertSnapshot | null {
     // Snapshots from before the morning check were all a visit's.
     by: s.by === "morning" ? "morning" : "visit",
     today: s.today,
+    // Snapshots from before languages were all in English.
+    lang: isLocale(s.lang) ? s.lang : "en",
     alerts: alerts as Alert[],
     weekly: { from: w.from, to: w.to, spent: w.spent, spentBefore: w.spentBefore, month: w.month ? { spent: w.month.spent, limit: w.month.limit } : null, netWorth: w.netWorth, netWorthLastMonth: w.netWorthLastMonth ?? null },
     monthly,

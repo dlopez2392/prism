@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { dayDate, dayRange, monthLong, monthYear, shortDate } from "@/lib/finance/format";
 import { ES, ES_PARTS } from "./es";
-import { englishOnly, pickLocale } from "./locale";
+import { englishOnly, isLocale, pickLocale } from "./locale";
 import { translator } from "./translator";
 
 describe("which language a visit gets", () => {
@@ -23,18 +23,25 @@ describe("which language a visit gets", () => {
     expect(pickLocale("fr", null)).toBe("en");
     expect(pickLocale(undefined, "es;q=0")).toBe("en");
   });
+
+  it("is only ever a language Prism speaks, whatever a cookie, a form or a database row holds", () => {
+    expect(["en", "es"].every(isLocale)).toBe(true);
+    for (const x of ["fr", "ES", "es-MX", "", null, undefined, 1, ["es"], { toString: () => "es" }]) expect(isLocale(x)).toBe(false);
+    expect(pickLocale("ES", "en")).toBe("en");
+  });
 });
 
 describe("screens still only in English", () => {
   it("are the ones listed, and everything under them, and no other", () => {
-    expect(englishOnly("/connections")).toBe(true);
-    expect(englishOnly("/connections/amazon")).toBe(true);
+    expect(englishOnly("/privacy")).toBe(true);
+    expect(englishOnly("/terms")).toBe(true);
+    expect(englishOnly("/connections/amazon")).toBe(false);
     expect(englishOnly("/goals")).toBe(false);
     expect(englishOnly("/")).toBe(false);
     expect(englishOnly("/spending")).toBe(false);
     expect(englishOnly("/sign-in/two-step")).toBe(false);
     // A prefix of a name is not the screen.
-    expect(englishOnly("/connectionsx")).toBe(false);
+    expect(englishOnly("/privacyx")).toBe(false);
   });
 });
 

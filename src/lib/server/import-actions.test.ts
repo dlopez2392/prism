@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/i18n/server", async () => ({ getT: async () => (await import("@/lib/i18n/t")).EN }));
 const refresh = vi.fn();
 vi.mock("next/cache", () => ({ refresh }));
 vi.mock("./finance", () => ({ requestToday: async () => "2026-09-30" }));

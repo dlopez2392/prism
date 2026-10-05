@@ -11,12 +11,22 @@ import { AmazonOrders } from "@/components/amazon-orders";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
 import { isAmazon, type BankLine } from "@/lib/finance/orders";
 import { getPersonalFinance } from "@/lib/server/finance";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Amazon orders" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Amazon orders") };
+}
 
 export default async function AmazonPage() {
-  const data = await getPersonalFinance();
-  const header = <PageHeader eyebrow="Connections" title="Amazon orders" subtitle="What each Amazon charge paid for, on the bank line it came from — not just “AMZN Mktp US −$86.40”." />;
+  const [data, t] = await Promise.all([getPersonalFinance(), getT()]);
+  const header = (
+    <PageHeader
+      eyebrow={t("Connections")}
+      title={t("Amazon orders")}
+      subtitle={t("What each Amazon charge paid for, on the bank line it came from — not just “AMZN Mktp US −$86.40”.")}
+    />
+  );
   const empty = (title: string, body: string, action?: ReactNode) => (
     <div className="space-y-5">
       {header}
@@ -26,25 +36,25 @@ export default async function AmazonPage() {
     </div>
   );
 
-  if (!data.accountsEnabled) return empty("This needs accounts", "What your Amazon charges paid for is kept in an account, and accounts aren't set up on this site.");
+  if (!data.accountsEnabled) return empty(t("This needs accounts"), t("What your Amazon charges paid for is kept in an account, and accounts aren't set up on this site."));
   if (!data.account) {
     return empty(
-      "Sign in to add your Amazon orders",
-      "What each charge paid for is kept, encrypted, in your account, beside the bank line it explains.",
+      t("Sign in to add your Amazon orders"),
+      t("What each charge paid for is kept, encrypted, in your account, beside the bank line it explains."),
       <ButtonLink href="/sign-in?next=%2Fconnections%2Famazon" variant="primary">
-        Sign in
+        {t("Sign in")}
       </ButtonLink>,
     );
   }
   // Only the person's own Amazon charges go to the browser: what a match needs, and nothing more.
-  const lines: BankLine[] = data.source === "demo" ? [] : data.transactions.filter((t) => t.amount < 0 && isAmazon(t.merchant)).map(({ id, date, amount, merchant }) => ({ id, date, amount, merchant }));
-  const noted = data.source === "demo" ? 0 : data.transactions.filter((t) => t.order).length;
+  const lines: BankLine[] = data.source === "demo" ? [] : data.transactions.filter((txn) => txn.amount < 0 && isAmazon(txn.merchant)).map(({ id, date, amount, merchant }) => ({ id, date, amount, merchant }));
+  const noted = data.source === "demo" ? 0 : data.transactions.filter((txn) => txn.order).length;
   if (lines.length === 0) {
     return empty(
-      "No Amazon charges yet",
-      "Your Amazon charges appear here once the card or bank you pay Amazon with is linked. Then add your order history, and every charge says what it paid for.",
+      t("No Amazon charges yet"),
+      t("Your Amazon charges appear here once the card or bank you pay Amazon with is linked. Then add your order history, and every charge says what it paid for."),
       <ButtonLink href="/connections" variant="primary">
-        Link a card
+        {t("Link a card")}
       </ButtonLink>,
     );
   }

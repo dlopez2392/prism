@@ -5,6 +5,8 @@
 // from Plaid's CDN only when someone asks to connect; nothing third-party
 // loads before that.
 
+import { msg } from "@/lib/i18n/t";
+
 export type PlaidHandler = { open: () => void; destroy: () => void };
 export type LinkSuccessMetadata = { institution?: { name?: string } | null };
 export type LinkExitError = { display_message?: string | null; error_message?: string } | null;
@@ -42,7 +44,7 @@ export function loadLink(): Promise<PlaidLinkFactory> {
     const fail = () => {
       s.remove();
       loading = null;
-      reject(new Error("Plaid Link failed to load."));
+      reject(new Error(msg("Plaid Link failed to load.")));
     };
     s.addEventListener("load", () => (window.Plaid ? resolve(window.Plaid) : fail()));
     s.addEventListener("error", fail);
@@ -61,10 +63,10 @@ export async function saveBank(publicToken: string): Promise<SavedBank> {
   try {
     const res = await fetch("/api/plaid/exchange", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publicToken }) });
     const json = (await res.json().catch(() => ({}))) as { error?: string; message?: string; institutionName?: string | null };
-    if (res.status === 401 && json.error === "sign_in_required") return { ok: false, message: json.message ?? "Sign in to connect a bank.", signIn: true };
-    if (!res.ok) return { ok: false, message: json.message ?? "The bank linked, but we couldn't save it. Try again." };
+    if (res.status === 401 && json.error === "sign_in_required") return { ok: false, message: json.message ?? msg("Sign in to connect a bank."), signIn: true };
+    if (!res.ok) return { ok: false, message: json.message ?? msg("The bank linked, but we couldn't save it. Try again.") };
     return { ok: true, institutionName: json.institutionName ?? null };
   } catch {
-    return { ok: false, message: "The bank linked, but we couldn't reach Prism to save it. Check your connection and try again." };
+    return { ok: false, message: msg("The bank linked, but we couldn't reach Prism to save it. Check your connection and try again.") };
   }
 }

@@ -44,6 +44,10 @@ test.describe("a browser that asks for Spanish first", () => {
     { path: "/future", title: /^Futuro$/, says: /Disponible para gastar/ },
     { path: "/year", title: /^Tu \d{4}$/, says: /./ },
     { path: "/taxes", title: /^Tus impuestos de \d{4}$/, says: /./ },
+    { path: "/connections", title: /^Conexiones$/, says: /Conectar un banco/ },
+    { path: "/connections/import", title: /./, says: /./ },
+    { path: "/connections/payments", title: /./, says: /./ },
+    { path: "/connections/amazon", title: /./, says: /./ },
   ];
 
   for (const s of SCREENS) {
@@ -68,9 +72,9 @@ test.describe("a browser that asks for Spanish first", () => {
   });
 
   test("a screen not yet in Spanish says its words are English, so a screen reader reads them in an English voice", async ({ page }) => {
-    await page.goto("/connections");
+    await page.goto("/privacy");
     await expect(page.locator("html")).toHaveAttribute("lang", "es");
-    await expect(page.getByRole("main").locator("[lang=en]").first()).toContainText("Connections");
+    await expect(page.getByRole("main").locator("[lang=en]").first()).toContainText("Privacy");
     await page.goto("/budgets");
     await expect(page.getByRole("main").locator("[lang=en]")).toHaveCount(0);
   });

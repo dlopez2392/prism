@@ -20,6 +20,9 @@
 // Each piece is sent once: its fingerprint (sha256 of the person and the
 // alert's occasion) is recorded after sending, and anything already recorded
 // is left out. With amounts off, every line uses its wording without dollars.
+// Every word is in the language of `t`, the one the person reads Prism in
+// (profiles.language); a bill or a price comes in the words the snapshot
+// already holds, which the job sees are in the same language (job.ts).
 
 import { createHash } from "node:crypto";
 import { BRAND } from "@/lib/brand";
@@ -28,6 +31,7 @@ import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
 import { addDays, addMonths, dayOfMonth, dayOfWeek, daysBetween, monthKey, startOfMonth } from "@/lib/finance/dates";
 import { dayDate, money0, monthLong, percent, shortDate } from "@/lib/finance/format";
 import type { Cents, ISODate } from "@/lib/finance/types";
+import { EN, msg, type T } from "@/lib/i18n/t";
 
 export { ALERT_CHOICES, isAlertChoice, type AlertChoice } from "./choices";
 import type { AlertChoice } from "./choices";
@@ -92,25 +96,38 @@ export function localDay(zone: string | null, now: Date): ISODate {
 const isoDay = (t: string): ISODate => t.slice(0, 10) as ISODate;
 /** An alert's occasion, its words, and whether a snapshot's figures are behind it. */
 type Candidate = { id: string; item: EmailItem; fromSnapshot: boolean };
-const SIGN_IN = "Sign in again on Connections and it carries on where it left off.";
+/** What alerts_due calls a bank Plaid gave no name. */
+const UNNAMED_BANK = msg("Your bank");
+const product = BRAND.product;
 
-function bankItems(r: Recipient, now: Date): Candidate[] {
+function bankItems(r: Recipient, now: Date, t: T): Candidate[] {
   const out: Candidate[] = [];
   for (const b of r.banks) {
+    const bank = b.name === UNNAMED_BANK ? t(UNNAMED_BANK) : b.name;
     if (b.attention === "disconnecting") {
       // Past its date it has already stopped: the sign-in Plaid asks for next is its own alert.
       if (!b.disconnectAt || !(Date.parse(b.disconnectAt) > now.getTime())) continue;
       const on = isoDay(b.disconnectAt);
       out.push({
         id: `bank:${b.id}:disconnect:${on}`,
-        item: { title: `${b.name} stops updating on ${dayDate(on)}`, detail: "Unless you sign in again before then. It takes a minute on Connections, and nothing is lost.", href: "/connections", urgent: true },
+        item: {
+          title: t("{bank} stops updating on {date}", { bank, date: dayDate(on, t.locale) }),
+          detail: t("Unless you sign in again before then. It takes a minute on Connections, and nothing is lost."),
+          href: "/connections",
+          urgent: true,
+        },
         fromSnapshot: false,
       });
     } else {
       // Dated by when Plaid said so, so the same bank needing it again next month is news again.
       out.push({
         id: `bank:${b.id}:${b.attention}:${b.since ? isoDay(b.since) : "undated"}`,
-        item: { title: `${b.name} needs you to sign in again`, detail: `Until you do, ${BRAND.product} can't see anything new from it. ${SIGN_IN}`, href: "/connections", urgent: true },
+        item: {
+          title: t("{bank} needs you to sign in again", { bank }),
+          detail: `${t("Until you do, {product} can't see anything new from it.", { product })} ${t("Sign in again on Connections and it carries on where it left off.")}`,
+          href: "/connections",
+          urgent: true,
+        },
         fromSnapshot: false,
       });
     }
@@ -131,103 +148,161 @@ function snapshotItems(r: Recipient, snap: AlertSnapshot, today: ISODate): Candi
     });
 }
 
+/** How a change reads: with its amount ({amount}), without, and when it's too small to name. */
+type Change = { more: string; less: string; moreBy: string; lessBy: string; same: string };
+
+const WEEK_SPENT: Change = {
+  more: msg("more than the week before"),
+  less: msg("less than the week before"),
+  moreBy: msg("{amount} more than the week before"),
+  lessBy: msg("{amount} less than the week before"),
+  same: msg("about the same as the week before"),
+};
+const SINCE_LAST_MONTH: Change = {
+  more: msg("up since the end of last month"),
+  less: msg("down since the end of last month"),
+  moreBy: msg("{amount} up since the end of last month"),
+  lessBy: msg("{amount} down since the end of last month"),
+  same: msg("level with the end of last month"),
+};
+const MONTH_SPENT: Change = {
+  more: msg("more spent than in {month}"),
+  less: msg("less spent than in {month}"),
+  moreBy: msg("{amount} more spent than in {month}"),
+  lessBy: msg("{amount} less spent than in {month}"),
+  same: msg("about the same spent as in {month}"),
+};
+
 /** "$40 more than the week before", "less than the week before": a change in words, never an arrow. */
-function compared(now: Cents, before: Cents, amounts: boolean, more: string, less: string, same: string): string {
+function compared(now: Cents, before: Cents, amounts: boolean, words: Change, t: T, vars: Record<string, string> = {}): string {
   const d = now - before;
-  if (Math.abs(d) < 100) return same;
-  if (!amounts) return d > 0 ? more : less;
-  return `${money0(Math.abs(d))} ${d > 0 ? more : less}`;
+  if (Math.abs(d) < 100) return t(words.same, vars);
+  if (!amounts) return t(d > 0 ? words.more : words.less, vars);
+  return t(d > 0 ? words.moreBy : words.lessBy, { ...vars, amount: money0(Math.abs(d)) });
 }
 
-function summaryOf(r: Recipient, snap: AlertSnapshot | null, today: ISODate, fresh: boolean): Summary {
-  const title = "Your week";
+function summaryOf(r: Recipient, snap: AlertSnapshot | null, today: ISODate, fresh: boolean, t: T): Summary {
+  const { locale } = t;
+  const title = t("Your week");
   if (!snap || !fresh) {
-    const seen = snap ? `since ${dayDate(snap.today)}` : "lately";
-    return { title, lines: [], note: `${BRAND.product} hasn't looked at your accounts ${seen}, so there are no new figures this week. Open ${BRAND.product} and next Monday's summary will have them.` };
+    const unseen = snap
+      ? t("{product} hasn't looked at your accounts since {date}, so there are no new figures this week.", { product, date: dayDate(snap.today, locale) })
+      : t("{product} hasn't looked at your accounts lately, so there are no new figures this week.", { product });
+    return { title, lines: [], note: `${unseen} ${t("Open {product} and next Monday's summary will have them.", { product })}` };
   }
   const w = snap.weekly;
   const lines: SummaryLine[] = [];
-  const spentWords = compared(w.spent, w.spentBefore, r.amounts, "more than the week before", "less than the week before", "about the same as the week before");
+  const change = compared(w.spent, w.spentBefore, r.amounts, WEEK_SPENT, t);
+  const from = shortDate(w.from, locale);
+  const to = shortDate(w.to, locale);
   lines.push({
-    label: "Spent",
-    value: r.amounts ? `${money0(w.spent)} from ${shortDate(w.from)} to ${shortDate(w.to)}, ${spentWords}` : `${spentWords.charAt(0).toUpperCase()}${spentWords.slice(1)}, ${shortDate(w.from)} to ${shortDate(w.to)}`,
+    label: t("Spent"),
+    value: r.amounts ? t("{amount} from {from} to {to}, {change}", { amount: money0(w.spent), from, to, change }) : t("{Change}, {from} to {to}", { change, from, to }),
   });
   if (w.month && w.month.limit > 0) {
     lines.push({
-      label: "Budgets",
-      value: r.amounts ? `${money0(w.month.spent)} of ${money0(w.month.limit)} used so far this month` : `${percent(w.month.spent / w.month.limit)} used so far this month`,
+      label: t("Budgets"),
+      value: r.amounts
+        ? t("{spent} of {limit} used so far this month", { spent: money0(w.month.spent), limit: money0(w.month.limit) })
+        : t("{percent} used so far this month", { percent: percent(w.month.spent / w.month.limit) }),
     });
   }
   if (w.netWorthLastMonth !== null) {
-    const change = compared(w.netWorth, w.netWorthLastMonth, r.amounts, "up since the end of last month", "down since the end of last month", "level with the end of last month");
-    lines.push({ label: "Net worth", value: r.amounts ? `${money0(w.netWorth)}, ${change}` : `${change.charAt(0).toUpperCase()}${change.slice(1)}` });
+    const moved = compared(w.netWorth, w.netWorthLastMonth, r.amounts, SINCE_LAST_MONTH, t);
+    lines.push({ label: t("Net worth"), value: r.amounts ? `${money0(w.netWorth)}, ${moved}` : cap(moved, locale) });
   }
   if (snap.upcoming !== null) {
     const soon = snap.upcoming.filter((u) => u.date >= today && u.date <= addDays(today, BILL_LEAD_DAYS));
     lines.push({
-      label: "Coming up",
+      label: t("Coming up"),
       value: soon.length
         ? soon
             .slice(0, 6)
-            .map((u) => (r.amounts ? `${u.name} ${money0(u.amount)} on ${dayDate(u.date)}` : `${u.name} on ${dayDate(u.date)}`))
-            .join("; ") + (soon.length > 6 ? `; and ${soon.length - 6} more` : "")
-        : `Nothing ${BRAND.product} knows of is due in the next seven days.`,
+            .map((u) => {
+              const date = dayDate(u.date, locale);
+              return r.amounts ? t("{name} {amount} on {date}", { name: u.name, amount: money0(u.amount), date }) : t("{name} on {date}", { name: u.name, date });
+            })
+            .join("; ") + (soon.length > 6 ? `; ${t("and {n} more", { n: soon.length - 6 })}` : "")
+        : t("Nothing {product} knows of is due in the next seven days.", { product }),
     });
   }
   return { title, lines, note: null };
 }
 
-const cap = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
-const list = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+const cap = (s: string, locale: T["locale"]) => `${s.charAt(0).toLocaleUpperCase(locale)}${s.slice(1)}`;
+function list(xs: string[], t: T): string {
+  return xs.length <= 1 ? xs.join("") : t("{list} and {last}", { list: xs.slice(0, -1).join(", "), last: xs.at(-1)! });
+}
 
 /**
  * Last month, in a few lines, early in this one: once a snapshot taken this
  * month has it, or on the 7th saying why it can't. Null while it waits, and
  * for a month Prism didn't hold whole (nothing to sum up, nothing wrong).
  */
-function recapOf(r: Recipient, snap: AlertSnapshot | null, today: ISODate): { id: string; summary: Summary } | null {
+function recapOf(r: Recipient, snap: AlertSnapshot | null, today: ISODate, t: T): { id: string; summary: Summary } | null {
   if (dayOfMonth(today) > RECAP_LAST_DAY) return null;
+  const { locale } = t;
   const thisMonth = startOfMonth(today);
   const month = monthKey(addMonths(thisMonth, -1));
-  const name = monthLong(`${month}-01`);
+  const name = monthLong(`${month}-01`, locale);
   const id = `monthly:${month}`;
-  const title = `Your ${name}`;
+  const title = t("Your {month}", { month: name });
   const seenThisMonth = snap !== null && snap.today >= thisMonth;
   const m = seenThisMonth ? snap.monthly : null;
   if (!m || m.month !== month) {
     if (seenThisMonth || dayOfMonth(today) < RECAP_LAST_DAY) return null;
-    const seen = snap ? `since ${dayDate(snap.today)}` : "lately";
-    return { id, summary: { title, lines: [], note: `${BRAND.product} hasn't looked at your accounts ${seen}, so it can't sum up ${name} here. Open ${BRAND.product} to see it on Cash flow.` } };
+    const unseen = snap
+      ? t("{product} hasn't looked at your accounts since {date}, so it can't sum up {month} here.", { product, date: dayDate(snap.today, locale), month: name })
+      : t("{product} hasn't looked at your accounts lately, so it can't sum up {month} here.", { product, month: name });
+    return { id, summary: { title, lines: [], note: `${unseen} ${t("Open {product} to see it on Cash flow.", { product })}` } };
   }
   const lines: SummaryLine[] = [];
   const kept = m.income - m.spent;
+  const inOut = { income: money0(m.income), spent: money0(m.spent), kept: money0(Math.abs(kept)) };
   lines.push({
-    label: "In and out",
+    label: t("In and out"),
     value: r.amounts
-      ? `${money0(m.income)} came in and ${money0(m.spent)} went out, so you ${kept >= 0 ? `kept ${money0(kept)}` : `spent ${money0(-kept)} more than came in`}`
+      ? kept >= 0
+        ? t("{income} came in and {spent} went out, so you kept {kept}", inOut)
+        : t("{income} came in and {spent} went out, so you spent {kept} more than came in", inOut)
       : kept >= 0
-        ? "You kept some of what came in"
-        : "You spent more than came in",
+        ? t("You kept some of what came in")
+        : t("You spent more than came in"),
   });
   if (m.before) {
-    const prev = monthLong(`${monthKey(addMonths(`${month}-01`, -1))}-01`);
-    const spent = compared(m.spent, m.before.spent, r.amounts, `more spent than in ${prev}`, `less spent than in ${prev}`, `about the same spent as in ${prev}`);
-    lines.push({ label: `Against ${prev}`, value: cap(spent) });
+    const prev = monthLong(`${monthKey(addMonths(`${month}-01`, -1))}-01`, locale);
+    const spent = compared(m.spent, m.before.spent, r.amounts, MONTH_SPENT, t, { month: prev });
+    lines.push({ label: t("Against {month}", { month: prev }), value: cap(spent, locale) });
   }
   if (m.top.length) {
-    lines.push({ label: "Where it went", value: r.amounts ? m.top.map((t) => `${t.label} ${money0(t.spent)}`).join(", ") : list(m.top.map((t) => t.label)) });
+    // A category's own name, translated here: the snapshot keeps it in English.
+    const top = m.top.map((x) => ({ label: t(x.label), spent: x.spent }));
+    lines.push({ label: t("Where it went"), value: r.amounts ? top.map((x) => `${x.label} ${money0(x.spent)}`).join(", ") : list(top.map((x) => x.label), t) });
   }
   if (m.netWorth) {
     const c = m.netWorth.change;
-    const way = Math.abs(c) < 100 ? "about level" : c > 0 ? "up" : "down";
-    const moved = way === "about level" || !r.amounts ? `${way} over the month` : `${way} ${money0(Math.abs(c))} over the month`;
-    lines.push({ label: "Net worth", value: r.amounts ? `${money0(m.netWorth.end)} at the end of ${name}, ${moved}` : cap(moved) });
+    const moved =
+      Math.abs(c) < 100
+        ? t("about level over the month")
+        : !r.amounts
+          ? c > 0
+            ? t("up over the month")
+            : t("down over the month")
+          : c > 0
+            ? t("up {amount} over the month", { amount: money0(c) })
+            : t("down {amount} over the month", { amount: money0(-c) });
+    lines.push({ label: t("Net worth"), value: r.amounts ? t("{amount} at the end of {month}, {change}", { amount: money0(m.netWorth.end), month: name, change: moved }) : cap(moved, locale) });
   }
   if (m.ahead) {
-    const bills = `${m.ahead.count} ${m.ahead.count === 1 ? "bill" : "bills"} in the next 30 days`;
+    const bills = m.ahead.count === 1 ? t("1 bill in the next 30 days") : t("{n} bills in the next 30 days", { n: m.ahead.count });
     lines.push({
-      label: "Coming up",
-      value: m.ahead.count === 0 ? `Nothing ${BRAND.product} knows of is due in the next 30 days.` : r.amounts ? `${bills}, about ${money0(m.ahead.total)} in all` : cap(bills),
+      label: t("Coming up"),
+      value:
+        m.ahead.count === 0
+          ? t("Nothing {product} knows of is due in the next 30 days.", { product })
+          : r.amounts
+            ? t("{bills}, about {amount} in all", { bills, amount: money0(m.ahead.total) })
+            : cap(bills, locale),
     });
   }
   return { id, summary: { title, lines, note: null } };
@@ -237,13 +312,13 @@ function clip(s: string): string {
   return s.length <= SUBJECT_MAX ? s : `${s.slice(0, SUBJECT_MAX - 1).trimEnd()}…`;
 }
 
-/** Today's email for this person, or null when there's nothing new to send. */
-export function emailFor(r: Recipient, now: Date): Email | null {
+/** Today's email for this person, in the language of `t`, or null when there's nothing new to send. */
+export function emailFor(r: Recipient, now: Date, t: T = EN): Email | null {
   const today = localDay(r.timeZone, now);
   const snap = r.snapshot;
   // A snapshot from "tomorrow" (a visit from a zone ahead of the stored one) counts as fresh.
   const fresh = snap !== null && daysBetween(snap.today, today) <= SNAPSHOT_FRESH_DAYS;
-  const candidates = [...(r.kinds.includes("bank") ? bankItems(r, now) : []), ...(snap && fresh ? snapshotItems(r, snap, today) : [])];
+  const candidates = [...(r.kinds.includes("bank") ? bankItems(r, now, t) : []), ...(snap && fresh ? snapshotItems(r, snap, today) : [])];
 
   const prints: string[] = [];
   const chosen: Candidate[] = [];
@@ -257,7 +332,7 @@ export function emailFor(r: Recipient, now: Date): Email | null {
 
   let summary: Summary | null = null;
   if (r.kinds.includes("weekly")) {
-    const recap = recapOf(r, snap, today);
+    const recap = recapOf(r, snap, today, t);
     const f = recap ? fingerprint(r.userId, recap.id) : null;
     if (recap && f && !r.sent.has(f)) {
       summary = recap.summary;
@@ -267,14 +342,14 @@ export function emailFor(r: Recipient, now: Date): Email | null {
   if (!summary && r.kinds.includes("weekly") && dayOfWeek(today) === 1) {
     const f = fingerprint(r.userId, `weekly:${today}`);
     if (!r.sent.has(f)) {
-      summary = summaryOf(r, snap, today, fresh);
+      summary = summaryOf(r, snap, today, fresh, t);
       prints.push(f);
     }
   }
   if (items.length === 0 && !summary) return null;
 
   const [first] = items;
-  const subject = first ? clip(items.length > 1 ? `${first.title}, and ${items.length - 1} more` : first.title) : `${summary!.title} in ${BRAND.product}`;
+  const subject = first ? clip(items.length > 1 ? t("{title}, and {n} more", { title: first.title, n: items.length - 1 }) : first.title) : t("{title} in {product}", { title: summary!.title, product });
   const fromSnapshot = chosen.some((c) => c.fromSnapshot) || (summary !== null && summary.note === null);
   return { subject, items, summary, asOf: fromSnapshot && snap ? { day: snap.today, by: snap.by } : null, fingerprints: prints };
 }
@@ -288,16 +363,17 @@ const BODY_MAX = 240;
  * The email, as one notification for each device the person lets Prism
  * notify. The first (most urgent) item leads, in the same words as the email,
  * so a phone never shows an amount the person turned off; the rest are
- * counted, and they're in the email. Only ever a path on Prism to open.
+ * counted, and they're in the email. Only ever a path on Prism to open. In
+ * the email's language, `t`.
  */
-export function phoneAlertFor(email: Email): PhoneAlert {
+export function phoneAlertFor(email: Email, t: T = EN): PhoneAlert {
   const [first, ...rest] = email.items;
   const fit = (s: string) => (s.length <= BODY_MAX ? s : `${s.slice(0, BODY_MAX - 1).trimEnd()}…`);
   if (first) {
     const more = rest.length + (email.summary ? 1 : 0);
-    return { title: clip(first.title), body: fit(more ? `${first.detail} And ${more} more in today's email.` : first.detail), url: first.href };
+    return { title: clip(first.title), body: fit(more ? `${first.detail} ${t("And {n} more in today's email.", { n: more })}` : first.detail), url: first.href };
   }
   const s = email.summary;
-  const line = s?.note ?? (s?.lines[0] ? `${s.lines[0].label}: ${s.lines[0].value}` : `Open ${BRAND.product} for this week's figures.`);
-  return { title: `${s?.title ?? "Your week"} in ${BRAND.product}`, body: fit(line), url: "/" };
+  const line = s?.note ?? (s?.lines[0] ? `${s.lines[0].label}: ${s.lines[0].value}` : t("Open {product} for this week's figures.", { product }));
+  return { title: t("{title} in {product}", { title: s?.title ?? t("Your week"), product }), body: fit(line), url: "/" };
 }

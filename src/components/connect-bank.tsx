@@ -110,7 +110,8 @@ export function ConnectBank({
             return;
           }
           if (!saved.ok) {
-            setState({ kind: "error", message: saved.message });
+            // The server's words are already in the page's language; Prism's own fallbacks are translated here.
+            setState({ kind: "error", message: t(saved.message) });
             return;
           }
           const bank = saved.institutionName ?? t("Your bank");
@@ -134,7 +135,7 @@ export function ConnectBank({
       handler.open();
       setState({ kind: "idle" });
     } catch (e) {
-      setState({ kind: "error", message: (e as Error).message });
+      setState({ kind: "error", message: t((e as Error).message) });
     }
   }
 

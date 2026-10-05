@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const signedIn = { current: { userId: "u1", email: "a@x.test", supabase: {} } as unknown };
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn.current }));
 vi.mock("next/cache", () => ({ refresh: vi.fn() }));
+vi.mock("@/lib/i18n/server", async () => ({ getT: async () => (await import("@/lib/i18n/t")).EN }));
 vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
     throw new Error(`redirect ${to}`);

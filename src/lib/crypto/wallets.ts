@@ -19,6 +19,7 @@
 // Pure: the balance services are in balances.ts, the checksums in address.ts.
 
 import type { Account, Cents, Holding, Institution } from "@/lib/finance/types";
+import { msg } from "@/lib/i18n/t";
 
 export type Chain = "bitcoin" | "ethereum" | "solana";
 
@@ -187,7 +188,7 @@ export function walletsInstitution(wallets: Wallet[]): Institution {
   const times = wallets.map((w) => w.reading?.at ?? null);
   const unread = times.some((t) => t === null);
   const oldest = times.filter((t): t is string => t !== null).sort()[0] ?? null;
-  return { id: WALLETS_INSTITUTION_ID, name: "Your wallets", health: unread ? "needs_attention" : "healthy", lastSyncedAt: oldest, source: "wallet" };
+  return { id: WALLETS_INSTITUTION_ID, name: msg("Your wallets"), health: unread ? "needs_attention" : "healthy", lastSyncedAt: oldest, source: "wallet" };
 }
 
 /** "0.0512 BTC": the amount, to a sensible number of places for its asset. */

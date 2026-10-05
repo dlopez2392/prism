@@ -32,6 +32,7 @@ import type { CreditScore } from "@/lib/finance/types";
 import { getFinance } from "@/lib/server/finance";
 import { getT } from "@/lib/i18n/server";
 import { msg, type T } from "@/lib/i18n/t";
+import { WALLETS_INSTITUTION_ID } from "@/lib/crypto/wallets";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
@@ -70,7 +71,7 @@ export default async function NetWorthPage() {
   // A bank's name is its own; "Added by you" is Prism's, in the person's language.
   const institutionName = (id: string) => {
     const name = institutions.get(id);
-    return name === undefined ? "—" : id === MANUAL_INSTITUTION_ID ? t(MANUAL_INSTITUTION_NAME) : name;
+    return name === undefined ? "—" : id === MANUAL_INSTITUTION_ID ? t(MANUAL_INSTITUTION_NAME) : id === WALLETS_INSTITUTION_ID ? t("Your wallets") : name;
   };
   // Which of their own accounts count in their totals: every one they have, those left out included, so any can come back.
   const hiddenAccounts = data.hiddenAccounts ?? [];

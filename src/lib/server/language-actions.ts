@@ -8,11 +8,11 @@
 // "es". Setting a cookie here re-renders the page in the same response.
 
 import { cookies } from "next/headers";
-import { LANG_COOKIE, LOCALES, type Locale } from "@/lib/i18n/locale";
+import { isLocale, LANG_COOKIE } from "@/lib/i18n/locale";
 
 export async function chooseLanguage(locale: unknown): Promise<void> {
-  if (!LOCALES.includes(locale as Locale)) return;
-  (await cookies()).set(LANG_COOKIE, locale as Locale, {
+  if (!isLocale(locale)) return;
+  (await cookies()).set(LANG_COOKIE, locale, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

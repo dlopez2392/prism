@@ -11,6 +11,7 @@
 
 import { CATEGORIES } from "./categories";
 import type { AccountKind, Cents, CategoryId, ISODate } from "./types";
+import { EN, type T } from "@/lib/i18n/t";
 
 export const IMPORT_LIMITS = {
   /** A file bigger than this isn't a transaction export. */
@@ -220,16 +221,19 @@ export function categoryFrom(label: string, amount: Cents): CategoryId {
 export type MappedRow = ImportRow & { account: string };
 export type Skipped = { line: number; reason: string };
 
-/** Every row the chosen columns can read, and the ones they can't, with why (line numbers as a spreadsheet shows them). */
-export function mapRows(rows: string[][], map: ColumnMap, today: ISODate): { rows: MappedRow[]; skipped: Skipped[] } {
+/**
+ * Every row the chosen columns can read, and the ones they can't, with why (line numbers as a spreadsheet shows
+ * them), said in the page's language, as is the name an account without one in the file starts with.
+ */
+export function mapRows(rows: string[][], map: ColumnMap, today: ISODate, t: T = EN): { rows: MappedRow[]; skipped: Skipped[] } {
   const out: MappedRow[] = [];
   const skipped: Skipped[] = [];
   const cell = (r: string[], i: number | null) => (i === null ? "" : (r[i] ?? "").trim());
   rows.forEach((r, n) => {
     const line = n + 2;
     const date = parseDate(cell(r, map.date));
-    if (!date) return void skipped.push({ line, reason: "no date Prism can read" });
-    if (date > today || date < IMPORT_LIMITS.oldest) return void skipped.push({ line, reason: "a date outside the years Prism keeps" });
+    if (!date) return void skipped.push({ line, reason: t("no date Prism can read") });
+    if (date > today || date < IMPORT_LIMITS.oldest) return void skipped.push({ line, reason: t("a date outside the years Prism keeps") });
     let amount: Cents | null;
     if (map.amount !== null) {
       amount = parseAmount(cell(r, map.amount));
@@ -243,16 +247,16 @@ export function mapRows(rows: string[][], map: ColumnMap, today: ISODate): { row
       const inn = parseAmount(cell(r, map.credit));
       amount = out !== null && out !== 0 ? -Math.abs(out) : inn !== null ? Math.abs(inn) : out;
     }
-    if (amount === null) return void skipped.push({ line, reason: "no amount Prism can read" });
-    if (amount === 0) return void skipped.push({ line, reason: "an amount of zero" });
+    if (amount === null) return void skipped.push({ line, reason: t("no amount Prism can read") });
+    if (amount === 0) return void skipped.push({ line, reason: t("an amount of zero") });
     const merchant = cell(r, map.merchant).replace(/\s+/g, " ").slice(0, IMPORT_LIMITS.merchant);
-    if (!merchant) return void skipped.push({ line, reason: "no description" });
+    if (!merchant) return void skipped.push({ line, reason: t("no description") });
     out.push({
       date,
       amount,
       merchant,
       category: categoryFrom(cell(r, map.category), amount),
-      account: cell(r, map.account).slice(0, IMPORT_LIMITS.account) || "Imported account",
+      account: cell(r, map.account).slice(0, IMPORT_LIMITS.account) || t("Imported account"),
     });
   });
   return { rows: out, skipped };

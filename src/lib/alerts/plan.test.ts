@@ -1,11 +1,13 @@
 // Which alerts one person's email carries today (plan.ts): bank warnings
 // straight from the database, bills and price rises only from a recent
 // visit, the Monday summary on their own Monday even when there's nothing
-// new to say, each piece once, and no dollar amount when they asked for none.
+// new to say, each piece once, and no dollar amount when they asked for none;
+// and all of it in Spanish for someone who reads Prism in Spanish.
 
 import { describe, expect, it } from "vitest";
 import type { Alert } from "@/lib/finance/alerts";
 import type { AlertSnapshot, MonthlyNumbers } from "@/lib/finance/alert-snapshot";
+import { translator } from "@/lib/i18n/translator";
 import { emailFor, fingerprint, localDay, phoneAlertFor, type Recipient } from "./plan";
 
 const U = "11111111-1111-4111-8111-111111111111";
@@ -40,6 +42,7 @@ function snapshot(over: Partial<AlertSnapshot> = {}): AlertSnapshot {
     at: "2026-10-04T18:00:00.000Z",
     by: "visit",
     today: "2026-10-04",
+    lang: "en",
     alerts: [bill, rise],
     weekly: { from: "2026-09-27", to: "2026-10-03", spent: 84_000, spentBefore: 80_000, month: { spent: 30_000, limit: 200_000 }, netWorth: 1_250_000, netWorthLastMonth: 1_200_000 },
     monthly: null,
@@ -302,5 +305,83 @@ describe("the recap of last month", () => {
     expect(monday.fingerprints).toEqual([fingerprint(U, "monthly:2026-09")]);
     const next = recap({ snapshot: seen("05"), sent: new Set(monday.fingerprints) }, "05")!;
     expect(next.summary!.title).toBe("Your week");
+  });
+});
+
+describe("in Spanish, for someone who reads Prism in Spanish", () => {
+  const es = translator("es");
+  const september: MonthlyNumbers = {
+    month: "2026-09",
+    income: 582_000,
+    spent: 410_000,
+    before: { income: 560_000, spent: 440_000 },
+    top: [
+      { label: "Housing", spent: 195_000 },
+      { label: "Food & dining", spent: 62_000 },
+      { label: "Transport", spent: 41_000 },
+    ],
+    netWorth: { end: 8_420_000, change: 120_000 },
+    ahead: { count: 9, total: 310_000 },
+  };
+  const recapOn = (day: string, over: Partial<Recipient> = {}) =>
+    emailFor(person({ kinds: ["weekly"], snapshot: snapshot({ today: `2026-10-${day}`, at: `2026-10-${day}T12:00:00.000Z`, alerts: [], monthly: september }), ...over }), new Date(`2026-10-${day}T13:00:00Z`), es)!;
+
+  it("says the Monday summary in Spanish, its dates in Spanish, and its amounts as a U.S. bank writes them", () => {
+    const e = emailFor(person({ kinds: ["weekly"] }), MONDAY, es)!;
+    expect(e.subject).toBe("Tu semana en Prism");
+    expect(e.summary!.lines).toEqual([
+      { label: "Gastado", value: "$840 del 27 sept al 3 oct, $40 más que la semana anterior" },
+      { label: "Presupuestos", value: "$300 de $2,000 usados en lo que va del mes" },
+      { label: "Patrimonio neto", value: "$12,500, subió $500 desde el cierre del mes pasado" },
+      { label: "Lo que viene", value: "Oak Street Rent $1,800 el jue, 8 oct" },
+    ]);
+    // The same fingerprints in either language: a language changed between mornings never sends the same news twice.
+    expect(e.fingerprints).toEqual(emailFor(person({ kinds: ["weekly"] }), MONDAY)!.fingerprints);
+  });
+
+  it("puts a change in words with a capital where it leads, and no dollar figure when amounts are off", () => {
+    const e = emailFor(person({ kinds: ["weekly"], amounts: false }), MONDAY, es)!;
+    expect(e.summary!.lines.map((l) => l.value)).toEqual([
+      "Más que la semana anterior, del 27 sept al 3 oct",
+      "15% usado en lo que va del mes",
+      "Subió desde el cierre del mes pasado",
+      "Oak Street Rent el jue, 8 oct",
+    ]);
+    const stale = emailFor(person({ kinds: ["weekly"], snapshot: snapshot({ today: "2026-09-20", at: "2026-09-20T12:00:00.000Z" }) }), MONDAY, es)!;
+    expect(stale.summary!.note).toBe("Prism no ha revisado tus cuentas desde el dom, 20 sept, así que esta semana no hay cifras nuevas. Abre Prism y el resumen del próximo lunes las tendrá.");
+  });
+
+  it("sums up last month in Spanish, its categories by their Spanish names", () => {
+    const e = recapOn("02");
+    expect(e.subject).toBe("Tu mes de septiembre en Prism");
+    expect(e.summary!.lines).toEqual([
+      { label: "Entradas y salidas", value: "Entraron $5,820 y salieron $4,100, así que ahorraste $1,720" },
+      { label: "Frente a agosto", value: "Gastaste $300 menos que en agosto" },
+      { label: "A dónde se fue", value: "Vivienda $1,950, Comida $620, Transporte $410" },
+      { label: "Patrimonio neto", value: "$84,200 al cierre de septiembre, subió $1,200 en el mes" },
+      { label: "Lo que viene", value: "9 facturas en los próximos 30 días, unos $3,100 en total" },
+    ]);
+    expect(recapOn("02", { amounts: false }).summary!.lines.map((l) => l.value)).toEqual([
+      "Ahorraste parte de lo que entró",
+      "Gastaste menos que en agosto",
+      "Vivienda, Comida y Transporte",
+      "Subió en el mes",
+      "9 facturas en los próximos 30 días",
+    ]);
+  });
+
+  it("names a bank's trouble in Spanish, a bank Plaid gave no name as theirs, and says the same on the phone", () => {
+    const banks = [
+      { id: "item-1", name: "Your bank", attention: "sign-in" as const, since: null, disconnectAt: null },
+      { id: "item-2", name: "First Bank", attention: "disconnecting" as const, since: null, disconnectAt: "2026-10-09T00:00:00Z" },
+    ];
+    const e = emailFor(person({ kinds: ["bank"], banks }), TUESDAY, es)!;
+    expect(e.subject).toBe("Tu banco necesita que vuelvas a iniciar sesión, y 1 más");
+    expect(e.items.map((i) => [i.title, i.detail])).toEqual([
+      ["Tu banco necesita que vuelvas a iniciar sesión", "Hasta que lo hagas, Prism no puede ver nada nuevo de ese banco. Vuelve a iniciar sesión en Conexiones y continuará donde se quedó."],
+      ["First Bank deja de actualizarse el vie, 9 oct", "A menos que vuelvas a iniciar sesión antes. Toma un minuto en Conexiones y no se pierde nada."],
+    ]);
+    expect(phoneAlertFor(e, es).body).toMatch(/ Y 1 más en el correo de hoy\.$/);
+    expect(phoneAlertFor(recapOn("02"), es)).toEqual({ title: "Tu mes de septiembre en Prism", body: "Entradas y salidas: Entraron $5,820 y salieron $4,100, así que ahorraste $1,720", url: "/" });
   });
 });

@@ -1,8 +1,10 @@
 // What a person's own visit leaves for the alert email job (finance.ts,
 // rememberAlerts): a sealed snapshot after the response, only when their
 // emails are on, at most every quarter hour unless the last one is under an
-// older vault key; none for a connected app; and the last one forgotten once
-// nothing of theirs is live.
+// older vault key or in a language they've just left; none for a connected
+// app; and the last one forgotten once nothing of theirs is live. The same
+// visit keeps the language they read Prism in with their account, for the
+// emails, only when it moved.
 
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +13,12 @@ import type { PlaidAccount } from "@/lib/plaid/client";
 vi.mock("server-only", () => ({}));
 const scheduled: (() => unknown)[] = [];
 vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), after: (fn: () => unknown) => void scheduled.push(fn) }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, has: () => false }), headers: async () => new Headers() }));
+/** What the browser asks for, as its Accept-Language. */
+const browser = { language: "" };
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined, has: () => false }),
+  headers: async () => new Headers(browser.language ? { "accept-language": browser.language } : {}),
+}));
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => ({ userId: "u1", email: "a@x.test", supabase: {} }) }));
 
 const checking: PlaidAccount = { account_id: "chk", name: "Checking", official_name: null, mask: "0001", type: "depository", subtype: "checking", balances: { available: 800, current: 800, iso_currency_code: "USD" } };
@@ -20,13 +27,16 @@ const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 const state = {
   alerts: { on: true, kinds: ["bank", "bill-short", "price-rise", "weekly"], amounts: true, takenAt: null as string | null, stale: false },
   linked: true,
+  language: "en",
 };
 const saveAlertSnapshot = vi.fn<(account: unknown, snapshot: unknown, key: unknown) => Promise<void>>(async () => undefined);
 const forgetAlertSnapshot = vi.fn(async () => undefined);
+const saveAccountLanguage = vi.fn<(account: unknown, language: unknown) => Promise<void>>(async () => undefined);
 vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: null,
     timeZone: "UTC",
+    language: state.language,
     plan: { budgets: null, goals: null },
     categories: { v: 1, merchants: {}, transactions: {} },
     manual: [],
@@ -50,6 +60,7 @@ vi.mock("./account-store", () => ({
   clearBankAttention: vi.fn(),
   liveCoinbaseToken: vi.fn(),
   saveAccountPlaidSync: vi.fn(async () => true),
+  saveAccountLanguage,
   saveAccountTimeZone: vi.fn(),
   saveFeedSnapshot: vi.fn(async () => undefined),
   saveCoinbaseValue: vi.fn(),
@@ -71,11 +82,14 @@ describe("what a visit leaves for alert emails", () => {
     vi.stubEnv("PRISM_VAULT_KEY", randomBytes(32).toString("base64"));
     state.alerts = { on: true, kinds: ["bank", "bill-short", "price-rise", "weekly"], amounts: true, takenAt: null, stale: false };
     state.linked = true;
+    state.language = "en";
+    browser.language = "";
   });
   afterEach(() => {
     vi.unstubAllEnvs();
     saveAlertSnapshot.mockClear();
     forgetAlertSnapshot.mockClear();
+    saveAccountLanguage.mockClear();
     scheduled.length = 0;
   });
 
@@ -115,6 +129,34 @@ describe("what a visit leaves for alert emails", () => {
     expect(forgetAlertSnapshot).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the language they read Prism in with their account, after the response, only when it moved, and words the snapshot in it", async () => {
+    await ownVisit();
+    expect(saveAccountLanguage).not.toHaveBeenCalled();
+    expect(saveAlertSnapshot.mock.calls[0]![1]).toMatchObject({ lang: "en" });
+
+    browser.language = "es-MX,es;q=0.9,en;q=0.5";
+    await ownVisit();
+    expect(saveAccountLanguage).toHaveBeenCalledTimes(1);
+    expect(saveAccountLanguage.mock.calls[0]).toEqual([expect.objectContaining({ userId: "u1" }), "es"]);
+    expect(saveAlertSnapshot.mock.calls[1]![1]).toMatchObject({ lang: "es" });
+
+    state.language = "es";
+    await ownVisit();
+    expect(saveAccountLanguage).toHaveBeenCalledTimes(1);
+  });
+
+  it("words the snapshot again at once when they've just changed language, rather than waiting the quarter hour", async () => {
+    state.alerts = { ...state.alerts, takenAt: ago(60_000) };
+    browser.language = "es";
+    await ownVisit();
+    expect(saveAlertSnapshot).toHaveBeenCalledTimes(1);
+    expect(saveAlertSnapshot.mock.calls[0]![1]).toMatchObject({ lang: "es" });
+    // Once the account has it, the quarter hour stands again.
+    state.language = "es";
+    await ownVisit();
+    expect(saveAlertSnapshot).toHaveBeenCalledTimes(1);
+  });
+
   it("is never left by a connected app", async () => {
     vi.resetModules();
     const { agentFinance } = await import("./finance");
@@ -122,5 +164,7 @@ describe("what a visit leaves for alert emails", () => {
     for (const fn of scheduled.splice(0)) await fn();
     expect(saveAlertSnapshot).not.toHaveBeenCalled();
     expect(forgetAlertSnapshot).not.toHaveBeenCalled();
+    // Nor does a connected app's read move the language the emails go in.
+    expect(saveAccountLanguage).not.toHaveBeenCalled();
   });
 });

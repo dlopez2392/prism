@@ -200,8 +200,11 @@
   share goes in `es/core.ts`; the test refuses one given twice). Server components and actions take `await getT()`,
   client components `useT()`, and shared server-safe components and pure
   functions take a `t` prop or argument that defaults to English (`EN`), so
-  emails, connected apps and tests stay English until they're asked
-  otherwise. Write WHOLE sentences with `{names}` (`t("{who} owes you
+  connected apps and tests stay English until they're asked otherwise. The
+  alert job has no request to ask: it writes in `profiles.language`, which
+  the person's own visit keeps in step with the page (`rememberLanguage` in
+  `finance.ts`, only when it moved, never a connected app), and a snapshot's
+  pre-worded alerts carry the language they're in (`AlertSnapshot.lang`). Write WHOLE sentences with `{names}` (`t("{who} owes you
   {amount}", …)`), never English fragments glued together, and a separate
   sentence for one and for many. A month mid-sentence is lower case in
   Spanish: pass `monthLong(d, t.locale)` and let a Spanish sentence that
@@ -215,7 +218,10 @@
   Sankey labels cut short). The choice is the `prism-lang` cookie, set by a
   server action (`language-actions.ts`), else the browser's
   Accept-Language. Translated so far: the shell, sign-in, Overview, Spending,
-  Cash flow, Budgets, Goals, Net worth, Future, Your year and Taxes. A screen still only in English is listed in
+  Cash flow, Budgets, Goals, Net worth, Future, Your year, Taxes, Connections
+  (with its imports), Account, the household, app consent, unsubscribe, and
+  alert and recap emails and push; the privacy policy and terms wait for a
+  lawyer. A screen still only in English is listed in
   `ENGLISH_ONLY` (`locale.ts`), which marks its content `lang="en"` inside a
   Spanish page so a screen reader reads it in an English voice: take it off
   the list in the same change that translates it.
@@ -285,7 +291,7 @@
 - Alert emails (`src/lib/alerts/*`, migration `alert_emails`): opt-in on the
   Account page. The daily job (`/api/cron/alerts`, Vercel Cron) holds no key
   to anyone's data: it reaches the database ONLY through `alerts_due`,
-  `alerts_sent` and `alerts_stop`, which answer to `CRON_SECRET` (the
+  `alerts_languages`, `alerts_sent` and `alerts_stop`, which answer to `CRON_SECRET` (the
   database keeps its sha256 in `job_keys`, which no API role can read). Its
   figures come from `alert_snapshots`, sealed and written only by the
   person's own visit (`rememberAlerts` in `finance.ts`, never a connected app

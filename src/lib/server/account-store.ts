@@ -21,6 +21,7 @@ import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/fi
 import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
 import { ALERT_CHOICES, isAlertChoice, type AlertChoice } from "@/lib/alerts/choices";
 import type { Budget } from "@/lib/finance/types";
+import { isLocale, type Locale } from "@/lib/i18n/locale";
 import type { Account } from "@/lib/supabase/server";
 import { needsRefresh } from "./coinbase-store";
 import { feedTokenHash, openFeedSnapshot, sealFeedSnapshot } from "./feed-token";
@@ -43,6 +44,7 @@ type ProfileRow = {
   alert_kinds?: unknown;
   alert_amounts?: boolean;
   alert_refresh?: boolean;
+  language?: string;
   updated_at: string;
 };
 type AlertSnapshotRow = { sealed: string; updated_at: string };
@@ -70,6 +72,8 @@ export type AlertSettings = { on: boolean; kinds: AlertChoice[]; amounts: boolea
 export type AccountSources = {
   firstName: string | null;
   timeZone: string | null;
+  /** The language Prism writes to them in (alert emails, phone alerts): the one their latest visit was in. */
+  language: Locale;
   plan: Plan;
   /** The person's category fixes; none when there are none, or none open under the vault key. */
   categories: CategoryRules;
@@ -129,7 +133,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const [profile, plaid, coinbase, feed, household, coinbaseShare, imported, alertSnapshot] = await Promise.all([
     db
       .from("profiles")
-      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, sealed_p2p_notes, sealed_txn_details, sealed_order_notes, alert_email, alert_kinds, alert_amounts, alert_refresh, updated_at")
+      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, sealed_p2p_notes, sealed_txn_details, sealed_order_notes, alert_email, alert_kinds, alert_amounts, alert_refresh, language, updated_at")
       .eq("user_id", account.userId)
       .maybeSingle<ProfileRow>(),
     db
@@ -204,6 +208,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   return {
     firstName: profile.data?.first_name ?? null,
     timeZone: profile.data?.time_zone ?? null,
+    language: isLocale(profile.data?.language) ? profile.data.language : "en",
     plan: { budgets: validBudgets(profile.data?.plan_budgets ?? undefined), goals: validGoals(profile.data?.plan_goals ?? undefined) },
     categories: rawRules === null ? NO_RULES : validCategoryRules(rawRules),
     manual: rawManual === null ? [] : validManualItems(rawManual),
@@ -354,6 +359,11 @@ export function saveAccountFirstName(account: Account, firstName: string | null)
 /** The IANA zone the person's browser reports — already checked by `validZone`. */
 export function saveAccountTimeZone(account: Account, timeZone: string) {
   return upsertProfile(account, { time_zone: timeZone });
+}
+
+/** The language the person reads Prism in, for what it sends them while they're away. */
+export function saveAccountLanguage(account: Account, language: Locale) {
+  return upsertProfile(account, { language });
 }
 
 export function saveAccountBudgets(account: Account, budgets: Budget[] | null) {

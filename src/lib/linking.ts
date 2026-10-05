@@ -13,6 +13,7 @@
 // No server-only imports: the Connect button builds the same sign-in link.
 
 import { safeNext } from "@/lib/profile";
+import { EN, type T } from "@/lib/i18n/t";
 
 export type ConnectKind = "bank" | "investments" | "coinbase";
 
@@ -22,14 +23,26 @@ export type LinkingRefusal = {
   message: string;
 };
 
-export function linkingRefusal(o: { accountsEnabled: boolean; signedIn: boolean; realMoney: boolean; kind?: ConnectKind }): LinkingRefusal | null {
+export function linkingRefusal(o: { accountsEnabled: boolean; signedIn: boolean; realMoney: boolean; kind?: ConnectKind }, t: T = EN): LinkingRefusal | null {
   if (o.signedIn) return null;
-  const what = o.kind === "coinbase" ? "Coinbase" : o.kind === "investments" ? "an investment account" : "a bank";
+  // Whole sentences for each kind, so each language says "a bank" and "an investment account" its own way.
   if (o.accountsEnabled) {
-    return { status: 401, error: "sign_in_required", message: `Sign in to connect ${what}. It's kept in your account, where two-step sign-in protects it.` };
+    const message =
+      o.kind === "coinbase"
+        ? t("Sign in to connect Coinbase. It's kept in your account, where two-step sign-in protects it.")
+        : o.kind === "investments"
+          ? t("Sign in to connect an investment account. It's kept in your account, where two-step sign-in protects it.")
+          : t("Sign in to connect a bank. It's kept in your account, where two-step sign-in protects it.");
+    return { status: 401, error: "sign_in_required", message };
   }
   if (o.realMoney) {
-    return { status: 503, error: "accounts_required", message: `Connecting ${what} needs a Prism account, and accounts aren't set up on this site.` };
+    const message =
+      o.kind === "coinbase"
+        ? t("Connecting Coinbase needs a Prism account, and accounts aren't set up on this site.")
+        : o.kind === "investments"
+          ? t("Connecting an investment account needs a Prism account, and accounts aren't set up on this site.")
+          : t("Connecting a bank needs a Prism account, and accounts aren't set up on this site.");
+    return { status: 503, error: "accounts_required", message };
   }
   return null;
 }

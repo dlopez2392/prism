@@ -7,18 +7,20 @@
 // with the marks, spaces, apostrophes, hyphens and periods names carry. No
 // digits or symbols, so a password pasted into the field is refused, not kept.
 
+import { EN, type T } from "@/lib/i18n/t";
+
 export const FIRST_NAME_MAX = 40;
 
 const NAME = /^\p{L}[\p{L}\p{M}'’. -]*$/u;
 
 export type FirstNameRead = { ok: true; name: string | null } | { ok: false; error: string };
 
-/** A submitted first name, cleaned. Blank means "go without one". */
-export function readFirstName(x: FormDataEntryValue | null): FirstNameRead {
+/** A submitted first name, cleaned. Blank means "go without one". Any correction is in the language of `t`. */
+export function readFirstName(x: FormDataEntryValue | null, t: T = EN): FirstNameRead {
   const s = typeof x === "string" ? x.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim() : "";
   if (!s) return { ok: true, name: null };
-  if ([...s].length > FIRST_NAME_MAX) return { ok: false, error: `Keep it to ${FIRST_NAME_MAX} letters or fewer.` };
-  if (!NAME.test(s)) return { ok: false, error: "Use letters only — just the first name Prism should greet you by." };
+  if ([...s].length > FIRST_NAME_MAX) return { ok: false, error: t("Keep it to {max} letters or fewer.", { max: FIRST_NAME_MAX }) };
+  if (!NAME.test(s)) return { ok: false, error: t("Use letters only — just the first name Prism should greet you by.") };
   return { ok: true, name: s };
 }
 

@@ -189,7 +189,7 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
   // An Amazon charge can be split by what it paid for: one part per item (the smallest added up past the limit), each in this line's category to start.
   const items = canSplit && txn.order && txn.order.items.length >= 2 ? txn.order.items : null;
   const byItems = () => {
-    const parts = itemParts(items!, DETAIL_LIMITS.parts);
+    const parts = itemParts(items!, DETAIL_LIMITS.parts, t);
     setSplitOn(true);
     // A split by one order's items is this charge's own, never every purchase at the shop.
     setRuleOn(false);

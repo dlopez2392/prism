@@ -193,9 +193,19 @@ anyone's money as itself:
   the email then says the figures are from that check.
 - **The job answers to a secret.** Vercel Cron calls the route with
   `CRON_SECRET`; the database keeps only its sha256 (`job_keys`, unreadable
-  over the API) and answers `alerts_due`, `alerts_sent` and `alerts_stop`
-  to nothing else. With the secret alone, a caller learns email addresses,
-  choices and which banks need a sign-in: every figure stays sealed.
+  over the API) and answers `alerts_due`, `alerts_languages`, `alerts_sent`
+  and `alerts_stop` to nothing else. With the secret alone, a caller learns
+  email addresses, choices, languages and which banks need a sign-in: every
+  figure stays sealed.
+- **In the person's language.** Each email, and the phone alert that goes
+  with it, is written in the language the person reads Prism in
+  (`profiles.language`, English or Spanish). Their own visits keep it in
+  step with the page (their pick on EN | ES, else their browser's language),
+  writing it only when it moved, so there is no second setting. A snapshot
+  holds its bills and price rises already in words, so it records its
+  language; one in a language the person has since left is worded again by
+  the morning check where they allow it, and otherwise goes as worded, since
+  a warning in the other language beats none.
 - **News goes once.** Each alert's occasion is fingerprinted (sha256 of the
   person and the alert id) and recorded after sending; a Resend idempotency
   key covers a retried run. Bills and price rises come only from a snapshot
@@ -762,10 +772,13 @@ as U.S. banks write them in either language.
   shows in English, and `pnpm test` names it.
 - The browser is handed the Spanish only on a page that's in Spanish, so an
   English page downloads none of it.
-- In Spanish so far: the shell, sign-in, Overview, Spending, Cash flow,
-  Budgets, Goals, Net worth, Future, Your year and Taxes. Connections,
-  Account, emails and push follow (`docs/ROADMAP.md`,
-  item 29); connected apps (MCP) answer in English.
+- In Spanish: every screen a person uses — the money screens, Connections
+  and its imports, Account (with a Language · Idioma setting), the
+  household, app consent and unsubscribe; and alert and recap emails and
+  phone alerts, in the language the person last used Prism in (kept with
+  their account, `profiles.language`). Still English: the privacy policy and
+  terms (a lawyer reads the Spanish first; `docs/ROADMAP.md`, item 29), and
+  connected apps (MCP) answer in English.
 
 ## Screens
 
