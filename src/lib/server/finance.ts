@@ -25,6 +25,7 @@ import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiab
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { applyDetails, hideAccounts, NO_DETAILS, type SplitRule, type TxnDetails } from "@/lib/finance/details";
+import { applyOrderNotes, NO_ORDER_NOTES, type OrderNotes } from "@/lib/finance/orders";
 import { applyP2pNotes, NO_P2P_NOTES, type P2pNotes } from "@/lib/finance/p2p";
 import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
@@ -159,6 +160,8 @@ export type Sources = {
   imports: ImportedHistory[];
   /** Who their Venmo, PayPal and Cash App payments were for (finance/p2p.ts). A device keeps none. */
   p2p: P2pNotes;
+  /** What their Amazon charges paid for (finance/orders.ts). A device keeps none. */
+  orders: OrderNotes;
   /** Their splits, tags and who owes them (finance/details.ts). A device keeps none. */
   details: TxnDetails;
   /** Imports that won't open under any key this deployment has. A device keeps none. */
@@ -202,8 +205,8 @@ type WalletSource = {
   offline?: boolean;
 };
 
-/** `p2p` is left out where nothing reads a person's payment notes: the morning check never does. Splits change totals, so it reads `details`. */
-export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets"> & { p2p?: P2pNotes; details?: TxnDetails };
+/** `p2p` and `orders` are left out where nothing reads them: the morning check never does. Splits change totals, so it reads `details`. */
+export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets"> & { p2p?: P2pNotes; orders?: OrderNotes; details?: TxnDetails };
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -268,6 +271,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       },
       imports: a.imports,
       p2p: a.p2pNotes,
+      orders: a.orderNotes,
       details: a.details,
       lockedImports: a.lockedImports,
       inHousehold: a.inHousehold,
@@ -313,6 +317,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     wallets: { list: [], save: null, scan: null },
     imports: [],
     p2p: NO_P2P_NOTES,
+    orders: NO_ORDER_NOTES,
     details: NO_DETAILS,
     lockedImports: [],
     inHousehold: false,
@@ -379,10 +384,13 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
   const imported = withImports(owned, src.imports, src.categories, none.banks && none.manual && none.wallets);
   const all = withWallets(imported, read.wallets, none.banks && none.manual && none.imports);
   // Who each Venmo, PayPal or Cash App line was for: the person's own notes, on their own lines.
-  const noted = src.p2p ? applyP2pNotes(all.transactions, src.p2p) : all.transactions;
+  const paid = src.p2p ? applyP2pNotes(all.transactions, src.p2p) : all.transactions;
+  // And what each Amazon charge paid for, from their own order history.
+  const noted = src.orders ? applyOrderNotes(paid, src.orders) : paid;
   // Then what they added themselves: a split becomes its parts, after their category fixes.
   const detailed = src.details ? applyDetails(noted, src.details) : noted;
-  // The household sees each line as the bank sent it (undetailed): the same for every member, and none of anyone's own notes.
+  // The household sees each line as the bank sent it (undetailed): the same figures for every member. A person's own payment
+  // and order notes stay on their own lines in their own view of it; no other member is ever sent them (household_shared_money).
   return { money: detailed === all.transactions ? all : { ...all, transactions: detailed }, wallets: read.wallets, undetailed: noted };
 }
 
@@ -657,6 +665,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     manual: a.manual,
     imports: a.imports,
     p2p: a.p2pNotes,
+    orders: a.orderNotes,
     details: a.details,
     // Read again in memory when stale; a connected app never saves (and the database wouldn't let it).
     wallets: { list: a.wallets, save: null, scan: null },

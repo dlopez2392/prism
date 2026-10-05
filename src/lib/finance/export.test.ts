@@ -60,7 +60,7 @@ describe("the transactions file", () => {
   it("lists newest first, names the account and its bank, and says what's still pending", () => {
     const text = transactionsCsv(data);
     const rows = parseCsv(text, 100_000);
-    expect(rows[0]).toEqual(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note", "Split", "Tags", "Owed by", "Owed amount", "Paid back on"]);
+    expect(rows[0]).toEqual(["Date", "Merchant", "Amount", "Category", "Account", "Institution", "Status", "Bank's category", "Kind of income", "Paid to or from", "Payment note", "Split", "Tags", "Owed by", "Owed amount", "Paid back on", "Amazon items"]);
     const dates = rows.slice(1).map((r) => r[0]!);
     expect(dates).toEqual([...dates].sort().reverse());
     const first = data.accounts[0]!;
@@ -94,9 +94,25 @@ describe("the transactions file", () => {
       ],
     };
     const [header, row] = parseCsv(transactionsCsv(added));
-    expect(row!.slice(header!.indexOf("Split"))).toEqual(["Part 1 of 2", "Party, =cmd", "'@Sam", "75.00", "2026-09-30"]);
+    expect(row!.slice(header!.indexOf("Split"))).toEqual(["Part 1 of 2", "Party, =cmd", "'@Sam", "75.00", "2026-09-30", ""]);
     const [t] = everythingJson(added, { wallets: [], manual: [], homes: [] }, { email: "a@x.test", firstName: null }, "2026-10-01T00:00:00Z").transactions;
     expect(t).toMatchObject({ split: { part: 1, of_parts: 2, whole_transaction_id: "c1", whole_amount: -150 }, tags: ["Party", "=cmd"], owed: { by: "@Sam", amount: 75, paid_back_on: "2026-09-30" } });
+  });
+
+  it("says what an Amazon charge paid for, a seller's formula written as words", () => {
+    const bought: FinanceData = {
+      ...data,
+      transactions: [
+        {
+          ...tx("2026-09-04", -3_497, "AMZN Mktp US", "shopping"),
+          order: { order: "111-1", date: "2026-09-02", items: [{ name: "=HYPERLINK(1)", qty: 1, amount: 2_499 }, { name: "USB-C cable", qty: 2, amount: 998 }] },
+        },
+      ],
+    };
+    const [header, row] = parseCsv(transactionsCsv(bought));
+    expect(row![header!.indexOf("Amazon items")]).toBe("'=HYPERLINK(1); 2 × USB-C cable");
+    const [t] = everythingJson(bought, { wallets: [], manual: [], homes: [] }, { email: "a@x.test", firstName: null }, "2026-10-01T00:00:00Z").transactions;
+    expect(t).toMatchObject({ amazon_order: { order_number: "111-1", ordered_on: "2026-09-02", items: [{ name: "=HYPERLINK(1)", quantity: 1, amount: 24.99 }, { name: "USB-C cable", quantity: 2, amount: 9.98 }] } });
   });
 
   it("keeps one year, for the year page", () => {

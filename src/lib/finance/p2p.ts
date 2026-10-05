@@ -80,11 +80,13 @@ export function appOf(merchant: string): P2pApp | null {
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
-function headerAt(rows: string[][], ...needles: string[]): number {
+/** The first row (of the first 30) holding every one of `needles` as a cell: a file's header. */
+export function headerAt(rows: string[][], ...needles: string[]): number {
   return rows.findIndex((r, i) => i < 30 && needles.every((n) => r.some((c) => norm(c) === n)));
 }
 
-function columns(header: string[]) {
+/** A header's column finder: the first of several names it goes by. */
+export function columns(header: string[]) {
   const names = header.map(norm);
   return (...want: string[]) => {
     for (const w of want) {
@@ -95,7 +97,7 @@ function columns(header: string[]) {
   };
 }
 
-const cell = (row: string[], i: number) => (i >= 0 ? (row[i] ?? "") : "");
+export const cell = (row: string[], i: number) => (i >= 0 ? (row[i] ?? "") : "");
 const unique = (xs: Cents[]) => [...new Set(xs.filter((x) => x !== 0))];
 
 /** The account holder in a Venmo file: the name on one side of nearly every payment. */

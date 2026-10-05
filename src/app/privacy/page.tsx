@@ -110,6 +110,12 @@ export default function PrivacyPage() {
               itself is read on your device and never sent to {BRAND.product}, and payments that don&apos;t match a line from your bank aren&apos;t kept.
             </li>
             <li>
+              If you add your Amazon order history: for each Amazon charge that matches a line from your bank, the order number, the day you placed it,
+              and each item&apos;s name, quantity and cost, stored encrypted in your account and never shown to your household. The file itself is read
+              on your device and never sent to {BRAND.product}; the addresses in it are never read, and orders that don&apos;t match a line from your
+              bank aren&apos;t kept.
+            </li>
+            <li>
               The public address of each crypto wallet you add, or for a whole Bitcoin wallet its extended public key, and what it last held, stored encrypted and never
               shared with your household. A public address is the one you&apos;d give someone to pay you, and an extended public key shows every address in a wallet:
               {BRAND.product} can see what they hold and can never move it, and never asks for a recovery phrase or private key.

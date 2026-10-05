@@ -11,12 +11,13 @@
 // every purchase at the same shop; one there can still be kept whole.
 
 import { startTransition, useActionState, useId, useState, useTransition, type FormEvent } from "react";
-import { Plus, ReceiptText, X } from "lucide-react";
+import { PackageOpen, Plus, ReceiptText, X } from "lucide-react";
 import clsx from "clsx";
 import { FixForm } from "@/components/category-fixer";
 import { buttonGhost, buttonPrimary, Dialog, FormMessage } from "@/components/dialog";
 import { CATEGORIES, SPEND_CATEGORIES, isSpendCategory } from "@/lib/finance/categories";
 import { DETAIL_LIMITS, ruleKey } from "@/lib/finance/details";
+import { itemParts } from "@/lib/finance/orders";
 import { dayDate, money, shortDate } from "@/lib/finance/format";
 import { dollarsInput, parseDollars } from "@/lib/finance/plan";
 import type { Cents, SpendCategoryId, Transaction } from "@/lib/finance/types";
@@ -162,7 +163,8 @@ function LeaveOut({ t, onDone }: { t: Transaction; onDone: (message: string) => 
   );
 }
 
-type Part = { category: SpendCategoryId; amount: string };
+/** `label`: the item a part stands for, when it was split by an Amazon charge's items. */
+type Part = { category: SpendCategoryId; amount: string; label?: string };
 
 function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened; onDone: (message: string) => void; onCancel: () => void; shopHasRule: boolean }) {
   const id = useId();
@@ -179,6 +181,18 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
     given.length ? given.slice(1).map((p) => ({ category: p.category as SpendCategoryId, amount: dollarsInput(-p.amount) })) : [{ category: first === "shopping" ? "food" : "shopping", amount: "" }],
   );
   const [firstCategory, setFirstCategory] = useState<SpendCategoryId>(given[0] && isSpendCategory(given[0].category) ? given[0].category : first);
+  const [firstLabel, setFirstLabel] = useState<string | null>(null);
+  // An Amazon charge can be split by what it paid for: one part per item (the smallest added up past the limit), each in this line's category to start.
+  const items = canSplit && t.order && t.order.items.length >= 2 ? t.order.items : null;
+  const byItems = () => {
+    const parts = itemParts(items!, DETAIL_LIMITS.parts);
+    setSplitOn(true);
+    // A split by one order's items is this charge's own, never every purchase at the shop.
+    setRuleOn(false);
+    setFirstCategory(first);
+    setFirstLabel(parts[0]!.name);
+    setRest(parts.slice(1).map((p) => ({ category: first, amount: dollarsInput(p.amount), label: p.name })));
+  };
   const [tags, setTags] = useState((t.tags ?? []).join(", "));
   const [owedOn, setOwedOn] = useState(Boolean(t.owed));
   const [who, setWho] = useState(t.owed?.who ?? "");
@@ -231,41 +245,51 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
               <span className="block text-[13px] text-ink-3">Every total, budget and chart counts each part where it belongs.</span>
             </span>
           </label>
+          {items ? (
+            <button type="button" onClick={byItems} className="mt-2 ml-6.5 inline-flex items-center gap-1 text-[13px] font-semibold text-accent-ink hover:underline">
+              <PackageOpen aria-hidden className="size-3.5" />
+              Split by its {items.length} items, then choose each one&apos;s category
+            </button>
+          ) : null}
           {splitOn ? (
             <div className="mt-3 space-y-2">
+              {firstLabel ? <p className="truncate text-xs text-ink-3">{firstLabel}</p> : null}
               <div className="grid grid-cols-[1fr_8rem_2rem] items-center gap-2">
-                {select(firstCategory, setFirstCategory, "Part 1 category")}
+                {select(firstCategory, setFirstCategory, firstLabel ? `Part 1 category, ${firstLabel}` : "Part 1 category")}
                 <div className="num px-1 text-right text-sm font-bold text-ink-1" aria-live="polite">
                   {left > 0 ? money(left) : "—"}
                 </div>
                 <span />
               </div>
               {rest.map((p, i) => (
-                <div key={i} className="grid grid-cols-[1fr_8rem_2rem] items-center gap-2">
-                  {select(p.category, (c) => setRest((r) => r.map((x, j) => (j === i ? { ...x, category: c } : x))), `Part ${i + 2} category`)}
-                  <div className="relative">
-                    <span aria-hidden className="pointer-events-none absolute inset-y-0 left-2.5 grid place-items-center text-sm text-ink-3">
-                      $
-                    </span>
-                    <input
-                      value={p.amount}
-                      onChange={(e) => setRest((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
-                      inputMode="decimal"
-                      autoComplete="off"
-                      aria-label={`Part ${i + 2} amount`}
-                      aria-invalid={amounts[i] === null && p.amount.trim() !== "" ? true : undefined}
-                      className={clsx(field, "num pr-2 pl-6")}
-                    />
+                <div key={i}>
+                  {p.label ? <p className="mb-1 truncate text-xs text-ink-3">{p.label}</p> : null}
+                  <div className="grid grid-cols-[1fr_8rem_2rem] items-center gap-2">
+                    {select(p.category, (c) => setRest((r) => r.map((x, j) => (j === i ? { ...x, category: c } : x))), p.label ? `Part ${i + 2} category, ${p.label}` : `Part ${i + 2} category`)}
+                    <div className="relative">
+                      <span aria-hidden className="pointer-events-none absolute inset-y-0 left-2.5 grid place-items-center text-sm text-ink-3">
+                        $
+                      </span>
+                      <input
+                        value={p.amount}
+                        onChange={(e) => setRest((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        aria-label={`Part ${i + 2} amount`}
+                        aria-invalid={amounts[i] === null && p.amount.trim() !== "" ? true : undefined}
+                        className={clsx(field, "num pr-2 pl-6")}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setRest((r) => r.filter((_, j) => j !== i))}
+                      disabled={rest.length === 1}
+                      aria-label={`Remove part ${i + 2}`}
+                      className="grid size-8 place-items-center rounded-ctl text-ink-3 hover:bg-surface-3 disabled:opacity-40"
+                    >
+                      <X aria-hidden className="size-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setRest((r) => r.filter((_, j) => j !== i))}
-                    disabled={rest.length === 1}
-                    aria-label={`Remove part ${i + 2}`}
-                    className="grid size-8 place-items-center rounded-ctl text-ink-3 hover:bg-surface-3 disabled:opacity-40"
-                  >
-                    <X aria-hidden className="size-4" />
-                  </button>
                 </div>
               ))}
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-3">

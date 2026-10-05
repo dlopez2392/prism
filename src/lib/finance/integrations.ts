@@ -131,6 +131,13 @@ export const INTEGRATIONS: IntegrationGroup[] = [
         how: "None lets another app read your account, so you add each app's own activity file. Prism reads it in your browser, never uploads it, and puts each payment's name and note on the bank line it matches.",
         status: "live",
       },
+      {
+        id: "amazon",
+        name: "Amazon orders",
+        adds: "What each Amazon charge paid for, item by item, not just \"AMZN Mktp\", and a split by its items.",
+        how: "Amazon doesn't let another app read your orders, so you ask Amazon for your own order history and add the file. Prism reads it in your browser, never uploads it, and puts each shipment's items on the charge it matches, to the cent.",
+        status: "live",
+      },
     ],
   },
   {

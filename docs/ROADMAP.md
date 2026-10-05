@@ -327,3 +327,13 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     keyboard, or on a phone a first tap for the numbers and a second to
     open). Overview's two legends lay out by their card's width, not the
     screen's, so no category name is cut short.
+28. **Amazon orders.** **Built (2026-10-05):** on Connections → Amazon
+    orders, a person adds the order history Amazon sends them
+    (Retail.OrderHistory.1.csv); Prism reads it in the browser, never uploads
+    it, and puts each shipment's items on the Amazon charge it matches, to
+    the cent. The ledger shows what each charge paid for and finds it by an
+    item's name, the downloads and connected apps carry the items, and a
+    charge splits by its items in one tap. Sealed in
+    `profiles.sealed_order_notes`, never shown to a household. No partner,
+    no new cost. Next, if people ask: Walmart and Target, whose order
+    histories have no download today.
