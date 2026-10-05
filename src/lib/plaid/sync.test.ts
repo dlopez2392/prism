@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PlaidConfig, PlaidTransaction } from "./client";
-import { applyPage, FRESH_MS, needsSync, syncTransactions, validState, type SyncState } from "./sync";
+import { applyPage, FRESH_MS, holdingsOnly, needsSync, syncTransactions, validState, type SyncState } from "./sync";
 
 const config: PlaidConfig = { clientId: "c", secret: "s", env: "sandbox", host: "https://plaid.test" };
 const TODAY = "2026-09-28";
@@ -45,6 +45,17 @@ function fakePlaid(pages: Record<string, Page | Page[]>) {
   });
   return { fetchImpl: fetchImpl as unknown as typeof fetch, calls };
 }
+
+describe("accounts with no transactions to give", () => {
+  it("are those that only hold investments: a bank or card alongside them still has its transactions", () => {
+    expect(holdingsOnly([{ type: "investment" }])).toBe(true);
+    expect(holdingsOnly([{ type: "investment" }, { type: "brokerage" }])).toBe(true);
+    expect(holdingsOnly([{ type: "investment" }, { type: "depository" }])).toBe(false);
+    expect(holdingsOnly([{ type: "credit" }])).toBe(false);
+    // No accounts at all is something wrong, never a brokerage.
+    expect(holdingsOnly([])).toBe(false);
+  });
+});
 
 describe("the first sync", () => {
   it("pages through the whole history and keeps the last cursor", async () => {

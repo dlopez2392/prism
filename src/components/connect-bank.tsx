@@ -19,6 +19,10 @@
 // to THAT bank again — Plaid's update mode — when a changed password or an
 // expired consent has stopped it updating. The connection Prism already
 // holds carries on, so there's nothing to save afterwards, only a refresh.
+//
+// With `kind="investments"` it connects an investment account instead (a
+// brokerage such as Robinhood or Webull), which a bank link can't show: see
+// LinkKind in src/lib/plaid/client.ts.
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -38,9 +42,10 @@ export function ConnectBank({
   signInFirst = false,
   reconnect,
   size = "md",
+  kind = "bank",
 }: {
-  /** "hero" is the white button that sits on the --gradient-prism card. */
-  variant?: "primary" | "ghost" | "hero";
+  /** "hero" is the white button that sits on the --gradient-prism card; "hero-ghost" is its outlined second. */
+  variant?: "primary" | "ghost" | "hero" | "hero-ghost";
   label?: string;
   className?: string;
   /** Where the person lands once the bank is saved (a full load), instead of a refresh of the page the button is on. */
@@ -51,6 +56,8 @@ export function ConnectBank({
   reconnect?: string;
   /** "sm" sits in a row beside the row's other actions (Disconnect). */
   size?: "md" | "sm";
+  /** A bank, or an investment account on its own. Ignored with `reconnect`: signing in again keeps what the connection is. */
+  kind?: "bank" | "investments";
 }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -59,7 +66,7 @@ export function ConnectBank({
   async function start() {
     const from = landOn ?? `${window.location.pathname}${window.location.search}`;
     if (signInFirst) {
-      window.location.assign(signInToConnect("bank", from));
+      window.location.assign(signInToConnect(kind, from));
       return;
     }
     setState({ kind: "busy", label: "Opening secure link…" });
@@ -67,11 +74,11 @@ export function ConnectBank({
       const res = await fetch("/api/plaid/link-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reconnect ? { from, itemId: reconnect } : { from }),
+        body: JSON.stringify(reconnect ? { from, itemId: reconnect } : kind === "investments" ? { from, kind } : { from }),
       });
       const json = (await res.json().catch(() => ({}))) as { linkToken?: string; error?: string; message?: string };
       if (res.status === 401 && json.error === "sign_in_required") {
-        window.location.assign(signInToConnect("bank", from));
+        window.location.assign(signInToConnect(kind, from));
         return;
       }
       if (res.status === 503 && json.error === "not_configured") {
@@ -97,14 +104,14 @@ export function ConnectBank({
           const saved = await saveBank(publicToken);
           if (!saved.ok && saved.signIn) {
             handler.destroy();
-            window.location.assign(signInToConnect("bank", from));
+            window.location.assign(signInToConnect(kind, from));
             return;
           }
           if (!saved.ok) {
             setState({ kind: "error", message: saved.message });
             return;
           }
-          setState({ kind: "done", message: `${saved.institutionName ?? "Your bank"} is connected. Pulling in your transactions…` });
+          setState({ kind: "done", message: `${saved.institutionName ?? "Your bank"} is connected. Pulling in your ${kind === "investments" ? "holdings" : "transactions"}…` });
           handler.destroy();
           if (landOn) window.location.replace(landOn);
           else router.refresh();
@@ -134,6 +141,7 @@ export function ConnectBank({
           variant === "primary" && "bg-button text-ink-on-accent hover:bg-button-hover",
           variant === "ghost" && "border border-line-strong text-ink-1 hover:bg-surface-3",
           variant === "hero" && "bg-[var(--on-hero)] text-[var(--button)] hover:opacity-90",
+          variant === "hero-ghost" && "border border-[var(--on-hero-soft)] text-[var(--on-hero)] hover:bg-[var(--on-hero-faint)]",
         )}
       >
         {reconnect ? (
@@ -148,7 +156,7 @@ export function ConnectBank({
           role="status"
           className={clsx(
             "mt-2 max-w-xs text-xs font-medium",
-            variant === "hero" ? "text-[var(--on-hero)]" : state.kind === "error" ? "text-crit-ink" : "text-good-ink",
+            variant === "hero" || variant === "hero-ghost" ? "text-[var(--on-hero)]" : state.kind === "error" ? "text-crit-ink" : "text-good-ink",
           )}
         >
           {state.message}

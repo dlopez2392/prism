@@ -42,7 +42,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
           {next?.startsWith("/oauth/consent")
             ? "Sign in first, then you'll choose whether to connect the app."
             : reason
-              ? `Sign in first, then connect ${reason === "coinbase" ? "Coinbase" : "your bank"}. It's kept in your account, where two-step sign-in can protect it and deleting your account removes it.`
+              ? `Sign in first, then connect ${reason === "coinbase" ? "Coinbase" : reason === "investments" ? "your investment account" : "your bank"}. It's kept in your account, where two-step sign-in can protect it and deleting your account removes it.`
               : "Keep your banks, budgets and goals in one account, on every device."}
         </p>
         <SignInForm linkError={linkError} next={next} />

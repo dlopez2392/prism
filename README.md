@@ -40,6 +40,21 @@ so Prism can be built and tried without a database; anything real refuses.
 For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 (`openssl rand -base64 32`); the app refuses to store tokens without one.
 
+**Investment accounts at a broker (Robinhood, Webull and the like) connect
+with "Connect an investment account"**, beside "Connect a bank" on
+Connections. Plaid shows only the institutions and accounts that support every
+product a link requires, and its Transactions covers bank and card accounts,
+never investment accounts, so a bank link can't show a brokerage account at
+all. The investment link asks for Investments first and transactions where a
+cash account sits alongside; the same consent for loan details is asked
+either way. Such a connection has no transactions to give, so Plaid refusing
+them is not an outage (`holdingsOnly` in `src/lib/plaid/sync.ts`): its balance
+and holdings show, while a bank whose transactions fail still says it
+couldn't be reached. Plaid bills Investments per connection from the moment
+it links, as it already does for a bank holding investments. Fidelity needs
+its own approval in the Plaid Dashboard first; Schwab arrives a few days after
+Plaid's production approval.
+
 **Home values from RentCast are off until you set `RENTCAST_API_KEY`**
 (Sensitive, in Vercel). Once set, a home on Net worth offers "Keep its value up
 to date with RentCast": the person gives its address, told first that it goes

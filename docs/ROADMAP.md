@@ -289,3 +289,13 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     Undo vanished after paying back the last debt owed or removing the last
     split rule. Next, if it's needed: households (two accounts in one test)
     and the connected-app sign-in.
+24. **Investment accounts at a broker.** **Built (2026-10-05):** "Connect an
+    investment account" beside "Connect a bank" on Connections links a
+    brokerage account (Robinhood, Webull, Vanguard, E*TRADE, Schwab and most
+    US brokers) through Plaid, holdings first: a bank link can't show one,
+    because Plaid's Transactions never covers investment accounts. Its
+    balance and holdings join net worth like any bank's; it has no
+    transactions, and Plaid refusing them isn't treated as an outage. No new
+    provider. Next, if people ask for a broker Plaid doesn't reach: SnapTrade
+    ($100 a month plus $1–2 per connected person), and Fidelity once its
+    approval in the Plaid Dashboard is in.
