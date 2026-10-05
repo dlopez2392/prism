@@ -49,12 +49,14 @@ test("money owed that was added by hand is planned once its rate and payment are
   await importRows(page);
 
   await page.goto("/net-worth");
-  await page.getByRole("button", { name: "Add", exact: true }).first().click();
-  await page.getByText("Money you owe", { exact: true }).click();
-  await page.getByLabel("Name").fill("Loan from Mom");
-  await page.getByLabel("How much you owe today").fill("3000");
-  await page.getByRole("button", { name: "Add", exact: true }).last().click();
-  await expect(page.getByRole("dialog")).toBeHidden();
+  await page.getByRole("button", { name: /^Add money you owe/ }).click();
+  // The open form only: each way in (the tiles, the Add beside the accounts) has its own.
+  const form = page.getByRole("dialog");
+  await expect(form.getByRole("radio", { name: "Money you owe" })).toBeChecked();
+  await form.getByLabel("Name").fill("Loan from Mom");
+  await form.getByLabel("How much you owe today").fill("3000");
+  await form.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(form).toBeHidden();
 
   // Nothing about this debt is guessed: it's asked for, then planned.
   const card = page.locator("section", { hasText: "Paying off what you owe" }).last();

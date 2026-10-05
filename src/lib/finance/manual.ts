@@ -53,6 +53,18 @@ export function isManualKind(x: unknown): x is ManualKind {
   return typeof x === "string" && Object.hasOwn(MANUAL_KINDS, x);
 }
 
+/** Net worth's card of everything a person can add, for a link that leaves the choice to them. */
+export const ADD_CARD_LINK = "/net-worth#add";
+
+/** A link that opens Net worth's add form with `kind` already chosen: from Connections, Overview, anywhere. */
+export const addLink = (kind: ManualKind) => `/net-worth#add-${kind}`;
+
+/** The kind such a link asks for ("#add-home"), or null for any other fragment. */
+export function addKindFromHash(hash: string): ManualKind | null {
+  const m = /^#add-([a-z]+)$/.exec(hash);
+  return m && isManualKind(m[1]) ? m[1] : null;
+}
+
 /** A name as a person would type it: trimmed, spaces collapsed, no control characters. Null if nothing is left or it's too long. */
 export function cleanManualName(x: unknown): string | null {
   if (typeof x !== "string") return null;

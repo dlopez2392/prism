@@ -5,7 +5,7 @@
 // month's, where it went, how the budgets stand, what's worth knowing, and
 // what's coming next.
 
-import { Sparkles, Telescope } from "lucide-react";
+import { Plus, Sparkles, Telescope } from "lucide-react";
 import Link from "next/link";
 import { HeadsUp, InsightList, SeeAll, StatTile, TransactionRow, UpcomingList } from "@/components/blocks";
 import { alertsFor } from "@/lib/finance/alerts";
@@ -22,6 +22,7 @@ import { addDays, daysInMonth } from "@/lib/finance/dates";
 import { dayDate, money0, monthLong, monthShort, signedMoney0, signedPercent } from "@/lib/finance/format";
 import { analyze } from "@/lib/finance/model";
 import { foldSlices, greeting } from "@/lib/finance/view";
+import { ADD_CARD_LINK } from "@/lib/finance/manual";
 import { getFinance } from "@/lib/server/finance";
 
 export default async function OverviewPage() {
@@ -29,6 +30,8 @@ export default async function OverviewPage() {
   const a = analyze(data);
   // What everyone shared, paced against the household's own budgets.
   const household = data.view === "household";
+  // A person's own view with nothing a bank can't report yet: no home, car or other thing added by hand, and no property a bank sent.
+  const addHome = data.account !== null && !household && data.manual.length === 0 && (data.source === "demo" || !data.accounts.some((acc) => acc.kind === "property"));
   const lookup = new Map(data.transactions.map((t) => [t.id, t]));
 
   const nw = a.netWorth;
@@ -86,6 +89,16 @@ export default async function OverviewPage() {
                   <span className="text-xs font-semibold text-[var(--on-hero-soft)]">Tracking from today — the change shows after your first month</span>
                 )}
               </div>
+              {/* Until a home, a car or anything else a bank can't see is in, say where it goes: banks never report a house. */}
+              {addHome ? (
+                <Link
+                  href={ADD_CARD_LINK}
+                  className="mt-3 inline-flex items-center gap-1 rounded-pill bg-[var(--on-hero-faint)] px-3 py-1.5 text-xs font-bold text-[var(--on-hero)] transition-opacity duration-150 hover:opacity-80"
+                >
+                  <Plus aria-hidden className="size-3.5" strokeWidth={2.5} />
+                  Add your home or car
+                </Link>
+              ) : null}
             </div>
             <Link href="/net-worth" className="rounded-pill bg-[var(--on-hero-faint)] px-3 py-1.5 text-xs font-bold text-[var(--on-hero)] transition-opacity duration-150 hover:opacity-80">
               Details

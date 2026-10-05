@@ -101,7 +101,12 @@
   anything else owned, or money owed, SEALED in `profiles.sealed_manual_items`,
   one value per month carried forward (so trends work), account-only, merged
   in `moneyFor` under the "Added by you" institution. Any of them makes the
-  household the person's own (`isLive`), never the demo. The profile's
+  household the person's own (`isLive`), never the demo. People find them
+  through `AddWhatYouOwn` on Net worth (a tile per kind, above the accounts
+  until something is added), Overview's "Add your home or car" while nothing
+  is, and Connections' home and car entries; `addLink(kind)` opens the form
+  with that kind chosen. Keep a way in that visible: a home tucked behind a
+  small Add was missed by the owner. The profile's
   sealed columns re-seal in ONE write guarded by `updated_at` (`staleSeals`).
 - Households (`supabase/migrations/20260930000000_households.sql`,
   `src/lib/finance/household.ts`): up to four adults, each with their OWN

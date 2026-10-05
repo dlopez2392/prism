@@ -10,14 +10,20 @@
 // A home can have RentCast keep its value up to date (`estimates`, when the
 // operator has switched it on): the person ticks it and gives the address,
 // told first exactly what is sent, to whom, and how often.
+//
+// The way in is `AddWhatYouOwn`, a card of one tile per kind on Net worth
+// (each opens the form with its kind chosen), which a link ending
+// #add-home, -vehicle, -debt or -asset opens too (`addLink`). The small Add
+// beside the accounts list is the same form, for whoever is already there.
 
-import { startTransition, useActionState, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Car, CircleCheck, Gem, HandCoins, House, Plus, Trash2, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
 import { buttonGhost, buttonPrimary, buttonSmall, Dialog, FormMessage, MoneyInput, TextInput } from "@/components/dialog";
+import { Card, CardHeader } from "@/components/ui";
 import { money0, shortDate } from "@/lib/finance/format";
 import { ADDRESS_MAX, type HomeValuation } from "@/lib/finance/home-value";
-import { MANUAL_KINDS, MANUAL_NAME_MAX, type ManualItem, type ManualKind } from "@/lib/finance/manual";
+import { addKindFromHash, MANUAL_KINDS, MANUAL_NAME_MAX, type ManualItem, type ManualKind } from "@/lib/finance/manual";
 import { dollarsInput, IDLE, type PlanFormState } from "@/lib/finance/plan";
 import { deleteManualItem, saveManualItem } from "@/lib/server/manual-actions";
 
@@ -54,6 +60,95 @@ export function AddManualItem({ estimates = false }: { estimates?: boolean }) {
       </button>
       <ManualDialog dialogRef={dialog} session={session} estimates={estimates} onDone={setNotice} />
     </div>
+  );
+}
+
+/** Each tile, in the order people think of them: what it adds, in a few words. */
+const TILES: { kind: ManualKind; label: string; hint: (estimates: boolean) => string }[] = [
+  { kind: "home", label: "Add your home", hint: (estimates) => (estimates ? "Its value kept up to date by RentCast" : "Update its value whenever it changes") },
+  { kind: "vehicle", label: "Add a vehicle", hint: () => "A car, truck or motorcycle" },
+  { kind: "debt", label: "Add money you owe", hint: () => "A loan from family, or one your bank doesn't show" },
+  { kind: "asset", label: "Add something else", hint: () => "Jewelry, art, a share in a business" },
+];
+
+/**
+ * Everything a bank can't report, on Net worth: a tile per kind, each opening
+ * the form with that kind chosen, and a link ending #add-<kind> opens it on
+ * arrival. `added` is how many the person has already, which changes only
+ * what the card says.
+ */
+export function AddWhatYouOwn({ estimates = false, added = 0 }: { estimates?: boolean; added?: number }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [session, setSession] = useState(0);
+  const [kind, setKind] = useState<ManualKind>("home");
+  const [notice, setNotice] = useState<string | null>(null);
+  const open = (k: ManualKind) => {
+    setKind(k);
+    setSession((s) => s + 1);
+    setNotice(null);
+    dialog.current?.showModal();
+  };
+
+  // Read after hydration (the server never sees a fragment), and again whenever the fragment changes.
+  useEffect(() => {
+    const fromLink = () => {
+      // A link to the card itself (Overview's "Add your home or car") lands on it, at any width: the page may still be streaming in when the browser looks for it.
+      if (window.location.hash === "#add") document.getElementById("add")?.scrollIntoView({ block: "start" });
+      const k = addKindFromHash(window.location.hash);
+      if (!k) return;
+      // Once: a refresh, or coming Back, doesn't open it again.
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+      setKind(k);
+      setSession((s) => s + 1);
+      setNotice(null);
+      dialog.current?.showModal();
+    };
+    fromLink();
+    window.addEventListener("hashchange", fromLink);
+    return () => window.removeEventListener("hashchange", fromLink);
+  }, []);
+
+  return (
+    <Card id="add" className="scroll-mt-24 p-5 sm:p-6">
+      <CardHeader
+        title={added ? "Add more of what you own or owe" : "Add what your bank can't see"}
+        subtitle={
+          added
+            ? `You've added ${added}. Anything else a bank doesn't report counts too.`
+            : "Your home, a car, a loan from family: add them and your net worth counts everything you own and owe, not just your accounts."
+        }
+      />
+      {/* Always in the DOM so screen readers announce it; drawn only when it speaks. */}
+      <p role="status" className={clsx("flex items-center gap-1 text-xs font-semibold text-good-ink", notice && "mt-3")}>
+        {notice ? (
+          <>
+            <CircleCheck aria-hidden className="size-3.5" />
+            {notice}
+          </>
+        ) : null}
+      </p>
+      <ul className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {TILES.map((t) => {
+          const Icon = ICONS[t.kind];
+          return (
+            <li key={t.kind}>
+              <button
+                type="button"
+                onClick={() => open(t.kind)}
+                className="flex h-full w-full flex-col items-start gap-2 rounded-ctl border border-line bg-surface-2 p-3.5 text-left transition-colors duration-150 hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] sm:p-4"
+              >
+                <span className="grid size-9 place-items-center rounded-ctl bg-accent-soft text-accent">
+                  <Icon aria-hidden className="size-[18px]" />
+                </span>
+                <span className="text-sm font-bold text-ink-1">{t.label}</span>
+                <span className="text-xs text-ink-3">{t.hint(estimates)}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <ManualDialog dialogRef={dialog} session={session} kind={kind} estimates={estimates} onDone={setNotice} />
+    </Card>
   );
 }
 
@@ -101,6 +196,7 @@ function ManualDialog({
   dialogRef,
   session,
   item,
+  kind,
   estimates,
   valuation,
   onDone,
@@ -108,6 +204,8 @@ function ManualDialog({
   dialogRef: React.RefObject<HTMLDialogElement | null>;
   session: number;
   item?: ManualItem;
+  /** The kind chosen to start with, for something new. */
+  kind?: ManualKind;
   estimates: boolean;
   valuation?: HomeValuation;
   onDone: (message: string) => void;
@@ -122,6 +220,7 @@ function ManualDialog({
       <ManualForm
         key={session}
         item={item}
+        initialKind={kind}
         estimates={estimates}
         valuation={valuation}
         onDone={(message) => {
@@ -136,12 +235,14 @@ function ManualDialog({
 
 function ManualForm({
   item,
+  initialKind,
   estimates,
   valuation,
   onDone,
   onCancel,
 }: {
   item?: ManualItem;
+  initialKind?: ManualKind;
   estimates: boolean;
   valuation?: HomeValuation;
   onDone: (message: string) => void;
@@ -152,7 +253,7 @@ function ManualForm({
     if (next.status === "saved") onDone(next.message);
     return next;
   }, IDLE);
-  const [kind, setKind] = useState<ManualKind>(item?.kind ?? "home");
+  const [kind, setKind] = useState<ManualKind>(item?.kind ?? initialKind ?? "home");
   const [confirming, setConfirming] = useState(false);
   const [estimate, setEstimate] = useState(valuation !== undefined);
   const errors = state.status === "error" ? (state.fields ?? {}) : {};
