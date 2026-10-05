@@ -38,6 +38,7 @@ let signedIn: typeof account | null = account;
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ refresh: () => calls.push("refresh") }));
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn }));
+vi.mock("@/lib/i18n/server", async () => ({ getT: async () => (await import("@/lib/i18n/t")).EN }));
 
 const { registerFactor, startSetup, turnOff } = await import("./two-step-actions");
 

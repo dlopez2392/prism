@@ -762,9 +762,11 @@ as U.S. banks write them in either language.
   shows in English, and `pnpm test` names it.
 - The browser is handed the Spanish only on a page that's in Spanish, so an
   English page downloads none of it.
-- In Spanish so far: the shell, sign-in, Overview, Spending, Cash flow,
-  Budgets, Goals, Net worth, Future, Your year and Taxes. Connections,
-  Account, emails and push follow (`docs/ROADMAP.md`,
+- In Spanish: every screen a person uses — the money screens, Connections
+  and its imports, Account (with a Language · Idioma setting), the
+  household, app consent and unsubscribe. Still English: the privacy policy
+  and terms (a lawyer reads the Spanish first), and emails and push (they
+  need the person's language kept with their account) (`docs/ROADMAP.md`,
   item 29); connected apps (MCP) answer in English.
 
 ## Screens

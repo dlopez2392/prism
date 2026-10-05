@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Transaction } from "@/lib/finance/types";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/i18n/server", async () => ({ getT: async () => (await import("@/lib/i18n/t")).EN }));
 vi.mock("next/cache", () => ({ refresh: vi.fn() }));
 const signedIn = { current: null as unknown };
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn.current }));

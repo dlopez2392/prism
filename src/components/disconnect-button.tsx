@@ -9,9 +9,11 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Unplug } from "lucide-react";
+import { useT } from "@/components/locale";
 
 export function DisconnectButton({ itemId, name, endpoint = "/api/plaid/disconnect" }: { itemId: string; name: string; endpoint?: string }) {
   const router = useRouter();
+  const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,7 +30,7 @@ export function DisconnectButton({ itemId, name, endpoint = "/api/plaid/disconne
     });
     setBusy(false);
     if (!res.ok) {
-      setError("That didn't work. Try again in a minute.");
+      setError(t("That didn't work. Try again in a minute."));
       return;
     }
     dialog.current?.close();
@@ -43,22 +45,22 @@ export function DisconnectButton({ itemId, name, endpoint = "/api/plaid/disconne
         className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-line px-2.5 text-xs font-semibold text-ink-2 hover:bg-surface-3"
       >
         <Unplug aria-hidden className="size-3.5" />
-        Disconnect
+        {t("Disconnect")}
       </button>
       <dialog ref={dialog} className="m-auto w-[min(92vw,420px)] rounded-card border border-line bg-surface-1 p-6 text-ink-1 shadow-pop backdrop:bg-[var(--surface-0)]/70">
-        <h2 className="text-lg font-bold">Disconnect {name}?</h2>
-        <p className="mt-2 text-sm text-ink-2">Its accounts leave Prism, and the link is revoked at {name} itself, not just here. Type the name to confirm.</p>
+        <h2 className="text-lg font-bold">{t("Disconnect {name}?", { name })}</h2>
+        <p className="mt-2 text-sm text-ink-2">{t("Its accounts leave Prism, and the link is revoked at {name} itself, not just here. Type the name to confirm.", { name })}</p>
         <input
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
-          aria-label={`Type ${name} to confirm`}
+          aria-label={t("Type {name} to confirm", { name })}
           placeholder={name}
           className="mt-4 h-10 w-full rounded-ctl border border-line bg-surface-2 px-3 text-sm focus:border-[var(--focus)]"
         />
         {error ? <p className="mt-2 text-xs font-semibold text-crit-ink">{error}</p> : null}
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={() => dialog.current?.close()} className="h-9 rounded-ctl border border-line px-3.5 text-sm font-semibold hover:bg-surface-3">
-            Keep it
+            {t("Keep it")}
           </button>
           <button
             type="button"
@@ -66,7 +68,7 @@ export function DisconnectButton({ itemId, name, endpoint = "/api/plaid/disconne
             onClick={disconnect}
             className="h-9 rounded-ctl bg-crit px-3.5 text-sm font-semibold text-ink-on-accent disabled:opacity-40"
           >
-            {busy ? "Disconnecting…" : "Disconnect"}
+            {busy ? t("Disconnecting…") : t("Disconnect")}
           </button>
         </div>
       </dialog>

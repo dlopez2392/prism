@@ -83,6 +83,7 @@ const grouped = (secret: string) => secret.replace(/(.{4})/g, "$1 ").trim();
  * after each change, so this component only holds the step in between.
  */
 export function TwoStepSettings({ factorId, supabase }: { factorId: string | null; supabase: SupabaseEnv }) {
+  const t = useT();
   const [setup, setSetup] = useState<SetupStart | null>(null);
   const [starting, startTransition] = useTransition();
   const [askingOff, setAskingOff] = useState(false);
@@ -90,10 +91,10 @@ export function TwoStepSettings({ factorId, supabase }: { factorId: string | nul
   const passed = useRef<string | null>(null);
 
   const [onState, onAction, turningOn] = useActionState<FormState, FormData>(async (_prev, form) => {
-    if (!setup?.ok) return { status: "error", message: "Start set-up again." };
+    if (!setup?.ok) return { status: "error", message: t("Start set-up again.") };
     if (passed.current !== setup.factorId) {
       const checked = await checkCode(supabase, setup.factorId, readCode(form));
-      if (!checked.ok) return { status: "error", message: checked.error };
+      if (!checked.ok) return { status: "error", message: t(checked.error) };
       passed.current = setup.factorId;
     }
     const saved = await registerFactor(setup.factorId);
@@ -105,7 +106,7 @@ export function TwoStepSettings({ factorId, supabase }: { factorId: string | nul
   const [offState, offAction, turningOff] = useActionState<FormState, FormData>(async (_prev, form) => {
     if (!factorId) return { status: "done" };
     const checked = await checkCode(supabase, factorId, readCode(form));
-    if (!checked.ok) return { status: "error", message: checked.error };
+    if (!checked.ok) return { status: "error", message: t(checked.error) };
     const off = await turnOff();
     if (!off.ok) return { status: "error", message: off.error };
     setAskingOff(false);
@@ -116,30 +117,30 @@ export function TwoStepSettings({ factorId, supabase }: { factorId: string | nul
     return (
       <div>
         <p className="flex flex-wrap items-center gap-2 text-sm text-ink-2">
-          <StatusPill status="good">On</StatusPill>
-          After your email code, Prism asks for a code from your authenticator app.
+          <StatusPill status="good">{t("On")}</StatusPill>
+          {t("After your email code, Prism asks for a code from your authenticator app.")}
         </p>
         {onState.status === "done" && !askingOff ? (
           <p role="status" className="mt-2 text-xs font-semibold text-ink-2">
-            Two-step sign-in is on. Next time you sign in, have your phone handy.
+            {t("Two-step sign-in is on. Next time you sign in, have your phone handy.")}
           </p>
         ) : null}
         {askingOff ? (
           <form action={offAction} noValidate className="mt-4 max-w-xs">
-            <CodeField id="off-code" label="A current code, to turn it off" error={errorOf(offState)} />
+            <CodeField id="off-code" label={t("A current code, to turn it off")} error={errorOf(offState)} />
             <div className="mt-4 flex flex-wrap gap-3">
               <button type="submit" disabled={turningOff} className={buttonGhost}>
                 <ShieldOff aria-hidden className="size-4" />
-                {turningOff ? "Turning off…" : "Turn off two-step sign-in"}
+                {turningOff ? t("Turning off…") : t("Turn off two-step sign-in")}
               </button>
               <button type="button" onClick={() => setAskingOff(false)} className="text-sm font-semibold text-ink-2 hover:underline">
-                Keep it on
+                {t("Keep it on")}
               </button>
             </div>
           </form>
         ) : (
           <button type="button" onClick={() => setAskingOff(true)} className={`${buttonGhost} mt-4`}>
-            Turn off
+            {t("Turn off")}
           </button>
         )}
       </div>
@@ -150,32 +151,32 @@ export function TwoStepSettings({ factorId, supabase }: { factorId: string | nul
     return (
       <form action={onAction} noValidate>
         <ol className="list-decimal space-y-3 pl-5 text-sm text-ink-2 marker:font-semibold marker:text-ink-3">
-          <li>Open an authenticator app on your phone, such as Google Authenticator, Microsoft Authenticator, 1Password or Authy.</li>
+          <li>{t("Open an authenticator app on your phone, such as Google Authenticator, Microsoft Authenticator, 1Password or Authy.")}</li>
           <li>
-            Scan this code with it.
+            {t("Scan this code with it.")}
             {/* The QR image is an SVG from Supabase Auth; shown as an image, nothing in it can run. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={setup.qrCode} alt="QR code to add Prism to your authenticator app" width={176} height={176} className="mt-3 block rounded-ctl bg-[var(--qr-ground)] p-2" />
+            <img src={setup.qrCode} alt={t("QR code to add Prism to your authenticator app")} width={176} height={176} className="mt-3 block rounded-ctl bg-[var(--qr-ground)] p-2" />
             <span className="mt-2 block text-xs text-ink-3">
-              Can&apos;t scan it? Type this key into the app instead:{" "}
+              {t("Can't scan it? Type this key into the app instead:")}{" "}
               <code className="num font-mono text-[13px] font-semibold break-all text-ink-1">{grouped(setup.secret)}</code>
             </span>
           </li>
-          <li>Enter the 6-digit code the app now shows for Prism.</li>
+          <li>{t("Enter the 6-digit code the app now shows for Prism.")}</li>
         </ol>
         <div className="mt-4 max-w-xs">
-          <CodeField id="setup-code" label="Code from the app" error={errorOf(onState)} autoFocus={false} />
+          <CodeField id="setup-code" label={t("Code from the app")} error={errorOf(onState)} autoFocus={false} />
         </div>
         <p className="mt-3 text-xs text-ink-3">
-          Keep that key somewhere safe, like a password manager. If you lose your phone, adding it to a new app gets you back in.
+          {t("Keep that key somewhere safe, like a password manager. If you lose your phone, adding it to a new app gets you back in.")}
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="submit" disabled={turningOn} className={buttonPrimary}>
             <ShieldCheck aria-hidden className="size-4" />
-            {turningOn ? "Checking…" : "Turn on two-step sign-in"}
+            {turningOn ? t("Checking…") : t("Turn on two-step sign-in")}
           </button>
           <button type="button" onClick={() => setSetup(null)} className="text-sm font-semibold text-ink-2 hover:underline">
-            Cancel
+            {t("Cancel")}
           </button>
         </div>
       </form>
@@ -185,12 +186,12 @@ export function TwoStepSettings({ factorId, supabase }: { factorId: string | nul
   return (
     <div>
       <p className="flex flex-wrap items-center gap-2 text-sm text-ink-2">
-        <StatusPill status="neutral">Off</StatusPill>
-        Right now, your email inbox alone can open your account.
+        <StatusPill status="neutral">{t("Off")}</StatusPill>
+        {t("Right now, your email inbox alone can open your account.")}
       </p>
       {offState.status === "done" ? (
         <p role="status" className="mt-2 text-xs font-semibold text-ink-2">
-          Two-step sign-in is off.
+          {t("Two-step sign-in is off.")}
         </p>
       ) : null}
       {setup && !setup.ok ? (
@@ -200,7 +201,7 @@ export function TwoStepSettings({ factorId, supabase }: { factorId: string | nul
       ) : null}
       <button type="button" disabled={starting} onClick={() => startTransition(async () => setSetup(await startSetup()))} className={`${buttonPrimary} mt-4`}>
         <KeyRound aria-hidden className="size-4" />
-        {starting ? "Getting a code ready…" : "Set up two-step sign-in"}
+        {starting ? t("Getting a code ready…") : t("Set up two-step sign-in")}
       </button>
     </div>
   );

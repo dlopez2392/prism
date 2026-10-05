@@ -296,7 +296,7 @@ export const CORE: Record<string, string> = {
   "No transactions yet": "Aún no hay transacciones",
   "Nobody owes you for that one.": "Nadie te debe por esa.",
   "Nobody owes you right now": "Nadie te debe por ahora",
-  "None yet": "Ninguna todavía",
+  "None yet": "Nada todavía",
   "Not counted in spending, income or budgets: for a one-off like a car, or a work trip you're paid back for. It stays in your transactions.":
     "No cuenta en gastos, ingresos ni presupuestos: para algo excepcional como un auto, o un viaje de trabajo que te reembolsan. Sigue en tus transacciones.",
   "Not now": "Ahora no",
@@ -590,6 +590,7 @@ export const CORE: Record<string, string> = {
   "Your sign-in has ended. Sign in again, then enter a new code.": "Tu sesión terminó. Vuelve a iniciar sesión y escribe un código nuevo.",
   "Your six-month average is {pct}. That month put {amount} to work.": "Tu promedio de seis meses es del {pct}. Ese mes pusiste {amount} a trabajar.",
   "Your tags": "Tus etiquetas",
+  "Your wallets": "Tus billeteras",
   "Your year": "Tu año",
   Year: "Año",
   "a household member": "alguien del hogar",

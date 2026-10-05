@@ -9,6 +9,8 @@
 //
 // Pure, and small enough for the browser bundle: shapes only, no crypto.
 
+import { EN, type T } from "@/lib/i18n/t";
+
 export type SecretKind = "private-key" | "recovery-phrase";
 
 const BASE58 = "[1-9A-HJ-NP-Za-km-z]";
@@ -33,9 +35,13 @@ export function secretKind(x: unknown): SecretKind | null {
 }
 
 /** What to tell the person. `sent` is false when the browser stopped it, true when it reached the server. */
-export function secretWarning(kind: SecretKind, sent: boolean): string {
-  const fate = sent ? "Prism didn't keep it." : "It wasn't sent anywhere.";
-  return kind === "recovery-phrase"
-    ? `That looks like a recovery phrase. ${fate} Anyone who has it can take your coins, so never type it into a website or app. Prism only ever needs a public address.`
-    : `That's a private key, which can spend your coins. ${fate} Never type it into a website or app. Prism only ever needs a public address, or for Bitcoin an extended public key (xpub, ypub or zpub).`;
+export function secretWarning(kind: SecretKind, sent: boolean, t: T = EN): string {
+  if (kind === "recovery-phrase") {
+    return sent
+      ? t("That looks like a recovery phrase. Prism didn't keep it. Anyone who has it can take your coins, so never type it into a website or app. Prism only ever needs a public address.")
+      : t("That looks like a recovery phrase. It wasn't sent anywhere. Anyone who has it can take your coins, so never type it into a website or app. Prism only ever needs a public address.");
+  }
+  return sent
+    ? t("That's a private key, which can spend your coins. Prism didn't keep it. Never type it into a website or app. Prism only ever needs a public address, or for Bitcoin an extended public key (xpub, ypub or zpub).")
+    : t("That's a private key, which can spend your coins. It wasn't sent anywhere. Never type it into a website or app. Prism only ever needs a public address, or for Bitcoin an extended public key (xpub, ypub or zpub).");
 }

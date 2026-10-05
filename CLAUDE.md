@@ -215,7 +215,10 @@
   Sankey labels cut short). The choice is the `prism-lang` cookie, set by a
   server action (`language-actions.ts`), else the browser's
   Accept-Language. Translated so far: the shell, sign-in, Overview, Spending,
-  Cash flow, Budgets, Goals, Net worth, Future, Your year and Taxes. A screen still only in English is listed in
+  Cash flow, Budgets, Goals, Net worth, Future, Your year, Taxes, Connections
+  (with its imports), Account, the household, app consent and unsubscribe;
+  the privacy policy and terms wait for a lawyer, and emails and push for a
+  stored language choice. A screen still only in English is listed in
   `ENGLISH_ONLY` (`locale.ts`), which marks its content `lang="en"` inside a
   Spanish page so a screen reader reads it in an English voice: take it off
   the list in the same change that translates it.

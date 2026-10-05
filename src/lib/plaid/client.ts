@@ -13,6 +13,7 @@
 //   PLAID_API_URL                   — TEST HOOK, sandbox only: point at a fake Plaid
 
 import { BRAND } from "@/lib/brand";
+import { EN, type T } from "@/lib/i18n/t";
 
 /** Just the variables read here — a plain record, so tests can pass one. */
 export type Env = Record<string, string | undefined>;
@@ -54,13 +55,14 @@ export class PlaidError extends Error {
  * error code and message — never a token or a secret), and the person gets
  * plain words, with the code only as a reference to quote.
  */
-export function plaidFailure(e: unknown, step: string, sorry: string): string {
+/** `sorry` is a whole sentence in the person's language; Plaid's own `displayMessage` comes in Plaid's (English). */
+export function plaidFailure(e: unknown, step: string, sorry: string, t: T = EN): string {
   if (e instanceof PlaidError) {
     console.error(`${step}: ${e.message}`);
-    return e.displayMessage ?? `${sorry} Try again in a minute. (Plaid code: ${e.code})`;
+    return e.displayMessage ?? t("{sorry} Try again in a minute. (Plaid code: {code})", { sorry, code: e.code });
   }
   console.error(`${step}: ${e instanceof Error ? e.message : String(e)}`);
-  return "Plaid is unreachable right now. Try again in a minute.";
+  return t("Plaid is unreachable right now. Try again in a minute.");
 }
 
 export async function plaidRequest<T>(

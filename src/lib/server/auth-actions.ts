@@ -101,12 +101,13 @@ export type DeleteState = { error?: string };
  * live token outlives the person's decision.
  */
 export async function deleteAccount(_prev: DeleteState, form: FormData): Promise<DeleteState> {
+  const t = await getT();
   const account = await currentAccount();
   if (!account) redirect("/sign-in");
   const typed = String(form.get("confirm") ?? "")
     .trim()
     .toLowerCase();
-  if (!account.email || typed !== account.email.toLowerCase()) return { error: "Type your email address exactly to confirm." };
+  if (!account.email || typed !== account.email.toLowerCase()) return { error: t("Type your email address exactly to confirm.") };
 
   let key: VaultKey | null = null;
   try {
@@ -124,7 +125,7 @@ export async function deleteAccount(_prev: DeleteState, form: FormData): Promise
   }
 
   const { error } = await account.supabase.rpc("delete_my_account");
-  if (error) return { error: "We couldn't delete the account just now. Nothing was removed — try again in a minute." };
+  if (error) return { error: t("We couldn't delete the account just now. Nothing was removed — try again in a minute.") };
   await account.supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
   redirect("/");
 }

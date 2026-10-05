@@ -16,10 +16,19 @@ import { StatusPill } from "@/components/ui";
 import { cancelHouseholdInvite, inviteToHousehold, leaveTheHousehold, setAccountShared, setHouseholdView, type InviteState } from "@/lib/server/household-actions";
 import type { Household } from "@/lib/server/household-store";
 import { useT } from "@/components/locale";
+import { shortDate } from "@/lib/finance/format";
+import type { Locale } from "@/lib/i18n/locale";
 
 const MAX = 4;
 
+/** The day an invitation's link stops working, on the viewer's own calendar: "Oct 12", or "12 oct". */
+function untilDay(at: string, locale: Locale): string {
+  const d = new Date(at);
+  return shortDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`, locale);
+}
+
 export function HouseholdCard({ household }: { household: Household | null }) {
+  const t = useT();
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
@@ -45,7 +54,7 @@ export function HouseholdCard({ household }: { household: Household | null }) {
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere]">
                   {p.firstName ?? p.email}
-                  {p.me ? <span className="font-normal text-ink-3"> (you)</span> : null}
+                  {p.me ? <span className="font-normal text-ink-3"> {t("(you)")}</span> : null}
                 </div>
                 <div className="text-xs text-ink-3 [overflow-wrap:anywhere]">{p.email}</div>
               </div>
@@ -59,7 +68,7 @@ export function HouseholdCard({ household }: { household: Household | null }) {
               {/* A basis, so on a phone the button drops below rather than squeezing the email letter by letter. */}
               <div className="min-w-0 flex-1 basis-44">
                 <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere]">{i.email}</div>
-                <div className="text-xs text-ink-3">Invited · link works until {new Date(i.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                <div className="text-xs text-ink-3">{t("Invited · link works until {date}", { date: untilDay(i.expiresAt, t.locale) })}</div>
               </div>
               <button
                 type="button"
@@ -67,14 +76,14 @@ export function HouseholdCard({ household }: { household: Household | null }) {
                 onClick={() =>
                   start(async () => {
                     const res = await cancelHouseholdInvite(i.id);
-                    setProblem(res.ok ? null : "That didn't cancel. Try again in a moment.");
+                    setProblem(res.ok ? null : t("That didn't cancel. Try again in a moment."));
                     router.refresh();
                   })
                 }
                 className={buttonSmall}
               >
                 <X aria-hidden className="size-4" />
-                Cancel invitation
+                {t("Cancel invitation")}
               </button>
             </li>
           ))}
@@ -91,22 +100,22 @@ export function HouseholdCard({ household }: { household: Household | null }) {
         {seats < MAX ? (
           <button type="button" onClick={openInvite} className={clsx(household ? buttonGhost : buttonPrimary)}>
             <UserPlus aria-hidden className="size-4" />
-            Invite someone
+            {t("Invite someone")}
           </button>
         ) : (
-          <span className="text-sm text-ink-3">Your household is full: four people, invitations included.</span>
+          <span className="text-sm text-ink-3">{t("Your household is full: four people, invitations included.")}</span>
         )}
         {household && !leaving ? (
           <button type="button" onClick={() => setLeaving(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-crit-ink hover:underline">
             <LogOut aria-hidden className="size-4" />
-            Leave household
+            {t("Leave household")}
           </button>
         ) : null}
       </div>
 
       {leaving ? (
         <div role="alert" className="rounded-ctl border border-line-strong bg-surface-2 p-3">
-          <p className="text-sm font-semibold text-ink-1">Leave your household? Everything you share stops at once, and you&apos;ll no longer see theirs.</p>
+          <p className="text-sm font-semibold text-ink-1">{t("Leave your household? Everything you share stops at once, and you'll no longer see theirs.")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
@@ -114,7 +123,7 @@ export function HouseholdCard({ household }: { household: Household | null }) {
               onClick={() =>
                 start(async () => {
                   const res = await leaveTheHousehold();
-                  setProblem(res.ok ? null : "That didn't work. Try again in a moment.");
+                  setProblem(res.ok ? null : t("That didn't work. Try again in a moment."));
                   setLeaving(false);
                   router.refresh();
                 })
@@ -122,16 +131,21 @@ export function HouseholdCard({ household }: { household: Household | null }) {
               className="inline-flex h-9 items-center gap-1.5 rounded-ctl border border-crit bg-surface-1 px-3.5 text-sm font-semibold text-crit-ink transition-colors duration-150 hover:bg-surface-3 disabled:opacity-60"
             >
               <LogOut aria-hidden className="size-4" />
-              {pending ? "Leaving…" : "Leave"}
+              {pending ? t("Leaving…") : t("Leave")}
             </button>
             <button type="button" onClick={() => setLeaving(false)} className={buttonSmall}>
-              Stay
+              {t("Stay")}
             </button>
           </div>
         </div>
       ) : null}
 
-      <Dialog dialogRef={dialog} title="Invite someone" description="They'll see only the accounts you choose to share, and you'll see only theirs." icon={UserPlus}>
+      <Dialog
+        dialogRef={dialog}
+        title={t("Invite someone")}
+        description={t("They'll see only the accounts you choose to share, and you'll see only theirs.")}
+        icon={UserPlus}
+      >
         <InviteForm key={session} onClose={() => dialog.current?.close()} />
       </Dialog>
     </div>
@@ -139,6 +153,7 @@ export function HouseholdCard({ household }: { household: Household | null }) {
 }
 
 function InviteForm({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const [state, action, pending] = useActionState(inviteToHousehold, { status: "idle" } as InviteState);
   const [copied, setCopied] = useState(false);
 
@@ -149,15 +164,20 @@ function InviteForm({ onClose }: { onClose: () => void }) {
   }
 
   if (state.status === "invited") {
+    // One sentence, with the address in bold wherever the language puts it.
+    const [before, after] = t(
+      "Send this link to {email} by text or email. It works once, for 7 days, and only when they're signed in to Prism with that address. Prism shows it only now.",
+    ).split("{email}");
     return (
       <div className="space-y-4">
         <p className="text-sm text-ink-2">
-          Send this link to <span className="font-semibold text-ink-1">{state.email}</span> by text or email. It works once, for 7 days, and only when
-          they&apos;re signed in to Prism with that address. Prism shows it only now.
+          {before}
+          <span className="font-semibold text-ink-1">{state.email}</span>
+          {after}
         </p>
         <div className="flex gap-2">
           <label className="min-w-0 flex-1">
-            <span className="sr-only">Invitation link</span>
+            <span className="sr-only">{t("Invitation link")}</span>
             <input readOnly value={state.link} onFocus={(e) => e.currentTarget.select()} className="h-10 w-full rounded-ctl border border-line bg-surface-2 px-3 font-mono text-xs text-ink-1" />
           </label>
           <button
@@ -173,15 +193,15 @@ function InviteForm({ onClose }: { onClose: () => void }) {
             className={buttonGhost}
           >
             {copied ? <Check aria-hidden className="size-4" /> : <Copy aria-hidden className="size-4" />}
-            {copied ? "Copied" : "Copy"}
+            {copied ? t("Copied") : t("Copy")}
           </button>
         </div>
         <p role="status" className="sr-only">
-          {copied ? "Link copied." : ""}
+          {copied ? t("Link copied.") : ""}
         </p>
         <div className="flex justify-end">
           <button type="button" onClick={onClose} className={buttonPrimary}>
-            Done
+            {t("Done")}
           </button>
         </div>
       </div>
@@ -190,13 +210,20 @@ function InviteForm({ onClose }: { onClose: () => void }) {
 
   return (
     <form onSubmit={submit} noValidate>
-      <TextInput name="email" label="Their email" defaultValue="" autoComplete="email" hint="The address they sign in to Prism with. They'll need to be 18 or older." error={state.status === "error" ? state.message : undefined} />
+      <TextInput
+        name="email"
+        label={t("Their email")}
+        defaultValue=""
+        autoComplete="email"
+        hint={t("The address they sign in to Prism with. They'll need to be 18 or older.")}
+        error={state.status === "error" ? state.message : undefined}
+      />
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" onClick={onClose} className={buttonGhost}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" disabled={pending} className={clsx(buttonPrimary, "min-w-28")}>
-          {pending ? "Making link…" : "Make the link"}
+          {pending ? t("Making link…") : t("Make the link")}
         </button>
       </div>
     </form>
@@ -207,13 +234,14 @@ export type ShareableAccount = { id: string; name: string; detail: string; itemI
 
 /** One row per account the person owns: shared with the household, or private (the default). */
 export function ShareAccounts({ accounts, shared }: { accounts: ShareableAccount[]; shared: string[] }) {
+  const t = useT();
   const router = useRouter();
   const [on, setOn] = useState(() => new Set(shared));
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   if (accounts.length === 0) {
-    return <p className="mt-3 text-sm text-ink-3">Connect a bank, or add something on Net worth, and you can choose to share it here.</p>;
+    return <p className="mt-3 text-sm text-ink-3">{t("Connect a bank, or add something on Net worth, and you can choose to share it here.")}</p>;
   }
   return (
     <div className="mt-3">
@@ -230,7 +258,7 @@ export function ShareAccounts({ accounts, shared }: { accounts: ShareableAccount
                 <button
                   type="button"
                   aria-pressed={isOn}
-                  aria-label={`Share ${a.name} with your household`}
+                  aria-label={t("Share {account} with your household", { account: a.name })}
                   disabled={pending}
                   onClick={() =>
                     start(async () => {
@@ -241,7 +269,7 @@ export function ShareAccounts({ accounts, shared }: { accounts: ShareableAccount
                       const res = await setAccountShared(a.id, a.itemId, !isOn);
                       if (!res.ok) {
                         setOn(on);
-                        setProblem("That didn't change. Try again in a moment.");
+                        setProblem(t("That didn't change. Try again in a moment."));
                       } else setProblem(null);
                       router.refresh();
                     })
@@ -252,10 +280,10 @@ export function ShareAccounts({ accounts, shared }: { accounts: ShareableAccount
                   )}
                 >
                   {isOn ? <Share2 aria-hidden className="size-4" /> : <House aria-hidden className="size-4" />}
-                  {isOn ? "Shared" : "Private"}
+                  {isOn ? t("Shared") : t("Private")}
                 </button>
               ) : (
-                <StatusPill status="neutral">Can&apos;t share yet</StatusPill>
+                <StatusPill status="neutral">{t("Can't share yet")}</StatusPill>
               )}
             </li>
           );

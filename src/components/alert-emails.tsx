@@ -9,6 +9,7 @@
 import { startTransition, useActionState, useState, type FormEvent } from "react";
 import { CircleCheck } from "lucide-react";
 import { buttonPrimary, FormMessage } from "@/components/dialog";
+import { useT } from "@/components/locale";
 import { ALERT_CHOICE_LABELS, ALERT_CHOICES, type AlertChoice } from "@/lib/alerts/choices";
 import { BRAND } from "@/lib/brand";
 import { IDLE } from "@/lib/finance/plan";
@@ -19,6 +20,7 @@ export type AlertEmailSettings = { on: boolean; kinds: AlertChoice[]; amounts: b
 const box = "mt-0.5 size-4 shrink-0 accent-button";
 
 export function AlertEmails({ settings, email }: { settings: AlertEmailSettings; email: string }) {
+  const t = useT();
   const [state, action, pending] = useActionState(saveAlertEmails, IDLE);
   const [on, setOn] = useState(settings.on);
   const kindsError = state.status === "error" ? state.fields?.kinds : undefined;
@@ -35,20 +37,20 @@ export function AlertEmails({ settings, email }: { settings: AlertEmailSettings;
       <label className="flex cursor-pointer items-start gap-2.5 rounded-ctl bg-surface-2 p-3 text-sm text-ink-1">
         <input type="checkbox" name="on" checked={on} onChange={(e) => setOn(e.target.checked)} className={box} />
         <span>
-          <span className="font-semibold">Email me alerts</span>
-          <span className="mt-0.5 block text-xs text-ink-2">To {email}, at most once a day, only when there&apos;s something new.</span>
+          <span className="font-semibold">{t("Email me alerts")}</span>
+          <span className="mt-0.5 block text-xs text-ink-2">{t("To {email}, at most once a day, only when there's something new.", { email })}</span>
         </span>
       </label>
 
       {/* Disabled boxes aren't sent, which is why turning emails off saves only that: the choices wait for next time. */}
       <fieldset disabled={!on} className="space-y-2.5 disabled:opacity-60" aria-describedby={kindsError ? "alert-kinds-error" : undefined}>
-        <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-3">What to email about</legend>
+        <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-3">{t("What to email about")}</legend>
         {ALERT_CHOICES.map((kind) => (
           <label key={kind} className="flex items-start gap-2.5 text-sm text-ink-1">
             <input type="checkbox" name="kinds" value={kind} defaultChecked={settings.kinds.includes(kind)} className={box} />
             <span>
-              {ALERT_CHOICE_LABELS[kind].label}
-              <span className="block text-xs text-ink-3">{ALERT_CHOICE_LABELS[kind].hint}</span>
+              {t(ALERT_CHOICE_LABELS[kind].label)}
+              <span className="block text-xs text-ink-3">{t(ALERT_CHOICE_LABELS[kind].hint)}</span>
             </span>
           </label>
         ))}
@@ -60,18 +62,22 @@ export function AlertEmails({ settings, email }: { settings: AlertEmailSettings;
         <label className="flex items-start gap-2.5 border-t border-line pt-3 text-sm text-ink-1">
           <input type="checkbox" name="refresh" defaultChecked={settings.refresh} className={box} />
           <span>
-            Check my banks each morning
+            {t("Check my banks each morning")}
             <span className="block text-xs text-ink-3">
-              So an email speaks for today, not your last visit. Before sending, {BRAND.product} reads your banks&apos; balances and new transactions, nothing more, and keeps them
-              encrypted as usual. Not with Coinbase connected.
+              {t(
+                "So an email speaks for today, not your last visit. Before sending, {product} reads your banks' balances and new transactions, nothing more, and keeps them encrypted as usual. Not with Coinbase connected.",
+                { product: BRAND.product },
+              )}
             </span>
           </span>
         </label>
         <label className="flex items-start gap-2.5 text-sm text-ink-1">
           <input type="checkbox" name="amounts" defaultChecked={settings.amounts} className={box} />
           <span>
-            Show dollar amounts
-            <span className="block text-xs text-ink-3">Subjects can show on a lock screen. Without amounts, emails say what happened and you open {BRAND.product} for the numbers.</span>
+            {t("Show dollar amounts")}
+            <span className="block text-xs text-ink-3">
+              {t("Subjects can show on a lock screen. Without amounts, emails say what happened and you open {product} for the numbers.", { product: BRAND.product })}
+            </span>
           </span>
         </label>
       </fieldset>
@@ -79,7 +85,7 @@ export function AlertEmails({ settings, email }: { settings: AlertEmailSettings;
       {kindsError ? null : <FormMessage state={state} />}
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={pending} className={buttonPrimary}>
-          {pending ? "Saving…" : "Save"}
+          {pending ? t("Saving…") : t("Save")}
         </button>
         {/* Always in the DOM so screen readers announce it. */}
         <p role="status" className="flex items-center gap-1 text-xs font-semibold text-good-ink">

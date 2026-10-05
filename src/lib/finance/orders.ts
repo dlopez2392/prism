@@ -61,9 +61,10 @@ export type OrderFile = { rows: OrderRow[]; skipped: number };
 /**
  * Amazon's order history (Retail.OrderHistory.1.csv), or null when the file
  * isn't one. Items in another currency, cancelled, or without an amount are
- * counted as skipped, never guessed at.
+ * counted as skipped, never guessed at. An item with no name gets one in the
+ * page's language.
  */
-export function readAmazonFile(text: string): OrderFile | null {
+export function readAmazonFile(text: string, t: T = EN): OrderFile | null {
   const all = parseCsv(text, ORDER_LIMITS.rows + 5);
   const at = headerAt(all, "order id", "order date", "total owed", "product name");
   if (at < 0) return null;
@@ -95,7 +96,7 @@ export function readAmazonFile(text: string): OrderFile | null {
       order,
       date,
       ship: parseDate(cell(r, shipped)),
-      name: cleanText(cell(r, product), ORDER_LIMITS.name) || "An Amazon item",
+      name: cleanText(cell(r, product), ORDER_LIMITS.name) || t("An Amazon item"),
       qty: Number.isSafeInteger(qty) && qty > 0 ? Math.min(qty, 999) : 1,
       amount,
     });
@@ -117,13 +118,14 @@ export type OrderResult = {
   to: ISODate | null;
 };
 
-/** The items a charge paid for, as kept: at most ORDER_LIMITS.items, the rest added up as one, so they always total the charge. */
-export function keptItems(rows: Pick<OrderRow, "name" | "qty" | "amount">[]): OrderItem[] {
+/** The items a charge paid for, as kept: at most ORDER_LIMITS.items, the rest added up as one (named in the page's language), so they always total the charge. */
+export function keptItems(rows: Pick<OrderRow, "name" | "qty" | "amount">[], t: T = EN): OrderItem[] {
   const items = rows.map((r) => ({ name: r.name, qty: r.qty, amount: r.amount }));
   if (items.length <= ORDER_LIMITS.items) return items;
   const head = items.slice(0, ORDER_LIMITS.items - 1);
   const rest = items.slice(ORDER_LIMITS.items - 1);
-  return [...head, { name: `${rest.length} more items`, qty: rest.reduce((s, x) => s + x.qty, 0), amount: rest.reduce((s, x) => s + x.amount, 0) }];
+  // Always two or more: one more would have fit.
+  return [...head, { name: t("{n} more items", { n: rest.length }), qty: rest.reduce((s, x) => s + x.qty, 0), amount: rest.reduce((s, x) => s + x.amount, 0) }];
 }
 
 /**
@@ -134,7 +136,7 @@ export function keptItems(rows: Pick<OrderRow, "name" | "qty" | "amount">[]): Or
  * after. Closest dates pair first, shipments before whole orders, and an
  * item is never counted in two charges.
  */
-export function matchOrders(rows: OrderRow[], lines: BankLine[]): OrderResult {
+export function matchOrders(rows: OrderRow[], lines: BankLine[], t: T = EN): OrderResult {
   const amazon = lines.filter((l) => l.amount < 0 && isAmazon(l.merchant));
   const byOrder = new Map<string, number[]>();
   rows.forEach((r, i) => byOrder.set(r.order, [...(byOrder.get(r.order) ?? []), i]));
@@ -181,7 +183,7 @@ export function matchOrders(rows: OrderRow[], lines: BankLine[]): OrderResult {
     lineUsed.add(p.line);
     const l = amazon[p.line]!;
     const first = rows[c.rows[0]!]!;
-    matches.push({ order: c.order, date: first.date, items: keptItems(c.rows.map((i) => rows[i]!)), txnId: l.id, amount: l.amount, bankDate: l.date });
+    matches.push({ order: c.order, date: first.date, items: keptItems(c.rows.map((i) => rows[i]!), t), txnId: l.id, amount: l.amount, bankDate: l.date });
   }
   const dates = rows.map((r) => r.date).sort();
   return {
@@ -269,12 +271,13 @@ export function orderLabel(n: Pick<OrderNote, "items">, t: T = EN): string {
   return t("{names} and {n} more", { names: names.slice(0, 2).join(", "), n: names.length - 2 });
 }
 
-/** A charge's items as the parts of a split: at most `max`, the smallest added up as the last, always totalling the charge. */
-export function itemParts(items: OrderItem[], max: number): { name: string; amount: Cents }[] {
+/** A charge's items as the parts of a split: at most `max`, the smallest added up as the last (named in the page's language), always totalling the charge. */
+export function itemParts(items: OrderItem[], max: number, t: T = EN): { name: string; amount: Cents }[] {
   const parts = items.map((i) => ({ name: i.name, amount: i.amount }));
   if (parts.length <= max) return parts;
   const big = [...parts].sort((a, b) => b.amount - a.amount);
   const head = big.slice(0, max - 1);
   const rest = big.slice(max - 1);
-  return [...head, { name: `${rest.length} other items`, amount: rest.reduce((s, x) => s + x.amount, 0) }];
+  // Always two or more: one more would have fit.
+  return [...head, { name: t("{n} other items", { n: rest.length }), amount: rest.reduce((s, x) => s + x.amount, 0) }];
 }

@@ -25,6 +25,7 @@ import { loadAccount } from "@/lib/server/account-store";
 import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey, type VaultKey } from "@/lib/server/vault";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
+import { getT } from "@/lib/i18n/server";
 
 export async function POST(req: Request) {
   const refused = sameOriginJson(req);
@@ -43,14 +44,15 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { from?: unknown; itemId?: unknown; kind?: unknown } | null;
   const kind: LinkKind = body?.kind === "investments" ? "investments" : "bank";
   const account = await currentAccount();
-  const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: config.env !== "sandbox" });
+  const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: config.env !== "sandbox" }, await getT());
   if (refusal) return NextResponse.json({ error: refusal.error, message: refusal.message }, { status: refusal.status });
   const jar = await cookies();
   const vault = account ? null : (open(jar.get(VAULT_COOKIE)?.value, key) ?? emptyVault());
   // Signing in to one of this person's own banks again: the only way to its access token is their own list.
   const again = body?.itemId === undefined ? null : ((account ? (await loadAccount(account, key)).items : vault!.items).find((i) => i.itemId === body.itemId) ?? null);
   if (body?.itemId !== undefined && !again) {
-    return NextResponse.json({ error: "not_found", message: "That bank isn't connected any more. Connect it again from Connections." }, { status: 404 });
+    const t = await getT();
+    return NextResponse.json({ error: "not_found", message: t("That bank isn't connected any more. Connect it again from Connections.") }, { status: 404 });
   }
   const accessToken = again?.accessToken;
   // The origin as the browser saw it (a TLS-terminating proxy makes req.url say http).
@@ -81,6 +83,7 @@ export async function POST(req: Request) {
     else if (jar.has(RETURN_COOKIE)) jar.set(RETURN_COOKIE, "", clearedReturnCookie());
     return NextResponse.json({ linkToken, env: config.env });
   } catch (e) {
-    return NextResponse.json({ error: "plaid_error", message: plaidFailure(e, "Plaid Link could not start", "Plaid couldn't start the connection.") }, { status: 502 });
+    const t = await getT();
+    return NextResponse.json({ error: "plaid_error", message: plaidFailure(e, "Plaid Link could not start", t("Plaid couldn't start the connection."), t) }, { status: 502 });
   }
 }
