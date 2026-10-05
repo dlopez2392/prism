@@ -3,7 +3,7 @@
 // row-level security holds to (second_step_pending) once it's on.
 
 import { watchErrors } from "../helpers";
-import { codeFor, expect, test, totp } from "./fixtures";
+import { codeFor, expect, mailSeen, test, totp } from "./fixtures";
 
 test("alert email choices are kept in the account", async ({ page, account }) => {
   void account;
@@ -37,9 +37,9 @@ test("two-step sign-in, once on, is asked for after the email code, and nothing 
   await page.waitForURL("/");
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(account.email);
-  const sent = Date.now();
+  const seen = await mailSeen(account.email);
   await page.getByRole("button", { name: "Email me a code" }).click();
-  await page.getByLabel("Code from the email").fill(await codeFor(account.email, sent));
+  await page.getByLabel("Code from the email").fill(await codeFor(account.email, seen));
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL(/\/sign-in\/two-step/);
 
