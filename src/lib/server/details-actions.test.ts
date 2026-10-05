@@ -122,6 +122,21 @@ describe("keeping a transaction's details", () => {
     expect(opened(row).lines).toEqual({ c1: { tags: ["Party"] }, c2: { whole: true } });
   });
 
+  it("keeps a shop's split made from a purchase with nothing else to keep", async () => {
+    const { db, row } = profileDb(null);
+    signIn(db);
+    // No tags, nobody owes: this line keeps nothing of its own, and the shop's split is all there is.
+    expect(await saveTransactionDetail("c1", { ...SPLIT, rule: true })).toMatchObject({ status: "saved", message: "Split into 2 parts, and so is every Costco purchase." });
+    expect(opened(row)).toEqual({ v: 1, lines: {}, rules: { costco: COSTCO } });
+  });
+
+  it("keeps the shops' splits when the last line's own details are cleared", async () => {
+    const { db, row } = profileDb(sealPacked({ v: 1, lines: { pay: { tags: ["Bonus"] } }, rules: { costco: COSTCO } }, KEY));
+    signIn(db);
+    expect(await saveTransactionDetail("pay", {})).toMatchObject({ status: "saved", message: "Back to how the bank sent it." });
+    expect(opened(row)).toEqual({ v: 1, lines: {}, rules: { costco: COSTCO } });
+  });
+
   it("takes the shop's split away when the box is unticked, keeping this one's own", async () => {
     const { db, row } = profileDb(sealPacked({ v: 1, lines: {}, rules: { costco: COSTCO } }, KEY));
     signIn(db);
@@ -160,5 +175,14 @@ describe("keeping a transaction's details", () => {
     expect(await setSplitRule("target", null)).toMatchObject({ status: "error", message: expect.stringMatching(/no split/) });
     expect(await setSplitRule(7, null)).toMatchObject({ status: "error" });
     expect(writes).toHaveLength(count);
+  });
+
+  it("puts back the only shop's split there was, and clears the column once nothing is left", async () => {
+    const { db, row } = profileDb(sealPacked({ v: 1, lines: {}, rules: { costco: COSTCO } }, KEY));
+    signIn(db);
+    expect(await setSplitRule("costco", null)).toMatchObject({ status: "saved" });
+    expect(row.sealed_txn_details).toBeNull();
+    expect(await setSplitRule("costco", COSTCO)).toMatchObject({ status: "saved", message: "Every Costco purchase is split again." });
+    expect(opened(row)).toEqual({ v: 1, lines: {}, rules: { costco: COSTCO } });
   });
 });

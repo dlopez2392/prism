@@ -193,13 +193,11 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
           <Card className="p-5 sm:p-6 lg:col-span-6">
             <CardHeader title="Owed to you" subtitle={owed.length ? `${money(owedTotal)} from ${owed.length} ${owed.length === 1 ? "purchase" : "purchases"}` : "Nothing open"} />
-            {owed.length ? (
-              <div className="mt-2">
-                <OwedList rows={owed} />
-              </div>
-            ) : (
-              <EmptyState icon={HandCoins} title="Nobody owes you right now" body="Covered dinner or bought the tickets? Open the purchase below and say who owes you. It waits here until they pay you back." />
-            )}
+            {/* Mounted even with nobody left, so "Paid back" on the last one keeps its Undo. */}
+            <OwedList
+              rows={owed}
+              empty={<EmptyState icon={HandCoins} title="Nobody owes you right now" body="Covered dinner or bought the tickets? Open the purchase below and say who owes you. It waits here until they pay you back." />}
+            />
           </Card>
           <Card className="p-5 sm:p-6 lg:col-span-6">
             <CardHeader title="Your tags" subtitle={tags.length ? "Spent under each, the last 12 months" : "None yet"} />
@@ -221,14 +219,8 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
               <EmptyState icon={Tag} title="Total a trip or a project" body="Tag purchases like Vacation 2026 or Kitchen redo to see what each cost across every category. Open any transaction below to add one." />
             )}
           </Card>
-          {data.splitRules.length ? (
-            <Card className="p-5 sm:p-6 lg:col-span-12">
-              <CardHeader title="Split rules" subtitle="Shops whose every purchase you split the same way. A purchase you split yourself, or keep whole, keeps its own." />
-              <div className="mt-2">
-                <SplitRules rules={data.splitRules} />
-              </div>
-            </Card>
-          ) : null}
+          {/* Its own card, shown while there are rules, and kept for the Undo after the last is removed. */}
+          <SplitRules rules={data.splitRules} />
         </div>
       ) : null}
 

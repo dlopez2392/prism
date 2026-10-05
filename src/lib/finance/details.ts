@@ -222,6 +222,11 @@ export function checkDetail(t: Pick<Transaction, "amount" | "category">, x: unkn
 
 const dollars = (c: Cents) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/** Anything to keep: a line's own details, or a shop's split with no line of its own (a split rule made from a plain purchase). */
+export function hasDetails(details: TxnDetails): boolean {
+  return Object.keys(details.lines).length > 0 || Object.keys(details.rules ?? {}).length > 0;
+}
+
 /** The details with one transaction's set (or cleared, with null). */
 export function withDetail(old: TxnDetails, id: string, detail: TxnDetail | null): TxnDetails {
   const lines = { ...old.lines };
@@ -240,8 +245,8 @@ export function withRule(old: TxnDetails, key: string, rule: SplitRule | null): 
 
 /** Each transaction with what the person added: a split becomes its parts. Never changes the transactions it's given. */
 export function applyDetails<T extends Transaction>(txns: T[], details: TxnDetails): T[] {
+  if (!hasDetails(details)) return txns;
   const rules = details.rules ?? {};
-  if (!Object.keys(details.lines).length && !Object.keys(rules).length) return txns;
   const out: T[] = [];
   for (const t of txns) {
     const d = Object.hasOwn(details.lines, t.id) ? details.lines[t.id]! : null;
