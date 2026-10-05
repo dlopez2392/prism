@@ -244,8 +244,8 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     widths, the theme toggle, Can I afford it?, the tax summary, the
     ledger's search and links, and the doors a stranger tries. Its first run
     caught a real gap: on a phone nothing said the example household wasn't
-    real money (now it does). Next, if it's ever needed: the signed-in
-    journeys against a throwaway Supabase project, and visual comparisons.
+    real money (now it does). Signed-in journeys followed (23). Next, if
+    it's ever needed: visual comparisons.
 19. **Bills that don't come every month.** **Built (2026-10-04):** bills
     that come every three, six or twelve months (insurance renewals, a
     quarterly water bill, a yearly membership) are found over two years of
@@ -277,3 +277,15 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     the nudge and hands it to the phone's share sheet, or copies it. Next, if
     people ask for it: tags that follow a shop, and a Venmo request link
     once there's a way to know the friend's Venmo name.
+23. **Signed-in browser tests.** **Built (2026-10-05):** the browser tests
+    also run signed in, at both widths, against a local Supabase stack built
+    from the migrations on the CI runner (no hosted project, no cost, no
+    secret, production unreachable): sign-up with the emailed code, money
+    that follows the account to another device, splits, tags, who owes you
+    and Remind, split rules, budgets, goals, a hand-added debt in the payoff
+    planner, alert email choices, and two-step sign-in. The first run found
+    two bugs the unit tests had passed, both fixed: a split kept for every
+    purchase at a shop was dropped when it was the only thing saved, and
+    Undo vanished after paying back the last debt owed or removing the last
+    split rule. Next, if it's needed: households (two accounts in one test)
+    and the connected-app sign-in.

@@ -2,7 +2,8 @@ name: CI
 
 # Prism's gates, exactly as a contributor runs them locally — so CI and a
 # terminal cannot disagree about what "green" means. No secrets: the unit
-# suite, the build and the browser tests run on the demo household.
+# suite, the build and the browser tests run on the demo household, and the
+# signed-in browser tests on a throwaway Supabase stack on this runner.
 
 on:
   push:
@@ -15,7 +16,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       # Reads the pinned version from package.json's "packageManager" field.
@@ -42,9 +43,19 @@ jobs:
           COINBASE_CLIENT_ID: ci-placeholder
           COINBASE_CLIENT_SECRET: ci-placeholder
       - run: pnpm build
-      # The built app in a real browser, on the example household, at desktop
-      # and phone widths (playwright.config.ts). Part of verify, so the rule
-      # that guards main requires it without a new required check.
+      # The signed-in browser tests' database: a LOCAL Supabase stack
+      # (supabase/config.toml), built from supabase/migrations on this runner
+      # and gone with it. Nothing hosted and no secret, so production is out
+      # of reach; e2e/accounts/stack.ts refuses anything that isn't this
+      # machine's all the same. The CLI is pinned: it pins the stack's images.
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.119.0
+      - run: supabase start -x imgproxy,postgres-meta,supavisor,vector,logflare
+      # The built app in a real browser, at desktop and phone widths
+      # (playwright.config.ts): the example household, and signed in on the
+      # local stack. Part of verify, so the rule that guards main requires it
+      # without a new required check.
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - if: failure()

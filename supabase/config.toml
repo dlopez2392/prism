@@ -1,0 +1,102 @@
+# supabase/config.toml — the LOCAL stack the signed-in browser tests run on
+# (e2e/accounts/, part of `pnpm test:e2e`). It describes a throwaway copy of
+# Prism's database on this machine, built from supabase/migrations on every
+# start, and nothing else: production ("prism") is configured in its own
+# dashboard, and this file is never linked or pushed to it. Only the services
+# the tests need are switched on; the rest are off so CI starts quickly.
+
+project_id = "prism-local"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+health_timeout = "2m"
+# Production's major version (prism runs Postgres 17).
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+[db.migrations]
+enabled = true
+
+# No seed: every test signs up its own fresh account and brings its own money.
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+
+# Mailpit: the sign-in emails land here, and the tests read the code from it.
+[local_smtp]
+enabled = true
+port = 54324
+
+[storage]
+enabled = false
+
+[auth]
+enabled = true
+# The signed-in tests serve Prism on port 3101 (playwright.config.ts).
+site_url = "http://localhost:3101"
+additional_redirect_urls = ["http://localhost:3101/auth/callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+# Every test signs up a new account from the same address, so the limits that
+# protect production would stop the suite halfway. They stay as they are there.
+[auth.rate_limit]
+email_sent = 1000
+sign_in_sign_ups = 1000
+token_verifications = 1000
+token_refresh = 1000
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+double_confirm_changes = true
+secure_password_change = false
+max_frequency = "1s"
+otp_length = 6
+otp_expiry = 3600
+
+# The code, as production's email carries it (the stock local email has only a link).
+[auth.email.template.magic_link]
+subject = "Your Prism code"
+content_path = "./supabase/templates/sign-in.html"
+
+[auth.email.template.confirmation]
+subject = "Your Prism code"
+content_path = "./supabase/templates/sign-in.html"
+
+# Two-step sign-in (authenticator app), as production has it.
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
