@@ -3,7 +3,8 @@ import path from "node:path";
 
 export default defineConfig({
   test: {
-    include: ["src/**/*.test.ts"],
+    // e2e/: the browser tests' own guards (e2e/accounts/stack.test.ts), never a browser test.
+    include: ["src/**/*.test.ts", "e2e/**/*.test.ts"],
     // The Plaid and Coinbase adapters, the token vault and accounts (Supabase)
     // read their configuration from the environment. Pin it OFF for the unit
     // suite so real keys can never change what a test asserts: a developer's

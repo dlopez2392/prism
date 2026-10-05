@@ -7,11 +7,27 @@
   shares no code, database, authentication or deployment with it.
 - Product and company names live in `src/lib/brand.ts`; never hard-code them.
 - Gates before any merge: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
-  `pnpm build`, `pnpm test:e2e` (Playwright on the built app, example
-  household only, desktop and 360px). CI runs all five in job `verify`
-  (`.github/workflows/ci.yml`). A new screen gets a row in
-  `e2e/screens.spec.ts`; a test that needs real money or a signed-in
-  account belongs in the unit suite, never e2e.
+  `pnpm build`, `pnpm test:e2e` (Playwright on the built app, desktop and
+  360px: the example household, and the signed-in tests in `e2e/accounts/`).
+  CI runs all five in job `verify` (`.github/workflows/ci.yml`). A new screen
+  gets a row in `e2e/screens.spec.ts`; a test that needs real money (a bank,
+  Coinbase, a wallet, RentCast) belongs in the unit suite, never e2e.
+- Signed-in browser tests (owner-approved 2026-10-05) run ONLY on the LOCAL
+  Supabase stack (`supabase/config.toml`, rebuilt from `supabase/migrations`
+  on every `supabase start`; CI pins the CLI). `e2e/accounts/stack.ts`
+  refuses any address that isn't loopback, any key that isn't publishable and
+  anything naming production, before a server starts: never point them at a
+  hosted project, never hand them a secret or service-role key, and make
+  every account through the sign-in form (`signIn`, the code read from the
+  stack's Mailpit). Each test signs up its own fresh account and brings its
+  money through the CSV importer (`importRows`), so tests never share state.
+  The signed-in server gets a vault key made up per run, and alert emails
+  switched on with a placeholder Resend key and a job secret no test is
+  given, so nothing can send. Without the stack a local run leaves them out
+  with a note; CI refuses to. A save that a person makes and reads back
+  belongs here as well as in the unit suite: the first run found a split
+  rule dropped on save and an Undo lost with the last row, both of which the
+  unit tests had passed.
 - **`main` is protected by a GitHub ruleset (since 2026-09-29), with no
   bypass, the owner included.** Changes arrive only through a pull request
   whose `verify` check is green on its head commit and whose branch is up to

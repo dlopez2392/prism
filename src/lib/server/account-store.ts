@@ -13,7 +13,7 @@ import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/li
 import { assembleImports, type ImportedHistory, type LockedImport } from "@/lib/finance/import";
 import { storedHomeValues, validHomeValues, type HomeValuation } from "@/lib/finance/home-value";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
-import { NO_DETAILS, validDetails, type TxnDetails } from "@/lib/finance/details";
+import { hasDetails, NO_DETAILS, validDetails, type TxnDetails } from "@/lib/finance/details";
 import { NO_P2P_NOTES, validP2pNotes, type P2pNotes } from "@/lib/finance/p2p";
 import { storedWallets, validWallets, walletStale, type Reading, type Script, type Wallet } from "@/lib/crypto/wallets";
 import { validBudgets, validGoals, type GoalSettings, type Plan } from "@/lib/finance/plan";
@@ -382,9 +382,9 @@ export async function loadAccountDetails(account: Account, key: VaultKey): Promi
   return data?.sealed_txn_details ? validDetails(openPacked(data.sealed_txn_details, key)) : NO_DETAILS;
 }
 
-/** Sealed: the person's own words about their money, and other people's names. Null when there are none left. */
+/** Sealed: the person's own words about their money, and other people's names. Null only when no line AND no shop's split is left. */
 export function saveAccountDetails(account: Account, details: TxnDetails, key: VaultKey) {
-  return upsertProfile(account, { sealed_txn_details: Object.keys(details.lines).length ? sealPacked(details, key) : null });
+  return upsertProfile(account, { sealed_txn_details: hasDetails(details) ? sealPacked(details, key) : null });
 }
 
 /** What they own or owe, read strictly before a save, like category fixes: a failed read never passes for "nothing". */

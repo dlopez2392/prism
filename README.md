@@ -767,6 +767,7 @@ pnpm lint
 pnpm test          # vitest — analytics, geometry, Plaid + Coinbase, vault, plans, calendar
 pnpm build
 pnpm test:e2e      # Playwright — the built app in a browser, desktop and 360px phone
+                   #   (signed in too, when the local Supabase stack is running)
 ```
 
 CI (`.github/workflows/ci.yml`) runs all five on every push, the browser
@@ -782,6 +783,33 @@ links; and the doors a stranger tries (framing, downloads, the AI
 connector). Locally, after `pnpm build`, `pnpm test:e2e` starts the server
 itself (or reuses one on port 3100); on a machine without Chromium, run
 `pnpm exec playwright install chromium` once.
+
+The signed-in tests (`e2e/accounts/`) serve the same build a second time,
+on port 3101, with accounts switched on against a **local** Supabase stack:
+a throwaway copy of Prism's database on the machine running the tests,
+built from `supabase/migrations` (`supabase/config.toml`). Nothing hosted is
+involved, so they cost nothing, need no secret, and cannot reach
+production: `e2e/accounts/stack.ts` refuses any address that isn't this
+machine's and anything naming production. Each test signs up its own
+account through the real sign-in form, reading the emailed code from the
+stack's Mailpit, imports a few months of made-up transactions through the
+CSV importer, and then works the screens as a person would: sign-in, a
+mistyped code and sign-out; money that follows the account to a second
+browser; splits, tags, who owes you, Remind and Undo; a split that follows a
+shop; budgets and goals; a debt added by hand in the payoff planner; alert
+email choices; and two-step sign-in with real authenticator codes, which
+nothing opens without. To run them, with Docker running and the
+[Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+installed:
+
+```bash
+supabase start -x imgproxy,postgres-meta,supavisor,vector,logflare
+pnpm build && pnpm test:e2e
+supabase stop
+```
+
+Without the stack, a local run leaves them out and says so; CI starts it
+before the browser tests and fails if it isn't there.
 
 ## License
 
