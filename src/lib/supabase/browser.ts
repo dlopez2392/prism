@@ -10,6 +10,7 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import { AUTH_COOKIE, type SupabaseEnv } from "./config";
+import { msg } from "@/lib/i18n/t";
 
 export type CodeCheck = { ok: true } | { ok: false; error: string };
 
@@ -23,7 +24,7 @@ export const cleanCode = (raw: string) => raw.replace(/[\s-]/g, "");
  */
 export async function checkCode(env: SupabaseEnv, factorId: string, raw: string): Promise<CodeCheck> {
   const code = cleanCode(raw);
-  if (!/^\d{6}$/.test(code)) return { ok: false, error: "Enter the 6-digit code from your authenticator app." };
+  if (!/^\d{6}$/.test(code)) return { ok: false, error: msg("Enter the 6-digit code from your authenticator app.") };
   const supabase = createBrowserClient(env.url, env.key, {
     cookieOptions: { name: AUTH_COOKIE },
     auth: { autoRefreshToken: false, detectSessionInUrl: false },
@@ -32,7 +33,7 @@ export async function checkCode(env: SupabaseEnv, factorId: string, raw: string)
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
     return error ? { ok: false, error: codeError(error) } : { ok: true };
   } catch {
-    return { ok: false, error: "We couldn't check your code just now. Check your connection and try again." };
+    return { ok: false, error: msg("We couldn't check your code just now. Check your connection and try again.") };
   }
 }
 
@@ -43,8 +44,8 @@ export async function checkCode(env: SupabaseEnv, factorId: string, raw: string)
  * code against a problem the code can't fix.
  */
 export function codeError(e: { status?: number; code?: string }): string {
-  if (e.status === 429 || e.code === "over_request_rate_limit") return "That's a lot of tries. Wait a minute, then enter the code showing now.";
-  if (e.code === "mfa_verification_failed" || e.code === "mfa_challenge_expired") return "That code didn't match. Codes change every 30 seconds, so enter the one showing now.";
-  if (e.status === 401 || e.code === "session_not_found" || e.code === "session_expired") return "Your sign-in has ended. Sign in again, then enter a new code.";
-  return "We couldn't check your code just now. Check your connection and try again.";
+  if (e.status === 429 || e.code === "over_request_rate_limit") return msg("That's a lot of tries. Wait a minute, then enter the code showing now.");
+  if (e.code === "mfa_verification_failed" || e.code === "mfa_challenge_expired") return msg("That code didn't match. Codes change every 30 seconds, so enter the one showing now.");
+  if (e.status === 401 || e.code === "session_not_found" || e.code === "session_expired") return msg("Your sign-in has ended. Sign in again, then enter a new code.");
+  return msg("We couldn't check your code just now. Check your connection and try again.");
 }

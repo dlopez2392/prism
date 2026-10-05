@@ -31,12 +31,13 @@ import clsx from "clsx";
 import { signInToConnect } from "@/lib/linking";
 import { loadLink, saveBank } from "@/lib/plaid/link";
 import { bankSignedInAgain } from "@/lib/server/bank-actions";
+import { useT } from "@/components/locale";
 
 type State = { kind: "idle" } | { kind: "busy"; label: string } | { kind: "error"; message: string } | { kind: "done"; message: string };
 
 export function ConnectBank({
   variant = "ghost",
-  label = "Connect a bank",
+  label,
   className,
   landOn,
   signInFirst = false,
@@ -60,6 +61,7 @@ export function ConnectBank({
   kind?: "bank" | "investments";
 }) {
   const router = useRouter();
+  const t = useT();
   const [state, setState] = useState<State>({ kind: "idle" });
   const dialog = useRef<HTMLDialogElement>(null);
 
@@ -69,7 +71,7 @@ export function ConnectBank({
       window.location.assign(signInToConnect(kind, from));
       return;
     }
-    setState({ kind: "busy", label: "Opening secure link…" });
+    setState({ kind: "busy", label: t("Opening secure link…") });
     try {
       const res = await fetch("/api/plaid/link-token", {
         method: "POST",
@@ -86,21 +88,21 @@ export function ConnectBank({
         dialog.current?.showModal();
         return;
       }
-      if (!res.ok || !json.linkToken) throw new Error(json.message ?? "We couldn't start the connection. Try again in a minute.");
+      if (!res.ok || !json.linkToken) throw new Error(json.message ?? t("We couldn't start the connection. Try again in a minute."));
       const Plaid = await loadLink();
       const handler = Plaid.create({
         token: json.linkToken,
         onSuccess: async (publicToken, metadata) => {
           if (reconnect) {
             handler.destroy();
-            setState({ kind: "done", message: `${metadata.institution?.name ?? "Your bank"} is reconnected. Bringing it up to date…` });
+            setState({ kind: "done", message: t("{bank} is reconnected. Bringing it up to date…", { bank: metadata.institution?.name ?? t("Your bank") }) });
             // Whatever Plaid warned about this bank is over now.
             await bankSignedInAgain(reconnect);
             if (landOn) window.location.replace(landOn);
             else router.refresh();
             return;
           }
-          setState({ kind: "busy", label: `Securing ${metadata.institution?.name ?? "your bank"}…` });
+          setState({ kind: "busy", label: t("Securing {bank}…", { bank: metadata.institution?.name ?? t("your bank") }) });
           const saved = await saveBank(publicToken);
           if (!saved.ok && saved.signIn) {
             handler.destroy();
@@ -111,13 +113,21 @@ export function ConnectBank({
             setState({ kind: "error", message: saved.message });
             return;
           }
-          setState({ kind: "done", message: `${saved.institutionName ?? "Your bank"} is connected. Pulling in your ${kind === "investments" ? "holdings" : "transactions"}…` });
+          const bank = saved.institutionName ?? t("Your bank");
+          setState({
+            kind: "done",
+            message: kind === "investments" ? t("{bank} is connected. Pulling in your holdings…", { bank }) : t("{bank} is connected. Pulling in your transactions…", { bank }),
+          });
           handler.destroy();
           if (landOn) window.location.replace(landOn);
           else router.refresh();
         },
         onExit: (err) => {
-          setState(err ? { kind: "error", message: err.display_message ?? (reconnect ? "Your bank didn't finish signing you in. Try again in a minute." : "The connection was cancelled.") } : { kind: "idle" });
+          setState(
+            err
+              ? { kind: "error", message: err.display_message ?? (reconnect ? t("Your bank didn't finish signing you in. Try again in a minute.") : t("The connection was cancelled.")) }
+              : { kind: "idle" },
+          );
           handler.destroy();
         },
       });
@@ -149,7 +159,7 @@ export function ConnectBank({
         ) : (
           <Plus aria-hidden className={size === "sm" ? "size-3.5" : "size-4"} strokeWidth={2.5} />
         )}
-        {busy ? state.label : label}
+        {busy ? state.label : (label ?? t("Connect a bank"))}
       </button>
       {state.kind === "error" || state.kind === "done" ? (
         <p
@@ -172,14 +182,13 @@ export function ConnectBank({
             <div className="grid size-11 place-items-center rounded-card bg-accent-soft text-accent">
               <Landmark className="size-5" />
             </div>
-            <button type="button" onClick={() => dialog.current?.close()} aria-label="Close" className="grid size-8 place-items-center rounded-ctl text-ink-3 hover:bg-surface-3">
+            <button type="button" onClick={() => dialog.current?.close()} aria-label={t("Close")} className="grid size-8 place-items-center rounded-ctl text-ink-3 hover:bg-surface-3">
               <X className="size-4" />
             </button>
           </div>
-          <h2 className="text-lg font-bold">You&apos;re exploring a demo household</h2>
+          <h2 className="text-lg font-bold">{t("You're exploring a demo household")}</h2>
           <p className="mt-2 text-sm text-ink-2">
-            Everything you see is Alex&apos;s made-up money, so you can try every chart before sharing anything real. Linking a real bank
-            takes one step once this app has its bank-connection keys.
+            {t("Everything you see is Alex's made-up money, so you can try every chart before sharing anything real. Linking a real bank takes one step once this app has its bank-connection keys.")}
           </p>
           <div className="mt-4 rounded-ctl bg-surface-2 p-3 text-xs text-ink-2">
             <div className="mb-1 flex items-center gap-1.5 font-semibold text-ink-1">
@@ -194,7 +203,7 @@ export function ConnectBank({
             onClick={() => dialog.current?.close()}
             className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-ctl bg-accent text-sm font-semibold text-ink-on-accent hover:bg-accent-strong"
           >
-            Keep exploring
+            {t("Keep exploring")}
           </button>
         </div>
       </dialog>

@@ -19,6 +19,7 @@
 import { addDays, daysBetween } from "./dates";
 import { parseAmount, parseCsv, parseDate } from "./import";
 import type { Cents, ISODate, P2pApp, P2pDirection, P2pNote, Transaction } from "./types";
+import { EN, type T } from "@/lib/i18n/t";
 
 export const P2P_APPS = ["venmo", "paypal", "cashapp"] as const satisfies readonly P2pApp[];
 export type { P2pApp, P2pDirection };
@@ -417,6 +418,6 @@ export function applyP2pNotes<T extends Transaction>(txns: T[], notes: P2pNotes)
 }
 
 /** "To Alex Kim", "From Sam", or "Moved to your bank", as a ledger line reads it. */
-export function p2pLabel(n: Pick<P2pNote, "dir" | "name">): string {
-  return n.dir === "to" ? `To ${n.name}` : n.dir === "from" ? `From ${n.name}` : n.name;
+export function p2pLabel(n: Pick<P2pNote, "dir" | "name">, t: T = EN): string {
+  return n.dir === "to" ? t("To {name}", { name: n.name }) : n.dir === "from" ? t("From {name}", { name: n.name }) : n.name;
 }

@@ -1,10 +1,11 @@
 // Goals, while they load: the hero beside a ring per goal, then the what-if card.
 
 import { Block, Bone, CardTitle, Frame, Header, Loading } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function GoalsLoading() {
   return (
-    <Loading label="Loading your goals">
+    <Loading label={msg("Loading your goals")}>
       <Header action />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Block className="h-72 lg:col-span-4" />

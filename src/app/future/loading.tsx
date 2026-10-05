@@ -1,10 +1,11 @@
 // Future, while it loads: safe-to-spend beside four tiles, the balance forecast, Can I afford it?, then what's coming beside the bills that don't come monthly and the subscriptions.
 
 import { Block, CardTitle, Frame, Header, Loading, Rows } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function FutureLoading() {
   return (
-    <Loading label="Loading your forecast">
+    <Loading label={msg("Loading your forecast")}>
       <Header />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Block className="h-60 lg:col-span-5" />

@@ -12,7 +12,8 @@ import { useState, useTransition } from "react";
 import { CircleCheck } from "lucide-react";
 import { buttonSmall } from "@/components/dialog";
 import { Card, CardHeader } from "@/components/ui";
-import { CATEGORIES } from "@/lib/finance/categories";
+import { categoryLabel } from "@/lib/finance/categories";
+import { useT } from "@/components/locale";
 import type { SplitRule } from "@/lib/finance/details";
 import { setSplitRule } from "@/lib/server/details-actions";
 
@@ -23,6 +24,7 @@ const percent = (share: number) => `${Number((share / 100).toFixed(2))}%`;
 export function SplitRules({ rules }: { rules: SplitRuleRow[] }) {
   const [message, setMessage] = useState<{ text: string; undo: SplitRuleRow | null; error?: true } | null>(null);
   const [pending, start] = useTransition();
+  const t = useT();
 
   const set = (row: SplitRuleRow, remove: boolean) =>
     start(async () => {
@@ -33,7 +35,7 @@ export function SplitRules({ rules }: { rules: SplitRuleRow[] }) {
   if (!rules.length && !message) return null;
   return (
     <Card className="p-5 sm:p-6 lg:col-span-12">
-      <CardHeader title="Split rules" subtitle="Shops whose every purchase you split the same way. A purchase you split yourself, or keep whole, keeps its own." />
+      <CardHeader title={t("Split rules")} subtitle={t("Shops whose every purchase you split the same way. A purchase you split yourself, or keep whole, keeps its own.")} />
       <p role="status" className="mt-2 min-h-5 text-xs font-semibold">
         {message ? (
           <span className={message.error ? "text-crit-ink" : "inline-flex items-center gap-1 text-good-ink"}>
@@ -41,7 +43,7 @@ export function SplitRules({ rules }: { rules: SplitRuleRow[] }) {
             {message.text}
             {message.undo ? (
               <button type="button" onClick={() => set(message.undo!, false)} disabled={pending} className="ml-2 font-semibold text-accent-ink underline-offset-2 hover:underline">
-                Undo
+                {t("Undo")}
               </button>
             ) : null}
           </span>
@@ -52,11 +54,11 @@ export function SplitRules({ rules }: { rules: SplitRuleRow[] }) {
           {rules.map((r) => (
             <li key={r.key} className="flex items-center gap-3 py-2.5">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere]">Every {r.name} purchase</div>
-                <div className="num text-xs text-ink-3">{r.split.map((p) => `${CATEGORIES[p.category].label} ${percent(p.share)}`).join(" · ")}</div>
+                <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere]">{t("Every {merchant} purchase", { merchant: r.name })}</div>
+                <div className="num text-xs text-ink-3">{r.split.map((p) => `${categoryLabel(p.category, t)} ${percent(p.share)}`).join(" · ")}</div>
               </div>
-              <button type="button" onClick={() => set(r, true)} disabled={pending} className={buttonSmall} aria-label={`Stop splitting ${r.name} purchases`}>
-                Remove
+              <button type="button" onClick={() => set(r, true)} disabled={pending} className={buttonSmall} aria-label={t("Stop splitting {merchant} purchases", { merchant: r.name })}>
+                {t("Remove")}
               </button>
             </li>
           ))}

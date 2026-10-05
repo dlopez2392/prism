@@ -23,6 +23,7 @@ import { addDays, daysBetween } from "./dates";
 import { parseAmount, parseCsv, parseDate } from "./import";
 import { cell, cleanText, columns, headerAt } from "./p2p";
 import type { Cents, ISODate, OrderItem, OrderNote, Transaction } from "./types";
+import { EN, type T } from "@/lib/i18n/t";
 
 export type { OrderItem, OrderNote };
 
@@ -261,11 +262,11 @@ export function applyOrderNotes<T extends Transaction>(txns: T[], notes: OrderNo
 }
 
 /** A charge's items as a ledger line reads them: "Dog food, USB-C cable and 2 more". */
-export function orderLabel(n: Pick<OrderNote, "items">): string {
+export function orderLabel(n: Pick<OrderNote, "items">, t: T = EN): string {
   const short = (s: string) => ([...s].length > 40 ? `${[...s].slice(0, 39).join("").trimEnd()}…` : s);
   const names = n.items.map((i) => short(i.name));
   if (names.length <= 2) return names.join(", ");
-  return `${names.slice(0, 2).join(", ")} and ${names.length - 2} more`;
+  return t("{names} and {n} more", { names: names.slice(0, 2).join(", "), n: names.length - 2 });
 }
 
 /** A charge's items as the parts of a split: at most `max`, the smallest added up as the last, always totalling the charge. */

@@ -1,10 +1,11 @@
 // Net worth, while it loads: the hero beside the twelve-month chart, then every account beside what the investments hold, then the payoff plan.
 
 import { Block, CardTitle, Frame, Header, Loading, Rows } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function NetWorthLoading() {
   return (
-    <Loading label="Loading your net worth">
+    <Loading label={msg("Loading your net worth")}>
       <Header />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Block className="h-72 lg:col-span-4" />

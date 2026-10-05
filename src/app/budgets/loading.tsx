@@ -1,10 +1,11 @@
 // Budgets, while they load: the hero beside every budget line, then a card per category with its ring.
 
 import { Block, Bone, CardTitle, Frame, Header, Loading, Rows } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function BudgetsLoading() {
   return (
-    <Loading label="Loading your budgets">
+    <Loading label={msg("Loading your budgets")}>
       <Header eyebrow action />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Block className="h-72 lg:col-span-5" />

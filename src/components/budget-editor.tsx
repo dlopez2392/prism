@@ -14,7 +14,8 @@ import { CircleCheck, Pencil, Plus, Target } from "lucide-react";
 import clsx from "clsx";
 import { CategoryIcon } from "@/components/category-icon";
 import { buttonGhost, buttonPrimary, buttonSmall, Dialog, FormMessage, MoneyInput } from "@/components/dialog";
-import { CATEGORIES, SPEND_CATEGORIES } from "@/lib/finance/categories";
+import { categoryLabel, SPEND_CATEGORIES } from "@/lib/finance/categories";
+import { useT } from "@/components/locale";
 import { money0 } from "@/lib/finance/format";
 import { dollarsInput, IDLE, type PlanFormState, type TypicalSpend } from "@/lib/finance/plan";
 import type { Budget } from "@/lib/finance/types";
@@ -33,7 +34,8 @@ type Props = {
   label?: string;
 };
 
-export function BudgetEditor({ budgets, typical, edited, signedIn = false, household, variant = "ghost", label = "Edit budgets" }: Props) {
+export function BudgetEditor({ budgets, typical, edited, signedIn = false, household, variant = "ghost", label }: Props) {
+  const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   // A fresh form every time the editor opens: nothing half-typed or stale
   // from a cancelled visit survives into the next one.
@@ -60,12 +62,16 @@ export function BudgetEditor({ budgets, typical, edited, signedIn = false, house
       </p>
       <button type="button" onClick={open} className={variant === "primary" ? clsx(buttonPrimary, "h-9") : buttonSmall}>
         <Icon aria-hidden className="size-4" />
-        {label}
+        {label ?? t("Edit budgets")}
       </button>
       <Dialog
         dialogRef={dialog}
-        title={household ? "Your household's monthly budgets" : "Your monthly budgets"}
-        description={household ? "Limits for what the household spends from shared accounts. Leave one blank to stop budgeting it." : "Set a limit for any category. Leave one blank to stop budgeting it."}
+        title={household ? t("Your household's monthly budgets") : t("Your monthly budgets")}
+        description={
+          household
+            ? t("Limits for what the household spends from shared accounts. Leave one blank to stop budgeting it.")
+            : t("Set a limit for any category. Leave one blank to stop budgeting it.")
+        }
         icon={Target}
       >
         <BudgetForm
@@ -95,6 +101,7 @@ function BudgetForm({
   onDone,
   onCancel,
 }: Omit<Props, "variant" | "label"> & { onDone: (message: string) => void; onCancel: () => void }) {
+  const t = useT();
   const [state, action, pending] = useActionState(async (prev: PlanFormState, form: FormData) => {
     const next = form.get("intent") === "reset" ? await resetBudgets(form) : await saveBudgets(prev, form);
     if (next.status === "saved") onDone(next.message);
@@ -140,16 +147,16 @@ function BudgetForm({
               <div className="flex min-w-0 items-center gap-2.5 pt-1.5">
                 <CategoryIcon category={c} size="sm" />
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-ink-1">{CATEGORIES[c].label}</div>
-                  <div className="num text-xs text-ink-3">{typical[c] > 0 ? `Usually ${money0(typical[c])}/mo` : "No spending lately"}</div>
+                  <div className="truncate text-sm font-semibold text-ink-1">{categoryLabel(c, t)}</div>
+                  <div className="num text-xs text-ink-3">{typical[c] > 0 ? t("Usually {amount}/mo", { amount: money0(typical[c]) }) : t("No spending lately")}</div>
                 </div>
               </div>
               <MoneyInput
                 name={`limit:${c}`}
                 defaultValue={limit ? dollarsInput(limit) : ""}
-                label={`${CATEGORIES[c].label} monthly budget`}
+                label={t("{category} monthly budget", { category: categoryLabel(c, t) })}
                 hideLabel
-                placeholder="No budget"
+                placeholder={t("No budget")}
                 error={errors[c]}
               />
             </li>
@@ -160,26 +167,26 @@ function BudgetForm({
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         {edited ? (
           <button type="button" onClick={reset} disabled={pending} className="text-sm font-semibold text-accent-ink hover:underline disabled:opacity-60">
-            {household ? "Go back to the drafted budgets" : "Use the suggested budgets"}
+            {household ? t("Go back to the drafted budgets") : t("Use the suggested budgets")}
           </button>
         ) : (
           <span />
         )}
         <div className="ml-auto flex gap-2">
           <button type="button" onClick={onCancel} className={buttonGhost}>
-            Cancel
+            {t("Cancel")}
           </button>
           <button type="submit" disabled={pending} className={buttonPrimary}>
-            {pending ? "Saving…" : "Save budgets"}
+            {pending ? t("Saving…") : t("Save budgets")}
           </button>
         </div>
       </div>
       <p className="mt-4 text-xs text-ink-3">
         {household
-          ? "Saved for your household. Everyone in it sees these budgets and can change them."
+          ? t("Saved for your household. Everyone in it sees these budgets and can change them.")
           : signedIn
-            ? "Saved to your account — on every device you sign in on."
-            : "Saved in this browser only — they won't follow you to another device."}
+            ? t("Saved to your account — on every device you sign in on.")
+            : t("Saved in this browser only — they won't follow you to another device.")}
       </p>
     </form>
   );

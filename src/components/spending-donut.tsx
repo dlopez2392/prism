@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Donut, type Slice } from "@/components/charts/radial";
 import { money0 } from "@/lib/finance/format";
+import { useT } from "@/components/locale";
 
 export function SpendingDonut({
   slices,
@@ -31,6 +32,7 @@ export function SpendingDonut({
 }) {
   const [active, setActive] = useState<string | null>(null);
   const router = useRouter();
+  const t = useT();
   return (
     <div className="@container flex w-full flex-col items-center gap-5">
       <Donut
@@ -38,7 +40,7 @@ export function SpendingDonut({
         size={size}
         centerLabel={label}
         centerValue={money0(total)}
-        ariaLabel={`Spending by category: ${slices.map((s) => `${s.label} ${money0(s.value)}`).join(", ")}`}
+        ariaLabel={t("Spending by category: {list}", { list: slices.map((s) => `${s.label} ${money0(s.value)}`).join(", ") })}
         active={active}
         onActive={setActive}
         onSelect={hrefs ? (id) => hrefs[id] && router.push(hrefs[id]) : undefined}
@@ -64,7 +66,7 @@ export function SpendingDonut({
               {href ? (
                 <Link href={href} className={clsx(look, "hover:bg-surface-3")} onFocus={() => setActive(s.id)} onBlur={() => setActive(null)}>
                   {row}
-                  <span className="sr-only">: see these transactions</span>
+                  <span className="sr-only">: {t("see these transactions")}</span>
                 </Link>
               ) : (
                 <div className={look}>{row}</div>

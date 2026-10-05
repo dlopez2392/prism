@@ -12,6 +12,7 @@
 // cookie is untrusted, so each validator is all-or-nothing: one bad field
 // discards the whole list rather than half-applying it.
 
+import { msg } from "@/lib/i18n/t";
 import { SPEND_CATEGORIES } from "./categories";
 import { addDays, addMonths } from "./dates";
 import type { Account, AccountKind, Budget, Cents, FinanceData, Goal, ISODate, SpendCategoryId } from "./types";
@@ -218,9 +219,9 @@ export function readBudgetForm(form: FormData): { budgets: Budget[] } | { errors
     const text = typeof raw === "string" ? raw.trim() : "";
     if (text === "") continue;
     const cents = parseDollars(text);
-    if (cents === null) errors[category] = "Enter an amount like 450 or 450.50.";
+    if (cents === null) errors[category] = msg("Enter an amount like 450 or 450.50.");
     else if (cents === 0) continue;
-    else if (cents > MAX_MONTHLY) errors[category] = "That's more than $1,000,000 a month.";
+    else if (cents > MAX_MONTHLY) errors[category] = msg("That's more than $1,000,000 a month.");
     else budgets.push({ category, limit: cents });
   }
   return Object.keys(errors).length ? { errors } : { budgets };

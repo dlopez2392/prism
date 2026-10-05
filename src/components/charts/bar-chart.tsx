@@ -15,6 +15,7 @@ import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from
 import { useRouter } from "next/navigation";
 import { barPath, linear, niceTicks, rectPath, thinIndices } from "@/lib/charts/geometry";
 import { ChartPlaceholder, ChartTooltip, fmt, useWidth, type TooltipRow, type ValueFormat } from "./core";
+import { useT } from "@/components/locale";
 
 export type BarSeries = {
   id: string;
@@ -57,13 +58,14 @@ export function BarChart({
   format = "money0",
   axisFormat = "compact",
   partial = [],
-  partialNote = "so far",
+  partialNote,
   maxBar = 24,
   ariaLabel,
   valueLabels = false,
   hrefs,
-  hrefNote = "Select to open",
+  hrefNote,
 }: Props) {
+  const t = useT();
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const router = useRouter();
@@ -130,11 +132,15 @@ export function BarChart({
       });
     if (mode === "stacked") rows.reverse();
     const total = mode === "stacked" && series.length > 1 ? series.reduce((s, x) => s + (x.values[hover] ?? 0), 0) : null;
-    const footer = [total !== null ? `Total ${fmt(format, total)}` : null, partial.includes(hover) ? partialNote : null, hrefs?.[hover] ? hrefNote : null]
+    const footer = [
+      total !== null ? t("Total {amount}", { amount: fmt(format, total) }) : null,
+      partial.includes(hover) ? (partialNote ?? t("so far")) : null,
+      hrefs?.[hover] ? (hrefNote ?? t("Select to open")) : null,
+    ]
       .filter(Boolean)
       .join(" · ");
     return { rows, footer: footer || undefined };
-  }, [hover, series, mode, format, partial, partialNote, hrefs, hrefNote]);
+  }, [hover, series, mode, format, partial, partialNote, hrefs, hrefNote, t]);
 
   return (
     <div ref={ref} className="relative w-full" style={{ height }}>

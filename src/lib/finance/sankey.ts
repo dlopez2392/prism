@@ -11,7 +11,8 @@
 // beat income, the gap arrives on the left as "From savings" instead of the
 // right column silently being taller than the left.
 
-import { CATEGORIES, categoryColor, SPEND_CATEGORIES } from "./categories";
+import { EN, type T } from "@/lib/i18n/t";
+import { categoryColor, categoryLabel, SPEND_CATEGORIES } from "./categories";
 import type { IncomeSource } from "./cashflow";
 import type { Cents, SpendCategoryId } from "./types";
 
@@ -30,6 +31,7 @@ export type SankeyGraph = { nodes: SankeyNode[]; links: SankeyLink[]; total: Cen
 export function buildCashFlowSankey(
   sources: IncomeSource[],
   spending: Record<SpendCategoryId, Cents>,
+  t: T = EN,
 ): SankeyGraph {
   const income = sources.reduce((s, x) => s + Math.max(0, x.amount), 0);
   const cats = SPEND_CATEGORIES.filter((c) => spending[c] > 0);
@@ -45,17 +47,17 @@ export function buildCashFlowSankey(
     links.push({ source: id, target: "income", value: s.amount });
   }
   if (saved < 0) {
-    nodes.push({ id: "from-savings", label: "From savings", column: 0, value: -saved, color: "var(--flow-out)" });
+    nodes.push({ id: "from-savings", label: t("From savings"), column: 0, value: -saved, color: "var(--flow-out)" });
     links.push({ source: "from-savings", target: "income", value: -saved });
   }
   const total = Math.max(income, spent);
-  nodes.push({ id: "income", label: "Income", column: 1, value: total, color: "var(--accent)" });
+  nodes.push({ id: "income", label: t("Income"), column: 1, value: total, color: "var(--accent)" });
   for (const c of cats) {
-    nodes.push({ id: c, label: CATEGORIES[c].label, column: 2, value: spending[c], color: categoryColor(c) });
+    nodes.push({ id: c, label: categoryLabel(c, t), column: 2, value: spending[c], color: categoryColor(c) });
     links.push({ source: "income", target: c, value: spending[c] });
   }
   if (saved > 0) {
-    nodes.push({ id: "saved", label: "Saved", column: 2, value: saved, color: "var(--flow-in)" });
+    nodes.push({ id: "saved", label: t("Saved"), column: 2, value: saved, color: "var(--flow-in)" });
     links.push({ source: "income", target: "saved", value: saved });
   }
   return { nodes, links, total };

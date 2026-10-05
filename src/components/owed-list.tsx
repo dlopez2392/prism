@@ -17,26 +17,28 @@ import { reminderText } from "@/lib/finance/details";
 import { buttonSmall } from "@/components/dialog";
 import { money, shortDate } from "@/lib/finance/format";
 import { markOwedPaid } from "@/lib/server/details-actions";
+import { useT } from "@/components/locale";
 
 export type OwedRow = { id: string; who: string; amount: number; merchant: string; date: string };
 
 export function OwedList({ rows, empty }: { rows: OwedRow[]; empty: ReactNode }) {
   const [message, setMessage] = useState<{ text: string; undo: string | null; error?: true } | null>(null);
   const [pending, start] = useTransition();
+  const t = useT();
 
   const remind = async (r: OwedRow) => {
-    const text = reminderText(r);
+    const text = reminderText(r, t);
     try {
       if (typeof navigator.share === "function" && (!navigator.canShare || navigator.canShare({ text }))) {
         await navigator.share({ text });
         return;
       }
       await navigator.clipboard.writeText(text);
-      setMessage({ text: `Copied a reminder for ${r.who}. Paste it into a text or a chat.`, undo: null });
+      setMessage({ text: t("Copied a reminder for {who}. Paste it into a text or a chat.", { who: r.who }), undo: null });
     } catch (e) {
       // Closing the share sheet isn't a failure.
       if (e instanceof Error && e.name === "AbortError") return;
-      setMessage({ text: `Couldn't copy it. Here it is: ${text}`, undo: null, error: true });
+      setMessage({ text: t("Couldn't copy it. Here it is: {text}", { text }), undo: null, error: true });
     }
   };
 
@@ -55,7 +57,7 @@ export function OwedList({ rows, empty }: { rows: OwedRow[]; empty: ReactNode })
             {message.text}
             {message.undo ? (
               <button type="button" onClick={() => mark(message.undo!, false)} disabled={pending} className="ml-2 font-semibold text-accent-ink underline-offset-2 hover:underline">
-                Undo
+                {t("Undo")}
               </button>
             ) : null}
           </span>
@@ -66,19 +68,17 @@ export function OwedList({ rows, empty }: { rows: OwedRow[]; empty: ReactNode })
           {rows.map((r) => (
             <li key={r.id} className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-ink-1">
-                  {r.who} owes you <span className="num">{money(r.amount)}</span>
-                </div>
+                <div className="text-sm font-semibold text-ink-1">{t("{who} owes you {amount}", { who: r.who, amount: money(r.amount) })}</div>
                 <div className="text-xs text-ink-3">
-                  {r.merchant} · <span className="num">{shortDate(r.date)}</span>
+                  {r.merchant} · <span className="num">{shortDate(r.date, t.locale)}</span>
                 </div>
               </div>
               <div className="flex shrink-0 gap-2">
-                <button type="button" onClick={() => void remind(r)} className={buttonSmall} aria-label={`Remind ${r.who} about ${money(r.amount)} for ${r.merchant}`}>
-                  Remind
+                <button type="button" onClick={() => void remind(r)} className={buttonSmall} aria-label={t("Remind {who} about {amount} for {merchant}", { who: r.who, amount: money(r.amount), merchant: r.merchant })}>
+                  {t("Remind")}
                 </button>
-                <button type="button" onClick={() => mark(r.id, true)} disabled={pending} className={buttonSmall} aria-label={`${r.who} paid you back ${money(r.amount)} for ${r.merchant}`}>
-                  Paid back
+                <button type="button" onClick={() => mark(r.id, true)} disabled={pending} className={buttonSmall} aria-label={t("{who} paid you back {amount} for {merchant}", { who: r.who, amount: money(r.amount), merchant: r.merchant })}>
+                  {t("Paid back")}
                 </button>
               </div>
             </li>

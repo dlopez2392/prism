@@ -34,6 +34,7 @@ import { money, shortDate } from "./format";
 import { normalizeMerchant } from "./merchant";
 import { cleanText } from "./p2p";
 import type { Account, Cents, FinanceData, Holding, ISODate, Owed, SpendCategoryId, Transaction } from "./types";
+import { EN, type T } from "@/lib/i18n/t";
 
 export type { Owed };
 export type SplitPart = { category: SpendCategoryId; amount: Cents };
@@ -217,25 +218,25 @@ export function validDetails(x: unknown): TxnDetails {
  * exactly what the bank says, and what's owed can't be more than was paid.
  * Null keeps nothing for that transaction (the person cleared it).
  */
-export function checkDetail(t: Pick<Transaction, "amount" | "category">, x: unknown): { detail: TxnDetail | null } | { error: string } {
-  if (!x || typeof x !== "object") return { error: "That didn't come through. Try again." };
+export function checkDetail(t: Pick<Transaction, "amount" | "category">, x: unknown, tr: T = EN): { detail: TxnDetail | null } | { error: string } {
+  if (!x || typeof x !== "object") return { error: tr("That didn't come through. Try again.") };
   const d = x as Record<string, unknown>;
   const total = Math.abs(t.amount);
   let split: SplitPart[] | null = null;
   if (d.split !== undefined && d.split !== null) {
-    if (t.amount >= 0 || t.category === "income") return { error: "Only money going out can be split." };
+    if (t.amount >= 0 || t.category === "income") return { error: tr("Only money going out can be split.") };
     split = validParts(d.split);
-    if (!split) return { error: `Split it into 2 to ${DETAIL_LIMITS.parts} parts, each with a category and an amount.` };
+    if (!split) return { error: tr("Split it into 2 to {n} parts, each with a category and an amount.", { n: DETAIL_LIMITS.parts }) };
     const sum = split.reduce((s, p) => s + p.amount, 0);
-    if (sum !== total) return { error: `The parts add up to ${dollars(sum)}; they need to add up to ${dollars(total)}.` };
+    if (sum !== total) return { error: tr("The parts add up to {sum}; they need to add up to {total}.", { sum: dollars(sum), total: dollars(total) }) };
   }
   const tags = d.tags === undefined || d.tags === null ? null : validTags(d.tags);
   let owed: Owed | null = null;
   if (d.owed !== undefined && d.owed !== null) {
     owed = validOwed(d.owed);
-    if (!owed) return { error: "Say who owes you, and how much." };
-    if (t.amount >= 0) return { error: "Only money you paid out can be owed back." };
-    if (owed.amount > total) return { error: `They can owe you at most ${dollars(total)}, what this cost.` };
+    if (!owed) return { error: tr("Say who owes you, and how much.") };
+    if (t.amount >= 0) return { error: tr("Only money you paid out can be owed back.") };
+    if (owed.amount > total) return { error: tr("They can owe you at most {total}, what this cost.", { total: dollars(total) }) };
   }
   if (!split && !tags && !owed) return { detail: null };
   return { detail: { ...(split ? { split } : {}), ...(tags ? { tags } : {}), ...(owed ? { owed } : {}) } };
@@ -344,8 +345,8 @@ export function wholeLines<T extends Transaction>(txns: T[]): T[] {
 }
 
 /** A friendly nudge about what someone owes, for the person to send themselves. */
-export function reminderText(o: { who: string; amount: Cents; merchant: string; date: ISODate }): string {
-  return `Hi ${o.who}, a quick reminder about the ${money(o.amount)} for ${o.merchant} on ${shortDate(o.date)}. Thanks!`;
+export function reminderText(o: { who: string; amount: Cents; merchant: string; date: ISODate }, t: T = EN): string {
+  return t("Hi {who}, a quick reminder about the {amount} for {merchant} on {date}. Thanks!", { who: o.who, amount: money(o.amount), merchant: o.merchant, date: shortDate(o.date, t.locale) });
 }
 
 /** Who owes the person what, still open, oldest first: each with the line it's for. */

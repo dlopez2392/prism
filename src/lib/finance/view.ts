@@ -4,9 +4,11 @@
 // they can be tested: how categories fold for a donut, how a greeting reads.
 
 import type { CategoryRow } from "./cashflow";
-import { CATEGORIES, categoryColor } from "./categories";
+import { CATEGORIES, categoryColor, categoryLabel } from "./categories";
 import { addMonths, eachDay, endOfMonth, lastMonths, monthKey, startOfMonth } from "./dates";
 import { dayRange, monthLong, monthYear } from "./format";
+import { EN, type T } from "@/lib/i18n/t";
+import type { Locale } from "@/lib/i18n/locale";
 import type { CategoryId, Cents, ISODate, Transaction } from "./types";
 
 export type SliceData = { id: string; label: string; value: Cents; color: string };
@@ -16,20 +18,20 @@ export type SliceData = { id: string; label: string; value: Cents; color: string
  * `max` named categories; everything else (including "Other" itself) folds
  * into one neutral "Everything else" slice.
  */
-export function foldSlices(rows: CategoryRow[], max = 6): SliceData[] {
+export function foldSlices(rows: CategoryRow[], t: T = EN, max = 6): SliceData[] {
   const named = rows.filter((r) => r.category !== "other").slice(0, max);
   const keep = new Set(named.map((r) => r.category));
   const rest = rows.filter((r) => !keep.has(r.category)).reduce((s, r) => s + r.amount, 0);
-  const slices: SliceData[] = named.map((r) => ({ id: r.category, label: CATEGORIES[r.category].label, value: r.amount, color: categoryColor(r.category) }));
-  if (rest > 0) slices.push({ id: "rest", label: "Everything else", value: rest, color: "var(--c-other)" });
+  const slices: SliceData[] = named.map((r) => ({ id: r.category, label: categoryLabel(r.category, t), value: r.amount, color: categoryColor(r.category) }));
+  if (rest > 0) slices.push({ id: "rest", label: t("Everything else"), value: rest, color: "var(--c-other)" });
   return slices;
 }
 
-export function greeting(hour: number): string {
-  if (hour < 5) return "Up late";
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+export function greeting(hour: number, t: T = EN): string {
+  if (hour < 5) return t("Up late");
+  if (hour < 12) return t("Good morning");
+  if (hour < 18) return t("Good afternoon");
+  return t("Good evening");
 }
 
 
@@ -116,13 +118,13 @@ export function monthHref(path: string, month: string, today: ISODate): string {
 }
 
 /** A window as a screen's eyebrow names it: "Aug 2026 – Oct 2026", or "Oct 2026" when it's one month. */
-export function periodLabel(from: ISODate, to: ISODate): string {
-  return monthKey(from) === monthKey(to) ? monthYear(to) : `${monthYear(from)} – ${monthYear(to)}`;
+export function periodLabel(from: ISODate, to: ISODate, locale: Locale = "en"): string {
+  return monthKey(from) === monthKey(to) ? monthYear(to, locale) : `${monthYear(from, locale)} – ${monthYear(to, locale)}`;
 }
 
 /** What a one-month window is set against, named: "August" for the whole of it, "Sep 1 – 5" for part. */
-export function againstLabel(from: ISODate, to: ISODate): string {
-  return from === startOfMonth(from) && to === endOfMonth(from) ? monthLong(from) : dayRange(from, to);
+export function againstLabel(from: ISODate, to: ISODate, locale: Locale = "en"): string {
+  return from === startOfMonth(from) && to === endOfMonth(from) ? monthLong(from, locale) : dayRange(from, to, locale);
 }
 
 /** End-of-day balances for one account, walked backwards from its current balance. */

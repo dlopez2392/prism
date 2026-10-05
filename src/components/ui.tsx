@@ -15,6 +15,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import clsx from "clsx";
+import { EN, type T } from "@/lib/i18n/t";
 
 export function Card({
   children,
@@ -92,12 +93,15 @@ export function Change({
   goodWhenUp = true,
   suffix,
   onHero = false,
+  t = EN,
 }: {
   text: string;
   up: boolean | null;
   goodWhenUp?: boolean;
   suffix?: string;
   onHero?: boolean;
+  /** The language the direction is said in, for a screen reader. */
+  t?: T;
 }) {
   const good = up === null ? null : up === goodWhenUp;
   const Icon = up === null ? null : up ? ArrowUpRight : ArrowDownRight;
@@ -110,7 +114,7 @@ export function Change({
     >
       {Icon ? <Icon aria-hidden className="size-3.5" strokeWidth={2.5} /> : null}
       {/* The arrow is drawn; the direction is also said, so it never rests on an icon or a colour alone. */}
-      {up === null ? null : <span className="sr-only">{up ? "up " : "down "}</span>}
+      {up === null ? null : <span className="sr-only">{up ? t("up") : t("down")} </span>}
       <span className="num">{text}</span>
       {suffix ? <span className={clsx("ml-1 font-medium", onHero ? "text-[var(--on-hero-soft)]" : "text-ink-3")}>{suffix}</span> : null}
     </span>

@@ -1,10 +1,11 @@
 // Account, while it loads: a card per setting — name, two-step sign-in, calendar, connected apps, delete.
 
 import { Bone, CardTitle, Frame, Header, Loading } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function AccountLoading() {
   return (
-    <Loading label="Loading your account">
+    <Loading label={msg("Loading your account")}>
       <Header action />
       {[0, 1, 2, 3].map((i) => (
         <Frame key={i}>
