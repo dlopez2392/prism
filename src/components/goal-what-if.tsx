@@ -10,14 +10,17 @@ import { useActionState, useState } from "react";
 import { CircleCheck } from "lucide-react";
 import clsx from "clsx";
 import { buttonPrimary } from "@/components/dialog";
+import { useT } from "@/components/locale";
 import { slotColor } from "@/lib/finance/categories";
-import { money0, monthYear } from "@/lib/finance/format";
+import { capitalized, money0, monthYear } from "@/lib/finance/format";
 import { monthsUntil, projectGoal } from "@/lib/finance/networth";
 import { IDLE } from "@/lib/finance/plan";
 import type { Goal } from "@/lib/finance/types";
 import { setGoalMonthly } from "@/lib/server/plan-actions";
 
 export function GoalWhatIf({ goals, today, household = false }: { goals: Goal[]; today: string; household?: boolean }) {
+  const t = useT();
+  const { locale } = t;
   const [id, setId] = useState(goals[0]?.id);
   const goal = goals.find((g) => g.id === id) ?? goals[0];
   const [monthly, setMonthly] = useState<Record<string, number>>({});
@@ -34,7 +37,7 @@ export function GoalWhatIf({ goals, today, household = false }: { goals: Goal[];
 
   return (
     <div>
-      <div role="tablist" aria-label="Goal" className="flex flex-wrap gap-2">
+      <div role="tablist" aria-label={t("Goal")} className="flex flex-wrap gap-2">
         {goals.map((g) => (
           <button
             key={g.id}
@@ -56,7 +59,7 @@ export function GoalWhatIf({ goals, today, household = false }: { goals: Goal[];
       <div className="mt-5 grid gap-5 sm:grid-cols-[1fr_auto] sm:items-end">
         <label className="block">
           <span className="flex items-baseline justify-between text-sm">
-            <span className="font-semibold text-ink-1">Monthly amount</span>
+            <span className="font-semibold text-ink-1">{t("Monthly amount")}</span>
             <span className="num text-2xl font-extrabold text-ink-1">{money0(amount)}</span>
           </span>
           <input
@@ -68,11 +71,11 @@ export function GoalWhatIf({ goals, today, household = false }: { goals: Goal[];
             onChange={(e) => setMonthly((m) => ({ ...m, [goal.id]: Number(e.target.value) }))}
             className="mt-3 w-full"
             style={{ accentColor: color }}
-            aria-valuetext={`${money0(amount)} a month`}
+            aria-valuetext={t("{amount} a month", { amount: money0(amount) })}
           />
           <span className="mt-1 flex justify-between text-xs text-ink-3">
             <span>$0</span>
-            <span>Now: {money0(goal.monthlyContribution)}</span>
+            <span>{t("Now: {amount}", { amount: money0(goal.monthlyContribution) })}</span>
             <span>{money0(max)}</span>
           </span>
         </label>
@@ -81,20 +84,34 @@ export function GoalWhatIf({ goals, today, household = false }: { goals: Goal[];
           onClick={() => setMonthly((m) => ({ ...m, [goal.id]: goal.monthlyContribution }))}
           className="h-9 rounded-ctl border border-line px-3 text-sm font-semibold text-ink-2 hover:bg-surface-3"
         >
-          Reset
+          {t("Reset")}
         </button>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3" aria-live="polite">
-        <Figure label="You'd finish" value={tried.projectedDate ? monthYear(tried.projectedDate) : "Never at $0"} />
+        <Figure label={t("You'd finish")} value={tried.projectedDate ? capitalized(monthYear(tried.projectedDate, locale)) : t("Never at $0")} />
         <Figure
-          label="Compared with now"
-          value={shift === null ? "—" : shift === 0 ? "Same month" : shift > 0 ? `${shift} ${shift === 1 ? "month" : "months"} sooner` : `${-shift} ${shift === -1 ? "month" : "months"} later`}
+          label={t("Compared with now")}
+          value={
+            shift === null
+              ? "—"
+              : shift === 0
+                ? t("Same month")
+                : shift === 1
+                  ? t("1 month sooner")
+                  : shift > 0
+                    ? t("{n} months sooner", { n: shift })
+                    : shift === -1
+                      ? t("1 month later")
+                      : t("{n} months later", { n: -shift })
+          }
         />
         <Figure
-          label={`To hit ${monthYear(goal.targetDate)}`}
-          value={`${money0(tried.neededMonthly)}/mo`}
-          note={monthsUntil(today, goal.targetDate) <= 0 ? "Target date has passed" : tried.onTrack ? "You're on track" : "Needed to arrive on time"}
+          label={t("To hit {month}", { month: monthYear(goal.targetDate, locale) })}
+          value={t("{amount}/mo", { amount: money0(tried.neededMonthly) })}
+          note={
+            monthsUntil(today, goal.targetDate) <= 0 ? t("Target date has passed") : tried.onTrack ? t("You're on track") : t("Needed to arrive on time")
+          }
         />
       </div>
 
@@ -114,7 +131,7 @@ export function GoalWhatIf({ goals, today, household = false }: { goals: Goal[];
         </p>
         {amount !== goal.monthlyContribution ? (
           <button type="submit" disabled={saving} className={buttonPrimary}>
-            {saving ? "Saving…" : `Plan on ${money0(amount)} a month`}
+            {saving ? t("Saving…") : t("Plan on {amount} a month", { amount: money0(amount) })}
           </button>
         ) : null}
       </form>

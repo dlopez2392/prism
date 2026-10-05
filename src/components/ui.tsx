@@ -59,8 +59,10 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={clsx("flex items-start justify-between gap-3", className)}>
-      <div className="min-w-0">
+    // The action sits beside the title while the title keeps about 10rem; past that it drops below, so a
+    // long button (longer still in Spanish) never squeezes the subtitle into a column of single words.
+    <div className={clsx("flex flex-wrap items-start justify-between gap-x-3 gap-y-2", className)}>
+      <div className="min-w-0 grow basis-40">
         <h2 className="text-[15px] font-bold tracking-tight text-ink-1">{title}</h2>
         {subtitle ? <p className="mt-0.5 text-[13px] text-ink-3">{subtitle}</p> : null}
       </div>

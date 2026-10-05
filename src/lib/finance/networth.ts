@@ -4,6 +4,7 @@
 // month-end balances (oldest first), so every series here has one point per
 // month and the last point is "now".
 
+import { EN, msg, type T } from "@/lib/i18n/t";
 import type { Account, AccountKind, AssetClass, Cents, Goal, Holding, ISODate } from "./types";
 import { addMonths, lastMonths } from "./dates";
 
@@ -26,12 +27,13 @@ export function netWorthSeries(accounts: Account[], today: ISODate): NetWorthPoi
   });
 }
 
+/** Each group's label in English: a screen shows it with t(). */
 export const KIND_GROUPS: { label: string; kinds: AccountKind[] }[] = [
-  { label: "Cash", kinds: ["checking", "savings"] },
-  { label: "Investments", kinds: ["investment", "retirement", "crypto"] },
-  { label: "Property", kinds: ["property"] },
-  { label: "Credit cards", kinds: ["credit"] },
-  { label: "Loans", kinds: ["loan"] },
+  { label: msg("Cash"), kinds: ["checking", "savings"] },
+  { label: msg("Investments"), kinds: ["investment", "retirement", "crypto"] },
+  { label: msg("Property"), kinds: ["property"] },
+  { label: msg("Credit cards"), kinds: ["credit"] },
+  { label: msg("Loans"), kinds: ["loan"] },
 ];
 
 export function groupAccounts(accounts: Account[]) {
@@ -49,6 +51,21 @@ export const ASSET_CLASS_SLOT: Record<AssetClass, number> = {
   Crypto: 5,
   "Real estate": 6,
 };
+
+/** What each asset class is called on screen; the class itself stays the key. */
+const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
+  "US stocks": msg("US stocks"),
+  International: msg("International"),
+  Bonds: msg("Bonds"),
+  Cash: msg("Cash"),
+  Crypto: msg("Crypto"),
+  "Real estate": msg("Real estate"),
+};
+
+/** "US stocks", in the person's language. */
+export function assetClassLabel(assetClass: AssetClass, t: T = EN): string {
+  return t(ASSET_CLASS_LABEL[assetClass]);
+}
 
 export function allocation(holdings: Holding[]) {
   const total = holdings.reduce((s, h) => s + h.value, 0);

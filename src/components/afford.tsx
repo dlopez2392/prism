@@ -9,27 +9,31 @@
 
 import { useId, useState } from "react";
 import clsx from "clsx";
+import { useT } from "@/components/locale";
 import { StatusPill, type Status } from "@/components/ui";
 import { AFFORD_HORIZON_DAYS, AFFORD_MAX, tryScenario, validScenario, type AffordBase, type ScenarioKind, type Verdict } from "@/lib/finance/afford";
 import { addDays } from "@/lib/finance/dates";
 import { money0, shortDate } from "@/lib/finance/format";
 import { parseDollars } from "@/lib/finance/plan";
+import { msg } from "@/lib/i18n/t";
 
+// Said on screen in the page's language: t(k.label).
 const KINDS: { kind: ScenarioKind; label: string; amount: string; date: string }[] = [
-  { kind: "once", label: "Something to buy", amount: "How much?", date: "When?" },
-  { kind: "monthly", label: "A new monthly bill", amount: "How much a month?", date: "Starting" },
-  { kind: "raise", label: "A raise", amount: "How much more a month?", date: "Starting" },
+  { kind: "once", label: msg("Something to buy"), amount: msg("How much?"), date: msg("When?") },
+  { kind: "monthly", label: msg("A new monthly bill"), amount: msg("How much a month?"), date: msg("Starting") },
+  { kind: "raise", label: msg("A raise"), amount: msg("How much more a month?"), date: msg("Starting") },
 ];
 
 const ANSWER: Record<Verdict["answer"], { status: Status; word: string }> = {
-  yes: { status: "good", word: "Fits" },
-  tight: { status: "warn", word: "Tight" },
-  no: { status: "crit", word: "Doesn't fit" },
+  yes: { status: "good", word: msg("Fits") },
+  tight: { status: "warn", word: msg("Tight") },
+  no: { status: "crit", word: msg("Doesn't fit") },
 };
 
 const field = "h-10 w-full rounded-ctl border border-line-strong bg-surface-2 text-sm text-ink-1 placeholder:text-ink-3 focus:border-[var(--focus)] aria-[invalid=true]:border-crit";
 
 export function CanIAfford({ base }: { base: AffordBase }) {
+  const t = useT();
   const id = useId();
   const [kind, setKind] = useState<ScenarioKind>("once");
   const [amountText, setAmountText] = useState("");
@@ -38,15 +42,21 @@ export function CanIAfford({ base }: { base: AffordBase }) {
   const typed = amountText.trim() !== "";
   const amount = typed ? parseDollars(amountText) : null;
   const last = addDays(base.today, AFFORD_HORIZON_DAYS);
-  const amountError = !typed ? null : amount === null || amount === 0 ? "Type an amount in dollars, like 1,200 or 49.99." : amount > AFFORD_MAX ? "That's more than Prism can test from a checking account." : null;
-  const dateError = date < base.today || date > last ? "Pick a day from today to a year from now." : null;
+  const amountError = !typed
+    ? null
+    : amount === null || amount === 0
+      ? t("Type an amount in dollars, like 1,200 or 49.99.")
+      : amount > AFFORD_MAX
+        ? t("That's more than Prism can test from a checking account.")
+        : null;
+  const dateError = date < base.today || date > last ? t("Pick a day from today to a year from now.") : null;
   const scenario = amount && !amountError && !dateError ? validScenario({ kind, amount, date }, base.today) : null;
-  const verdict = scenario ? tryScenario(base, scenario) : null;
-  const kept = (c: number | null) => (c === null ? "—" : `${money0(c)}/mo`);
+  const verdict = scenario ? tryScenario(base, scenario, t) : null;
+  const kept = (c: number | null) => (c === null ? "—" : t("{amount}/mo", { amount: money0(c) }));
 
   return (
     <div>
-      <div role="group" aria-label="What it is" className="flex flex-wrap gap-2">
+      <div role="group" aria-label={t("What it is")} className="flex flex-wrap gap-2">
         {KINDS.map((x) => (
           <button
             key={x.kind}
@@ -58,7 +68,7 @@ export function CanIAfford({ base }: { base: AffordBase }) {
               x.kind === kind ? "border-transparent bg-button text-ink-on-accent" : "border-line text-ink-2 hover:bg-surface-3",
             )}
           >
-            {x.label}
+            {t(x.label)}
           </button>
         ))}
       </div>
@@ -66,7 +76,7 @@ export function CanIAfford({ base }: { base: AffordBase }) {
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor={`${id}-amount`} className="mb-1 block text-[13px] font-semibold text-ink-2">
-            {k.amount}
+            {t(k.amount)}
           </label>
           <div className="relative">
             <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-sm text-ink-3">
@@ -92,7 +102,7 @@ export function CanIAfford({ base }: { base: AffordBase }) {
         </div>
         <div>
           <label htmlFor={`${id}-date`} className="mb-1 block text-[13px] font-semibold text-ink-2">
-            {k.date}
+            {t(k.date)}
           </label>
           <input
             id={`${id}-date`}
@@ -118,7 +128,7 @@ export function CanIAfford({ base }: { base: AffordBase }) {
           <div className="rounded-ctl bg-surface-2 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <StatusPill status={ANSWER[verdict.answer].status} className="bg-surface-1">
-                {ANSWER[verdict.answer].word}
+                {t(ANSWER[verdict.answer].word)}
               </StatusPill>
               <span className="text-[15px] font-bold text-ink-1">{verdict.headline}</span>
             </div>
@@ -128,13 +138,23 @@ export function CanIAfford({ base }: { base: AffordBase }) {
               ))}
             </ul>
             <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-              <Change label="Lowest point ahead" before={money0(verdict.lowestBefore.balance)} after={money0(verdict.lowest.balance)} note={verdict.lowest.date === base.today ? "today" : `around ${shortDate(verdict.lowest.date)}`} />
-              <Change label="Safe to spend today" before={money0(verdict.safeBefore)} after={money0(verdict.safeAfter)} />
-              <Change label="You usually keep" before={kept(verdict.keptBefore)} after={kept(verdict.keptAfter)} note={verdict.keptBefore === null ? "needs three full months" : "last three full months"} />
+              <Change
+                label={t("Lowest point ahead")}
+                before={money0(verdict.lowestBefore.balance)}
+                after={money0(verdict.lowest.balance)}
+                note={verdict.lowest.date === base.today ? t("today") : t("around {date}", { date: shortDate(verdict.lowest.date, t.locale) })}
+              />
+              <Change label={t("Safe to spend today")} before={money0(verdict.safeBefore)} after={money0(verdict.safeAfter)} />
+              <Change
+                label={t("You usually keep")}
+                before={kept(verdict.keptBefore)}
+                after={kept(verdict.keptAfter)}
+                note={verdict.keptBefore === null ? t("needs three full months") : t("last three full months")}
+              />
             </dl>
           </div>
         ) : (
-          <p className="text-sm text-ink-3">Type an amount to see whether it fits. Nothing you try here is saved.</p>
+          <p className="text-sm text-ink-3">{t("Type an amount to see whether it fits. Nothing you try here is saved.")}</p>
         )}
       </div>
     </div>
@@ -142,20 +162,26 @@ export function CanIAfford({ base }: { base: AffordBase }) {
 }
 
 function Change({ label, before, after, note }: { label: string; before: string; after: string; note?: string }) {
+  const t = useT();
   return (
     <div>
       <dt className="text-xs font-semibold text-ink-3">{label}</dt>
       <dd className="mt-0.5 text-sm text-ink-1">
-        {before === after ? null : (
+        {before === after ? (
+          <span className="num font-bold">{after}</span>
+        ) : (
+          // Seen as "before → after"; heard as one sentence.
           <>
             <span aria-hidden className="num text-ink-3 line-through decoration-1">
               {before}
             </span>
             <span aria-hidden> → </span>
-            <span className="sr-only">{`from ${before} to `}</span>
+            <span aria-hidden className="num font-bold">
+              {after}
+            </span>
+            <span className="sr-only">{t("from {before} to {after}", { before, after })}</span>
           </>
         )}
-        <span className="num font-bold">{after}</span>
         {note ? <span className="block text-xs text-ink-3">{note}</span> : null}
       </dd>
     </div>

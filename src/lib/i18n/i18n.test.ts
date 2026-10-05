@@ -6,7 +6,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { dayDate, dayRange, monthLong, monthYear, shortDate } from "@/lib/finance/format";
-import { ES } from "./es";
+import { ES, ES_PARTS } from "./es";
 import { englishOnly, pickLocale } from "./locale";
 import { translator } from "./translator";
 
@@ -27,13 +27,14 @@ describe("which language a visit gets", () => {
 
 describe("screens still only in English", () => {
   it("are the ones listed, and everything under them, and no other", () => {
-    expect(englishOnly("/goals")).toBe(true);
+    expect(englishOnly("/connections")).toBe(true);
     expect(englishOnly("/connections/amazon")).toBe(true);
+    expect(englishOnly("/goals")).toBe(false);
     expect(englishOnly("/")).toBe(false);
     expect(englishOnly("/spending")).toBe(false);
     expect(englishOnly("/sign-in/two-step")).toBe(false);
     // A prefix of a name is not the screen.
-    expect(englishOnly("/goalsx")).toBe(false);
+    expect(englishOnly("/connectionsx")).toBe(false);
   });
 });
 
@@ -92,6 +93,18 @@ describe("the Spanish", () => {
     // "{Month}" is "{month}" with a capital (t.ts), so names compare without their case.
     const names = (s: string) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!.toLowerCase()))].sort();
     for (const [en, es] of Object.entries(ES)) expect(names(es), en).toEqual(names(en));
+  });
+
+  it("gives each sentence once, in one part", () => {
+    const seen = new Map<string, string>();
+    const twice: string[] = [];
+    for (const [part, words] of Object.entries(ES_PARTS)) {
+      for (const en of Object.keys(words)) {
+        if (seen.has(en)) twice.push(`${en} (${seen.get(en)}, ${part})`);
+        else seen.set(en, part);
+      }
+    }
+    expect(twice).toEqual([]);
   });
 
   it("has nothing it isn't asked for", () => {

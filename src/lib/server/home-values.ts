@@ -15,6 +15,7 @@ import { estimateHomeValue, HomeValueError, homeValuesEnabled, type HomeEstimate
 import type { Account } from "@/lib/supabase/server";
 import { loadAccountHomeValues, loadAccountManualItems, saveAccountManualItemsAndHomes } from "./account-store";
 import type { VaultKey } from "./vault";
+import { msg } from "@/lib/i18n/t";
 
 type Env = Record<string, string | undefined>;
 
@@ -48,20 +49,21 @@ export async function lookUpHomeValue(
 }
 
 /** What to tell the person when there's no estimate. */
+/** Why there's no estimate, in English; the screen says it in the person's language (`t(…)`). */
 export function noEstimateMessage(why: NoEstimate): string {
   switch (why) {
     case "already":
-      return "RentCast already estimated it this month. The next estimate comes next month.";
+      return msg("RentCast already estimated it this month. The next estimate comes next month.");
     case "person-limit":
-      return "Prism estimates up to three homes a month for you. Enter this one's value yourself for now.";
+      return msg("Prism estimates up to three homes a month for you. Enter this one's value yourself for now.");
     case "limit":
-      return "Prism's home estimates are used up for now. Enter a value yourself; RentCast takes over again next month.";
+      return msg("Prism's home estimates are used up for now. Enter a value yourself; RentCast takes over again next month.");
     case "refused":
-      return "Finish signing in, including your authenticator, and try again.";
+      return msg("Finish signing in, including your authenticator, and try again.");
     case "not-found":
-      return "RentCast couldn't find that address. Check it, or enter a value yourself.";
+      return msg("RentCast couldn't find that address. Check it, or enter a value yourself.");
     default:
-      return "RentCast didn't answer. Enter a value for now; Prism tries again next month.";
+      return msg("RentCast didn't answer. Enter a value for now; Prism tries again next month.");
   }
 }
 
