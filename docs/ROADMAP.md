@@ -319,3 +319,11 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     in the same sealed record as splits and tags, so no new table; the
     household never sees either. The balance forecast and bill detection still
     count the money, because it still moved.
+27. **Every number is a door.** **Built (2026-10-05):** on Overview, a slice
+    of "Where it went", its legend row, or an Everyday budget opens this
+    month's transactions in that category; on Spending, a category's row or
+    a shop's row narrows the list below it; and a month's bars on Spending
+    and Cash flow open that month on its own (a click, Enter from the
+    keyboard, or on a phone a first tap for the numbers and a second to
+    open). Overview's two legends lay out by their card's width, not the
+    screen's, so no category name is cut short.

@@ -6,9 +6,13 @@
 // category). Bars are capped at 24px and never fill their slot; each has a
 // 4px rounded data-end and a square foot; touching fills are separated by a
 // 2px gap, not a stroke. The whole column is the hover target, and the
-// tooltip lists every series in it.
+// tooltip lists every series in it. A column can also be a door (`hrefs`):
+// a click opens it, Enter does from the keyboard, and on a touch screen the
+// first tap shows the tooltip and a second opens it, so a tap never leaves
+// the page before its numbers have been read.
 
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useRouter } from "next/navigation";
 import { barPath, linear, niceTicks, rectPath, thinIndices } from "@/lib/charts/geometry";
 import { ChartPlaceholder, ChartTooltip, fmt, useWidth, type TooltipRow, type ValueFormat } from "./core";
 
@@ -36,6 +40,9 @@ type Props = {
   ariaLabel: string;
   /** Show the value above each column's data end (only sensible for few bars). */
   valueLabels?: boolean;
+  /** Where each column leads (null: nowhere), and what its tooltip says it opens: "See the month". */
+  hrefs?: (string | null)[];
+  hrefNote?: string;
 };
 
 const M = { top: 16, right: 8, bottom: 26, left: 52 };
@@ -54,10 +61,28 @@ export function BarChart({
   maxBar = 24,
   ariaLabel,
   valueLabels = false,
+  hrefs,
+  hrefNote = "Select to open",
 }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  const router = useRouter();
+  // The column a tap may open: a mouse opens at once; a touch only once its tooltip is already showing.
+  const shown = useRef<number | null>(null);
+  const armed = useRef<number | null>(null);
   const n = labels.length;
+  const show = (i: number | null) => {
+    shown.current = i;
+    setHover(i);
+  };
+  const press = (i: number, e: PointerEvent<SVGGElement>) => {
+    armed.current = e.pointerType !== "touch" || shown.current === i ? i : null;
+    show(i);
+  };
+  const open = (i: number) => {
+    const href = hrefs?.[i];
+    if (href && armed.current === i) router.push(href, { scroll: false });
+  };
 
   const geo = useMemo(() => {
     if (width === 0 || n === 0) return null;
@@ -87,9 +112,10 @@ export function BarChart({
   }, [width, n, series, mode, height, maxBar]);
 
   const onKey = (e: KeyboardEvent<SVGSVGElement>) => {
-    if (e.key === "ArrowRight") setHover((h) => Math.min(n - 1, (h ?? -1) + 1));
-    else if (e.key === "ArrowLeft") setHover((h) => Math.max(0, (h ?? n) - 1));
-    else if (e.key === "Escape") setHover(null);
+    if (e.key === "ArrowRight") show(Math.min(n - 1, (hover ?? -1) + 1));
+    else if (e.key === "ArrowLeft") show(Math.max(0, (hover ?? n) - 1));
+    else if (e.key === "Escape") show(null);
+    else if (e.key === "Enter" && hover !== null && hrefs?.[hover]) router.push(hrefs[hover]!, { scroll: false });
     else return;
     e.preventDefault();
   };
@@ -104,11 +130,11 @@ export function BarChart({
       });
     if (mode === "stacked") rows.reverse();
     const total = mode === "stacked" && series.length > 1 ? series.reduce((s, x) => s + (x.values[hover] ?? 0), 0) : null;
-    const footer = [total !== null ? `Total ${fmt(format, total)}` : null, partial.includes(hover) ? partialNote : null]
+    const footer = [total !== null ? `Total ${fmt(format, total)}` : null, partial.includes(hover) ? partialNote : null, hrefs?.[hover] ? hrefNote : null]
       .filter(Boolean)
       .join(" · ");
     return { rows, footer: footer || undefined };
-  }, [hover, series, mode, format, partial, partialNote]);
+  }, [hover, series, mode, format, partial, partialNote, hrefs, hrefNote]);
 
   return (
     <div ref={ref} className="relative w-full" style={{ height }}>
@@ -123,9 +149,12 @@ export function BarChart({
             aria-label={ariaLabel}
             tabIndex={0}
             className="block touch-pan-y outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
-            onPointerLeave={() => setHover(null)}
+            // A finger "leaves" the moment it lifts: on a touch screen the tooltip stays until the chart loses focus.
+            onPointerLeave={(e) => {
+              if (e.pointerType !== "touch") show(null);
+            }}
             onKeyDown={onKey}
-            onBlur={() => setHover(null)}
+            onBlur={() => show(null)}
           >
             {geo.ticks.map((t) => (
               <g key={t}>
@@ -179,10 +208,13 @@ export function BarChart({
               return (
                 <g
                   key={i}
-                  className="mark"
+                  className={hrefs?.[i] ? "mark cursor-pointer" : "mark"}
                   opacity={dim ? 0.45 : faint ? 0.6 : 1}
-                  onPointerEnter={() => setHover(i)}
-                  onPointerDown={() => setHover(i)}
+                  onPointerEnter={(e) => {
+                    if (e.pointerType !== "touch") show(i);
+                  }}
+                  onPointerDown={(e) => press(i, e)}
+                  onClick={() => open(i)}
                 >
                   {/* The whole column is the hit target, bigger than the mark. */}
                   <rect x={M.left + geo.slot * i} y={M.top} width={geo.slot} height={height - M.top - M.bottom} fill="transparent" />

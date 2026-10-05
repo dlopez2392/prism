@@ -22,6 +22,7 @@ export function Donut({
   ariaLabel,
   active,
   onActive,
+  onSelect,
 }: {
   slices: Slice[];
   size?: number;
@@ -33,6 +34,8 @@ export function Donut({
   /** Controlled highlight, so a legend beside the donut can drive it. */
   active?: string | null;
   onActive?: (id: string | null) => void;
+  /** A slice chosen, by a click or by Enter: what it opens is the caller's. */
+  onSelect?: (id: string) => void;
 }) {
   const [own, setOwn] = useState<string | null>(null);
   const hot = active !== undefined ? active : own;
@@ -67,6 +70,16 @@ export function Donut({
               onPointerLeave={() => set(null)}
               onFocus={() => set(s.id)}
               onBlur={() => set(null)}
+              onClick={onSelect ? () => onSelect(s.id) : undefined}
+              onKeyDown={
+                onSelect
+                  ? (e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      onSelect(s.id);
+                    }
+                  : undefined
+              }
             />
           );
         })}

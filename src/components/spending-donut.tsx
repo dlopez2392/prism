@@ -4,17 +4,35 @@
 //
 // The category donut and its legend list, sharing one highlight: hover a row
 // and its slice lifts; hover a slice and its row lights. ≤ 6 slices plus
-// "Other", per the part-to-whole rule — anything smaller folds.
+// "Other", per the part-to-whole rule — anything smaller folds. With `hrefs`,
+// a slice and its row open what they stand for. The legend takes two columns
+// only when its card is wide enough to give every name its full width.
 
 import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Donut, type Slice } from "@/components/charts/radial";
 import { money0 } from "@/lib/finance/format";
 
-export function SpendingDonut({ slices, total, label, size = 200 }: { slices: Slice[]; total: number; label: string; size?: number }) {
+export function SpendingDonut({
+  slices,
+  total,
+  label,
+  size = 200,
+  hrefs,
+}: {
+  slices: Slice[];
+  total: number;
+  label: string;
+  size?: number;
+  /** Where each slice leads, by its id. */
+  hrefs?: Record<string, string>;
+}) {
   const [active, setActive] = useState<string | null>(null);
+  const router = useRouter();
   return (
-    <div className="flex flex-col items-center gap-5">
+    <div className="@container flex w-full flex-col items-center gap-5">
       <Donut
         slices={slices}
         size={size}
@@ -23,25 +41,37 @@ export function SpendingDonut({ slices, total, label, size = 200 }: { slices: Sl
         ariaLabel={`Spending by category: ${slices.map((s) => `${s.label} ${money0(s.value)}`).join(", ")}`}
         active={active}
         onActive={setActive}
+        onSelect={hrefs ? (id) => hrefs[id] && router.push(hrefs[id]) : undefined}
       />
-      <ul className="grid w-full min-w-0 grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
-        {slices.map((s) => (
-          <li
-            key={s.id}
-            onPointerEnter={() => setActive(s.id)}
-            onPointerLeave={() => setActive(null)}
-            className={clsx(
-              "flex items-center gap-2 rounded-ctl px-2 py-1.5 text-[13px] transition-colors duration-150",
-              active === s.id ? "bg-surface-3" : "",
-              active && active !== s.id ? "opacity-60" : "",
-            )}
-          >
-            <span aria-hidden className="size-2.5 shrink-0 rounded-[3px]" style={{ background: s.color }} />
-            <span className="min-w-0 flex-1 truncate font-medium text-ink-1">{s.label}</span>
-            <span className="num text-xs text-ink-3">{total > 0 ? Math.round((s.value / total) * 100) : 0}%</span>
-            <span className="num text-right font-semibold text-ink-1">{money0(s.value)}</span>
-          </li>
-        ))}
+      <ul className="grid w-full min-w-0 grid-cols-1 gap-x-4 gap-y-0.5 @md:grid-cols-2">
+        {slices.map((s) => {
+          const row = (
+            <>
+              <span aria-hidden className="size-2.5 shrink-0 rounded-[3px]" style={{ background: s.color }} />
+              <span className="min-w-0 flex-1 truncate font-medium text-ink-1">{s.label}</span>
+              <span className="num text-xs text-ink-3">{total > 0 ? Math.round((s.value / total) * 100) : 0}%</span>
+              <span className="num text-right font-semibold text-ink-1">{money0(s.value)}</span>
+            </>
+          );
+          const look = clsx(
+            "flex items-center gap-2 rounded-ctl px-2 py-1.5 text-[13px] transition-colors duration-150",
+            active === s.id ? "bg-surface-3" : "",
+            active && active !== s.id ? "opacity-60" : "",
+          );
+          const href = hrefs?.[s.id];
+          return (
+            <li key={s.id} onPointerEnter={() => setActive(s.id)} onPointerLeave={() => setActive(null)}>
+              {href ? (
+                <Link href={href} className={clsx(look, "hover:bg-surface-3")} onFocus={() => setActive(s.id)} onBlur={() => setActive(null)}>
+                  {row}
+                  <span className="sr-only">: see these transactions</span>
+                </Link>
+              ) : (
+                <div className={look}>{row}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
