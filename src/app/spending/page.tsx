@@ -20,10 +20,10 @@ import { TransactionsTable } from "@/components/transactions-table";
 import { Card, CardHeader, Change, EmptyState, PageHeader } from "@/components/ui";
 import { categoryBreakdown, dailySpend, monthlyByCategory, sumSpending, topMerchants } from "@/lib/finance/cashflow";
 import { CATEGORIES, categoryColor, SPEND_CATEGORIES } from "@/lib/finance/categories";
-import { addDays } from "@/lib/finance/dates";
+import { addDays, daysBetween } from "@/lib/finance/dates";
 import { stillOwed, tagTotals } from "@/lib/finance/details";
-import { money, money0, monthShort, monthYear, signedMoney0, signedPercent } from "@/lib/finance/format";
-import { ledgerHash, monthWindow, parseRange } from "@/lib/finance/view";
+import { dayRange, money, money0, monthShort, monthYear, signedMoney0, signedPercent } from "@/lib/finance/format";
+import { ledgerHash, monthWindow, parseRange, periodLabel } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Spending" };
@@ -38,16 +38,17 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
 
   const spent = sumSpending(txns, w.from, w.to);
   const before = sumSpending(txns, w.prevFrom, w.prevTo);
-  const perMonth = spent / range;
+  // One month so far averages over its days; longer windows over their months.
+  const average = range === 1 ? { label: "Per day", value: spent / (daysBetween(w.from, w.to) + 1) } : { label: "Per month", value: spent / range };
   const rows = categoryBreakdown(txns, { from: w.from, to: w.to }, { from: w.prevFrom, to: w.prevTo });
-  const byMonth = monthlyByCategory(txns, w.months);
-  const labels = w.months.map((m) => monthYear(`${m}-01`));
+  const byMonth = monthlyByCategory(txns, w.trend);
+  const labels = w.trend.map((m) => monthYear(`${m}-01`));
   const merchants = topMerchants(txns, w.from, w.to, 8);
   const maxMerchant = merchants[0]?.amount ?? 1;
   const maxRow = rows[0]?.amount ?? 1;
   const days = dailySpend(txns, addDays(data.today, -(HEATMAP_DAYS - 1)), data.today);
   const busiest = [...days].sort((a, b) => b.amount - a.amount)[0];
-  const period = `${monthYear(w.from)} – ${monthYear(w.to)}`;
+  const period = periodLabel(w.from, w.to);
   const accountNames = Object.fromEntries(data.accounts.map((a) => [a.id, a.name]));
   const inWindow = txns.filter((t) => t.date >= w.from && t.date <= w.to);
   // Category fixes live in an account and rename the person's own money, never the example household's.
@@ -74,16 +75,16 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card hero className="flex flex-col justify-between p-5 sm:p-6 lg:col-span-4">
           <div>
-            <div className="text-sm font-semibold text-[var(--on-hero-soft)]">Spent over {range} months</div>
+            <div className="text-sm font-semibold text-[var(--on-hero-soft)]">{range === 1 ? "Spent this month" : `Spent over ${range} months`}</div>
             <div className="mt-1 text-[44px] font-extrabold leading-none tracking-tight">{money0(spent)}</div>
             <div className="mt-3">
-              <Change onHero text={signedMoney0(spent - before)} up={spent > before} goodWhenUp={false} suffix="vs the period before" />
+              <Change onHero text={signedMoney0(spent - before)} up={spent > before} goodWhenUp={false} suffix={range === 1 ? `vs ${dayRange(w.prevFrom, w.prevTo)}` : "vs the period before"} />
             </div>
           </div>
           <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-ctl bg-[var(--on-hero-faint)] p-3">
-              <dt className="text-xs text-[var(--on-hero-soft)]">Per month</dt>
-              <dd className="mt-0.5 text-lg font-bold">{money0(perMonth)}</dd>
+              <dt className="text-xs text-[var(--on-hero-soft)]">{average.label}</dt>
+              <dd className="mt-0.5 text-lg font-bold">{money0(average.value)}</dd>
             </div>
             <div className="rounded-ctl bg-[var(--on-hero-faint)] p-3">
               <dt className="text-xs text-[var(--on-hero-soft)]">Biggest category</dt>
@@ -106,7 +107,7 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
           <BarChart
             mode="stacked"
             labels={labels}
-            axisLabels={w.months.map((m) => monthShort(`${m}-01`))}
+            axisLabels={w.trend.map((m) => monthShort(`${m}-01`))}
             series={SPEND_CATEGORIES.map((c) => ({ id: c, label: CATEGORIES[c].label, color: categoryColor(c), values: byMonth.map((r) => Math.max(0, r[c])) }))}
             partial={[labels.length - 1]}
             maxBar={40}
@@ -118,7 +119,7 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card className="p-5 sm:p-6 lg:col-span-6">
-          <CardHeader title="Categories" subtitle={`Against ${monthYear(w.prevFrom)} – ${monthYear(w.prevTo)}`} />
+          <CardHeader title="Categories" subtitle={`Against ${range === 1 ? dayRange(w.prevFrom, w.prevTo) : periodLabel(w.prevFrom, w.prevTo)}`} />
           {rows.length ? (
             <ul className="mt-4 space-y-3.5">
               {rows.map((r) => (

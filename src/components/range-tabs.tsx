@@ -7,11 +7,12 @@ import Link from "next/link";
 import clsx from "clsx";
 import { RANGES, type RangeMonths } from "@/lib/finance/view";
 
-const LABEL: Record<RangeMonths, string> = { 3: "3 months", 6: "6 months", 12: "12 months" };
+const LABEL: Record<RangeMonths, string> = { 1: "1 month", 3: "3 months", 6: "6 months", 12: "12 months" };
 
 export function RangeTabs({ path, active }: { path: string; active: RangeMonths }) {
   return (
-    <nav aria-label="Date range" className="inline-flex rounded-ctl border border-line bg-surface-1 p-1 shadow-card">
+    // Full width on a phone, where four ranges share the row evenly; its own width from sm up.
+    <nav aria-label="Date range" className="flex w-full rounded-ctl border border-line bg-surface-1 p-1 shadow-card sm:inline-flex sm:w-auto">
       {RANGES.map((r) => (
         <Link
           key={r}
@@ -19,7 +20,7 @@ export function RangeTabs({ path, active }: { path: string; active: RangeMonths 
           scroll={false}
           aria-current={r === active ? "true" : undefined}
           className={clsx(
-            "rounded-[calc(var(--radius-ctl)-4px)] px-3 py-1.5 text-xs font-bold transition-colors duration-150",
+            "flex-1 whitespace-nowrap rounded-[calc(var(--radius-ctl)-4px)] px-2 py-1.5 text-center text-xs font-bold transition-colors duration-150 sm:flex-none sm:px-3",
             r === active ? "bg-button text-ink-on-accent" : "text-ink-2 hover:bg-surface-3 hover:text-ink-1",
           )}
         >

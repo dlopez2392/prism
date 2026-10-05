@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays, addMonths, bankHolidays, daysBetween, eachDay, isBusinessDay, lastMonths, nthWeekdayOfMonth, previousBusinessDay } from "./dates";
-import { money, money0, moneyCompact, shortDate, signedMoney0 } from "./format";
+import { dayRange, money, money0, moneyCompact, shortDate, signedMoney0 } from "./format";
 
 describe("calendar arithmetic", () => {
   it("clamps month-end when adding months", () => {
@@ -73,5 +73,8 @@ describe("money formatting", () => {
 
   it("formats dates without touching the viewer's zone", () => {
     expect(shortDate("2026-09-01")).toBe("Sep 1");
+    expect(dayRange("2026-09-01", "2026-09-05")).toBe("Sep 1 – 5");
+    expect(dayRange("2026-09-28", "2026-10-03")).toBe("Sep 28 – Oct 3");
+    expect(dayRange("2026-09-01", "2026-09-01")).toBe("Sep 1");
   });
 });

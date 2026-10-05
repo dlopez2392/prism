@@ -15,11 +15,11 @@ import { TimeSeriesChart } from "@/components/charts/time-series";
 import { RangeTabs } from "@/components/range-tabs";
 import { Card, Change, EmptyState, PageHeader } from "@/components/ui";
 import { categoryTotals, incomeSources, monthlyCashFlow, sumIncome, sumSpending } from "@/lib/finance/cashflow";
-import { money0, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
+import { dayRange, money0, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
 import { incomeSummary } from "@/lib/finance/income";
 import { detectRecurring } from "@/lib/finance/recurring";
 import { buildCashFlowSankey } from "@/lib/finance/sankey";
-import { monthWindow, parseRange } from "@/lib/finance/view";
+import { monthWindow, parseRange, periodLabel } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Cash flow" };
@@ -38,11 +38,13 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
   const rate = income > 0 ? kept / income : null;
 
   const graph = buildCashFlowSankey(incomeSources(txns, w.from, w.to, 3), categoryTotals(txns, w.from, w.to));
-  const flows = monthlyCashFlow(txns, w.months);
+  const flows = monthlyCashFlow(txns, w.trend);
   const labels = flows.map((f) => monthYear(`${f.month}-01`));
   const axis = flows.map((f) => monthShort(`${f.month}-01`));
   const partial = [flows.length - 1];
-  const period = `${monthYear(w.from)} – ${monthYear(w.to)}`;
+  const period = periodLabel(w.from, w.to);
+  // One month is set against the same days of the last one; longer windows against the stretch before.
+  const against = range === 1 ? `vs ${dayRange(w.prevFrom, w.prevTo)}` : `vs previous ${range} mo`;
   const earning = incomeSummary(txns, detectRecurring(txns, data.today), data.today);
 
   return (
@@ -54,20 +56,20 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
           <div className="text-sm font-semibold text-[var(--on-hero-soft)]">You kept</div>
           <div className="mt-1 text-[44px] font-extrabold leading-none tracking-tight">{money0(Math.max(0, kept))}</div>
           <p className="mt-2 text-sm text-[var(--on-hero-soft)]">
-            {rate !== null ? `${percent(Math.max(0, rate))} of everything that came in over ${range} months.` : "No income in this period yet."}
+            {rate !== null ? `${percent(Math.max(0, rate))} of everything that came in ${range === 1 ? "this month so far" : `over ${range} months`}.` : "No income in this period yet."}
           </p>
         </Card>
         <StatTile
           label="Money in"
           value={money0(income)}
-          change={<Change text={signedMoney0(income - prevIncome)} up={income >= prevIncome} suffix={`vs previous ${range} mo`} />}
+          change={<Change text={signedMoney0(income - prevIncome)} up={income >= prevIncome} suffix={against} />}
           spark={flows.map((f) => f.income)}
           sparkColor="var(--flow-in)"
         />
         <StatTile
           label="Money out"
           value={money0(spending)}
-          change={<Change text={signedMoney0(spending - prevSpending)} up={spending > prevSpending} goodWhenUp={false} suffix={`vs previous ${range} mo`} />}
+          change={<Change text={signedMoney0(spending - prevSpending)} up={spending > prevSpending} goodWhenUp={false} suffix={against} />}
           spark={flows.map((f) => f.spending)}
           sparkColor="var(--flow-out)"
         />

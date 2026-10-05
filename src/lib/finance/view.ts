@@ -5,7 +5,8 @@
 
 import type { CategoryRow } from "./cashflow";
 import { CATEGORIES, categoryColor } from "./categories";
-import { addDays, addMonths, daysBetween, eachDay, lastMonths, startOfMonth } from "./dates";
+import { addMonths, eachDay, lastMonths, monthKey, startOfMonth } from "./dates";
+import { monthYear } from "./format";
 import type { CategoryId, Cents, ISODate, Transaction } from "./types";
 
 export type SliceData = { id: string; label: string; value: Cents; color: string };
@@ -32,7 +33,7 @@ export function greeting(hour: number): string {
 }
 
 
-export const RANGES = [3, 6, 12] as const;
+export const RANGES = [1, 3, 6, 12] as const;
 export type RangeMonths = (typeof RANGES)[number];
 
 export function parseRange(raw: string | string[] | undefined, fallback: RangeMonths = 6): RangeMonths {
@@ -42,13 +43,31 @@ export function parseRange(raw: string | string[] | undefined, fallback: RangeMo
 
 /**
  * A window of `months` calendar months ending today (the current month counts
- * as one, so far), plus the equally long window just before it.
+ * as one, so far), and the window it's compared with: the same days, `months`
+ * months earlier. Aligned by the calendar, not by length, so both hold the
+ * same paydays and the same rent: on Oct 5 the last 3 months (Aug 1 – Oct 5)
+ * are set against May 1 – Jul 5, and this month so far (Oct 1 – 5) against
+ * Sep 1 – 5. The day clamps, so Mar 31 is set against Feb 28.
+ *
+ * `trend` is the months a month-by-month chart draws: the window's own, but
+ * never fewer than two, so a one-month window still has the month it's
+ * compared with beside it.
  */
 export function monthWindow(today: ISODate, months: number) {
   const from = addMonths(startOfMonth(today), -(months - 1));
-  const span = daysBetween(from, today);
-  const prevTo = addDays(from, -1);
-  return { from, to: today, prevFrom: addDays(prevTo, -span), prevTo, months: lastMonths(today, months) };
+  return {
+    from,
+    to: today,
+    prevFrom: addMonths(from, -months),
+    prevTo: addMonths(today, -months),
+    months: lastMonths(today, months),
+    trend: lastMonths(today, Math.max(months, 2)),
+  };
+}
+
+/** A window as a screen's eyebrow names it: "Aug 2026 – Oct 2026", or "Oct 2026" when it's one month. */
+export function periodLabel(from: ISODate, to: ISODate): string {
+  return monthKey(from) === monthKey(to) ? monthYear(to) : `${monthYear(from)} – ${monthYear(to)}`;
 }
 
 /** End-of-day balances for one account, walked backwards from its current balance. */
