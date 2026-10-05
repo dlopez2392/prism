@@ -75,6 +75,12 @@ export function shortDate(date: ISODate): string {
   return `${MONTHS[m - 1]} ${d}`;
 }
 
+/** "Sep 1 – 5", "Sep 28 – Oct 3", or "Sep 1" for a single day. */
+export function dayRange(from: ISODate, to: ISODate): string {
+  if (from === to) return shortDate(from);
+  return from.slice(0, 7) === to.slice(0, 7) ? `${shortDate(from)} – ${Number(to.slice(8, 10))}` : `${shortDate(from)} – ${shortDate(to)}`;
+}
+
 /** "Sat, Sep 27" */
 export function dayDate(date: ISODate): string {
   const [y, m, d] = parts(date);

@@ -1,10 +1,12 @@
 // What a visitor can do on the example household, end to end: try a
 // purchase on Future and see the bills that don't come monthly, plan paying
 // off the loans on Net worth, read the tax summary year by year, and search
-// the ledger, including from a link that names what to look for; and find
-// the link for an investment account beside the bank's on Connections.
+// the ledger, including from a link that names what to look for; find the
+// link for an investment account beside the bank's on Connections; and look
+// at one month so far on Spending and Cash flow.
 
 import { expect, test } from "@playwright/test";
+import { expectNoSidewaysScroll, watchErrors } from "./helpers";
 
 test("Connections offers an investment account beside a bank, and on the example household says there's nothing to link", async ({ page }) => {
   await page.goto("/connections");
@@ -96,4 +98,29 @@ test("the year page leads to the tax summary for the same year", async ({ page }
   await page.getByRole("link", { name: `See ${year} for your taxes` }).click();
   await expect(page).toHaveURL(new RegExp(`/taxes\\?y=${year}$`));
   await expect(page.locator("h1")).toHaveText(`Your ${year} taxes`);
+});
+
+test("one month sets this month so far against the same days of the last, on Spending and Cash flow", async ({ page }) => {
+  const errors = watchErrors(page);
+  for (const [path, says] of [
+    ["/spending", "Spent this month"],
+    ["/cash-flow", /of everything that came in this month so far\./],
+  ] as const) {
+    await page.goto(path);
+    const range = page.getByRole("navigation", { name: "Date range" });
+    await range.getByRole("link", { name: "1 month" }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}\\?range=1$`));
+    await expect(range.getByRole("link", { name: "1 month" })).toHaveAttribute("aria-current", "true");
+    await expect(page.getByText(says)).toBeVisible();
+    // Against the same days of last month, named: "vs Sep 1 – 5", or "vs Sep 1" on the first.
+    await expect(page.getByText(/^vs [A-Z][a-z]{2} 1( – \d{1,2})?$/).first()).toBeVisible();
+    // The four ranges fit a phone's width.
+    await expectNoSidewaysScroll(page);
+  }
+  // One month so far averages by the day; longer ranges by the month.
+  await page.goto("/spending?range=1");
+  await expect(page.getByText("Per day", { exact: true })).toBeVisible();
+  await page.goto("/spending?range=3");
+  await expect(page.getByText("Per month", { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
 });
