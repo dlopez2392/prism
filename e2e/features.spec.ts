@@ -3,7 +3,7 @@
 // off the loans on Net worth, read the tax summary year by year, and search
 // the ledger, including from a link that names what to look for; find the
 // link for an investment account beside the bank's on Connections; and look
-// at one month so far on Spending and Cash flow.
+// at one month on Spending and Cash flow, this one or any before it.
 
 import { expect, test } from "@playwright/test";
 import { expectNoSidewaysScroll, watchErrors } from "./helpers";
@@ -122,5 +122,40 @@ test("one month sets this month so far against the same days of the last, on Spe
   await expect(page.getByText("Per day", { exact: true })).toBeVisible();
   await page.goto("/spending?range=3");
   await expect(page.getByText("Per month", { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("one month steps back through past months, each set against the whole month before, and forward to this month again", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/spending?range=1");
+  const month = page.getByRole("navigation", { name: "Month" });
+  // Read day by day: the pace chart stands where the month-by-month bars do for longer ranges.
+  await expect(page.getByRole("heading", { name: "Spending pace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Month by month, by category" })).toHaveCount(0);
+  // This month: there's nothing later to step to.
+  await expect(month.getByRole("link", { name: /^Later month/ })).toHaveCount(0);
+
+  await month.getByRole("link", { name: /^Earlier month, / }).click();
+  await expect(page).toHaveURL(/\/spending\?range=1&month=\d{4}-\d{2}$/);
+  const shown = new URL(page.url()).searchParams.get("month")!;
+  const name = new Date(`${shown}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+  await expect(page.getByText(`Spent in ${name}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`All of ${name} against all of`)).toBeVisible();
+  // A whole month is set against the whole month before it, by name: "vs August".
+  await expect(page.getByText(/^vs [A-Z][a-z]+$/).first()).toBeVisible();
+  await expectNoSidewaysScroll(page);
+
+  await month.getByRole("link", { name: "Later month, this month" }).click();
+  await expect(page).toHaveURL(/\/spending\?range=1$/);
+  await expect(page.getByText("Spent this month", { exact: true })).toBeVisible();
+
+  // Cash flow reads the same address the same way, and a past month isn't "in progress".
+  await page.goto(`/cash-flow?range=1&month=${shown}`);
+  await expect(page.getByText(new RegExp(`of everything that came in during ${name}\\.$`))).toBeVisible();
+  await expect(page.getByText("Both months in full")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Month" }).getByText(new RegExp(`^${name} \\d{4}$`))).toBeVisible();
+  // A month named beside a longer range is ignored, so no stepper shows.
+  await page.goto(`/cash-flow?range=3&month=${shown}`);
+  await expect(page.getByRole("navigation", { name: "Month" })).toHaveCount(0);
   expect(errors).toEqual([]);
 });

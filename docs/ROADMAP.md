@@ -299,3 +299,13 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     provider. Next, if people ask for a broker Plaid doesn't reach: SnapTrade
     ($100 a month plus $1–2 per connected person), and Fidelity once its
     approval in the Plaid Dashboard is in.
+25. **One month at a time.** **Built (2026-10-05):** Spending and Cash flow
+    gain a 1-month range: this month so far against the same days of last
+    month ("vs Sep 1 – 5"), and, with the stepper beside it, any past month
+    back to the oldest transaction, whole against the whole month before
+    ("vs August"). Spending reads one month day by day, with the same
+    spending-pace chart as Overview. Every range's comparison is aligned by
+    the calendar, not by length, so both sides hold the same paydays and
+    rent. Next, from the same review: leave a purchase out of spending and
+    budgets, hide an account from totals, and charts that open the
+    transactions behind them.

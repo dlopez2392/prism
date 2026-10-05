@@ -5,8 +5,8 @@
 
 import type { CategoryRow } from "./cashflow";
 import { CATEGORIES, categoryColor } from "./categories";
-import { addMonths, eachDay, lastMonths, monthKey, startOfMonth } from "./dates";
-import { monthYear } from "./format";
+import { addMonths, eachDay, endOfMonth, lastMonths, monthKey, startOfMonth } from "./dates";
+import { dayRange, monthLong, monthYear } from "./format";
 import type { CategoryId, Cents, ISODate, Transaction } from "./types";
 
 export type SliceData = { id: string; label: string; value: Cents; color: string };
@@ -42,32 +42,82 @@ export function parseRange(raw: string | string[] | undefined, fallback: RangeMo
 }
 
 /**
- * A window of `months` calendar months ending today (the current month counts
- * as one, so far), and the window it's compared with: the same days, `months`
- * months earlier. Aligned by the calendar, not by length, so both hold the
- * same paydays and the same rent: on Oct 5 the last 3 months (Aug 1 – Oct 5)
- * are set against May 1 – Jul 5, and this month so far (Oct 1 – 5) against
- * Sep 1 – 5. The day clamps, so Mar 31 is set against Feb 28.
+ * A window of `months` calendar months ending on `end` (today, with the
+ * current month counted as one, so far; or the last day of a past month),
+ * and the window it's compared with: the same days, `months` months earlier.
+ * Aligned by the calendar, not by length, so both hold the same paydays and
+ * the same rent: on Oct 5 the last 3 months (Aug 1 – Oct 5) are set against
+ * May 1 – Jul 5, and this month so far (Oct 1 – 5) against Sep 1 – 5. A
+ * window that ends on a month's last day is whole months, set against whole
+ * months: September against all of August, February against all of January.
  *
  * `trend` is the months a month-by-month chart draws: the window's own, but
  * never fewer than two, so a one-month window still has the month it's
  * compared with beside it.
  */
-export function monthWindow(today: ISODate, months: number) {
-  const from = addMonths(startOfMonth(today), -(months - 1));
+export function monthWindow(end: ISODate, months: number) {
+  const from = addMonths(startOfMonth(end), -(months - 1));
+  const back = addMonths(end, -months);
   return {
     from,
-    to: today,
+    to: end,
     prevFrom: addMonths(from, -months),
-    prevTo: addMonths(today, -months),
-    months: lastMonths(today, months),
-    trend: lastMonths(today, Math.max(months, 2)),
+    prevTo: end === endOfMonth(end) ? endOfMonth(back) : back,
+    months: lastMonths(end, months),
+    trend: lastMonths(end, Math.max(months, 2)),
   };
+}
+
+/**
+ * The month a one-month view shows, from the address ("2026-09"): a past
+ * month that has something in it, from `earliest` (the oldest transaction's
+ * date) up to last month. Null for this month, and for anything else, so a
+ * mistyped or stale link still opens on today.
+ */
+export function parseMonth(raw: string | string[] | undefined, today: ISODate, earliest: ISODate | null): string | null {
+  const m = Array.isArray(raw) ? raw[0] : raw;
+  if (!m || !/^\d{4}-(0[1-9]|1[0-2])$/.test(m) || !earliest) return null;
+  return m < monthKey(today) && m >= monthKey(earliest) ? m : null;
+}
+
+/**
+ * The months either side of `month` a one-month view can step to, as their
+ * keys ("2026-08"), or null where there's nothing: before the oldest
+ * transaction, or after this month. This month itself is `null` in the
+ * address, so stepping forward onto it gives `current`.
+ */
+export function monthSteps(month: string | null, today: ISODate, earliest: ISODate | null) {
+  const shown = month ?? monthKey(today);
+  const older = monthKey(addMonths(`${shown}-01`, -1));
+  const newer = monthKey(addMonths(`${shown}-01`, 1));
+  return {
+    older: earliest && older >= monthKey(earliest) ? older : null,
+    newer: month === null ? null : newer === monthKey(today) ? "current" : newer,
+  } as const;
+}
+
+/**
+ * What a Spending or Cash flow address asks for: the range, the past month a
+ * one-month view shows (null for this month), the window that makes, and the
+ * months either side of it for the stepper (one month only).
+ */
+export function rangeView(params: Record<string, string | string[] | undefined>, today: ISODate, transactions: Transaction[]) {
+  const range = parseRange(params.range);
+  const earliest = transactions.reduce<ISODate | null>((m, t) => (m === null || t.date < m ? t.date : m), null);
+  const month = range === 1 ? parseMonth(params.month, today, earliest) : null;
+  const w = monthWindow(month ? endOfMonth(`${month}-01`) : today, range);
+  const step = range === 1 ? { shown: month ?? monthKey(today), ...monthSteps(month, today, earliest) } : undefined;
+  return { range, month, w, step };
 }
 
 /** A window as a screen's eyebrow names it: "Aug 2026 – Oct 2026", or "Oct 2026" when it's one month. */
 export function periodLabel(from: ISODate, to: ISODate): string {
   return monthKey(from) === monthKey(to) ? monthYear(to) : `${monthYear(from)} – ${monthYear(to)}`;
+}
+
+/** What a one-month window is set against, named: "August" for the whole of it, "Sep 1 – 5" for part. */
+export function againstLabel(from: ISODate, to: ISODate): string {
+  return from === startOfMonth(from) && to === endOfMonth(from) ? monthLong(from) : dayRange(from, to);
 }
 
 /** End-of-day balances for one account, walked backwards from its current balance. */
