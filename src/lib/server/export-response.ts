@@ -8,6 +8,7 @@
 
 import "server-only";
 import { BRAND } from "@/lib/brand";
+import { everyAccount } from "@/lib/finance/details";
 import { currentAccount } from "@/lib/supabase/server";
 import { getPersonalFinance, type Loaded } from "./finance";
 
@@ -24,7 +25,8 @@ export async function ownMoneyOrRefusal(req: Request): Promise<Own | Response> {
       headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" },
     });
   }
-  return { data, email: account.email };
+  // All of it: accounts the person leaves out of their totals are still theirs to download.
+  return { data: everyAccount(data), email: account.email };
 }
 
 const slug = BRAND.product.toLowerCase().replace(/[^a-z0-9]+/g, "-");

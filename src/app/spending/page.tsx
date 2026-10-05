@@ -49,7 +49,8 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
   const days = dailySpend(txns, addDays(data.today, -(HEATMAP_DAYS - 1)), data.today);
   const busiest = [...days].sort((a, b) => b.amount - a.amount)[0];
   const period = periodLabel(w.from, w.to);
-  const accountNames = Object.fromEntries(data.accounts.map((a) => [a.id, a.name]));
+  // Accounts left out of the totals still name their lines.
+  const accountNames = Object.fromEntries([...data.accounts, ...(data.hiddenAccounts ?? [])].map((a) => [a.id, a.name]));
   const inWindow = txns.filter((t) => t.date >= w.from && t.date <= w.to);
   // Category fixes live in an account and rename the person's own money, never the example household's.
   const canFix = data.account !== null && data.source !== "demo" && data.view === "me";

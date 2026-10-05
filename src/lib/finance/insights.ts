@@ -8,7 +8,7 @@
 //
 // Nothing here is advice. It is arithmetic, phrased kindly.
 
-import { categoryBreakdown, monthToDate, type MonthFlow } from "./cashflow";
+import { categoryBreakdown, isIncome, monthToDate, type MonthFlow } from "./cashflow";
 import { CATEGORIES } from "./categories";
 import type { BudgetStatus } from "./budgets";
 import { daysLeftInMonth } from "./budgets";
@@ -41,7 +41,7 @@ export function generateInsights(input: {
   const { txns, today, budgets, streams, flows } = input;
   const out: Insight[] = [];
   const mtd = monthToDate(today);
-  const inMonth = (t: Transaction, c: string) => t.category === c && t.date >= mtd.from && t.date <= today;
+  const inMonth = (t: Transaction, c: string) => t.category === c && !t.excluded && t.date >= mtd.from && t.date <= today;
 
   // 1. Budgets that are over, or on pace to be.
   const worst = budgets
@@ -127,7 +127,7 @@ export function generateInsights(input: {
     const avg = prior.reduce((s, f) => s + (f.savingsRate ?? 0), 0) / prior.length;
     const monthStart = `${last.month}-01`;
     const ids = txns
-      .filter((t) => monthKey(t.date) === last.month && t.category === "income")
+      .filter((t) => monthKey(t.date) === last.month && isIncome(t))
       .map((t) => t.id);
     if (last.savingsRate > avg + 0.02) {
       out.push({
@@ -167,11 +167,11 @@ export function generateInsights(input: {
   // 6. A one-off purchase well above the usual for its category.
   const scheduled = new Set(streams.flatMap((s) => s.transactionIds));
   const recent = txns.filter(
-    (t) => t.amount < -20_000 && t.date > addDays(today, -14) && CATEGORIES[t.category].slot > 0 && !scheduled.has(t.split?.of ?? t.id),
+    (t) => t.amount < -20_000 && !t.excluded && t.date > addDays(today, -14) && CATEGORIES[t.category].slot > 0 && !scheduled.has(t.split?.of ?? t.id),
   );
   for (const t of recent.sort((a, b) => a.amount - b.amount).slice(0, 1)) {
     const sameCat = txns
-      .filter((x) => x.category === t.category && x.amount < 0 && x.date >= addDays(startOfMonth(today), -90))
+      .filter((x) => x.category === t.category && !x.excluded && x.amount < 0 && x.date >= addDays(startOfMonth(today), -90))
       .map((x) => -x.amount)
       .sort((a, b) => a - b);
     const med = sameCat[Math.floor(sameCat.length / 2)] ?? 0;

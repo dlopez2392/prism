@@ -309,3 +309,13 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     rent. Next, from the same review: leave a purchase out of spending and
     budgets, hide an account from totals, and charts that open the
     transactions behind them.
+26. **Leave it out of the totals.** **Built (2026-10-05):** a switch at the
+    top of any transaction leaves it out of every total (spending, income,
+    budgets, insights, the year page, alert emails and connected apps' sums)
+    while it stays listed, marked "Left out of totals"; "Choose what counts"
+    on Net worth does the same for a whole account (a business card, a
+    closed or duplicate account): its balance leaves net worth and every line
+    in it is left out, and it stays connected and in the data download. Kept
+    in the same sealed record as splits and tags, so no new table; the
+    household never sees either. The balance forecast and bill detection still
+    count the money, because it still moved.

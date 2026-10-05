@@ -3,7 +3,8 @@
 // src/lib/server/details-actions.ts
 //
 // Keeping what a person adds to their own transactions (finance/details.ts):
-// a split, their tags, who owes them. Only for a signed-in account, only on
+// a split, their tags, who owes them, and what they leave out of their totals
+// (a line, or a whole account). Only for a signed-in account, only on
 // one of their OWN lines as the bank sent it (a split's parts are joined back
 // first), and only what checkDetail allows: parts that add up exactly, an
 // amount owed no larger than what was paid. Sealed in their account, never on
@@ -16,7 +17,7 @@
 // with a split, saved with none, is kept whole: the others still follow.
 
 import { refresh } from "next/cache";
-import { checkDetail, ruleKey, sharesOf, validRule, withDetail, withRule, wholeLines, type SplitRule, type TxnDetail } from "@/lib/finance/details";
+import { checkDetail, ruleKey, sharesOf, validRule, withDetail, withHidden, withRule, wholeLines, type SplitRule, type TxnDetail } from "@/lib/finance/details";
 import { currentAccount } from "@/lib/supabase/server";
 import { loadAccountDetails, saveAccountDetails } from "./account-store";
 import { getPersonalFinance } from "./finance";
@@ -86,6 +87,8 @@ export async function saveTransactionDetail(txnId: unknown, detail: unknown): Pr
       kept = { ...(kept ?? {}), whole: true };
       message = `Kept whole. Other ${own.line.merchant} purchases still follow your split.`;
     }
+    // Left out stays left out: that's the switch above the form, never something the form sends.
+    if (current.lines[own.line.id]?.out) kept = { ...(kept ?? {}), out: true };
     await saveAccountDetails(own.account, withDetail(next, own.line.id, kept), own.key);
     refresh();
     return { status: "saved", message, at: Date.now() };
@@ -124,6 +127,47 @@ export async function markOwedPaid(txnId: unknown, paid: unknown): Promise<Detai
     await saveAccountDetails(own.account, withDetail(current, own.line.id, next), own.key);
     refresh();
     return { status: "saved", message: paid === true ? `Marked paid back by ${detail.owed.who}.` : `Open again: ${detail.owed.who} still owes you.`, at: Date.now() };
+  } catch {
+    return { status: "error", message: "That didn't save. Try again in a moment." };
+  }
+}
+
+/** Leave one of the person's lines out of every total (or count it again): the rest of what they added to it stays as it is. */
+export async function leaveOut(txnId: unknown, out: unknown): Promise<DetailState> {
+  try {
+    if (typeof out !== "boolean") return { status: "error", message: "That didn't come through. Try again." };
+    const own = await ownLine(txnId);
+    if (!own.ok) return { status: "error", message: own.error };
+    const current = await loadAccountDetails(own.account, own.key);
+    const next: TxnDetail = { ...current.lines[own.line.id] };
+    if (out === true) next.out = true;
+    else delete next.out;
+    await saveAccountDetails(own.account, withDetail(current, own.line.id, Object.keys(next).length ? next : null), own.key);
+    refresh();
+    return { status: "saved", message: out === true ? "Left out of your totals. It stays in your transactions." : "Counted in your totals again.", at: Date.now() };
+  } catch {
+    return { status: "error", message: "That didn't save. Try again in a moment." };
+  }
+}
+
+/** Leave one of the person's accounts out of every total (or count it again): its balance, and every line in it. It stays connected. */
+export async function countAccount(accountId: unknown, counted: unknown): Promise<DetailState> {
+  try {
+    if (typeof counted !== "boolean") return { status: "error", message: "That didn't come through. Try again." };
+    const me = await ownAccount();
+    if (!me.ok) return { status: "error", message: me.error };
+    const data = await getPersonalFinance();
+    if (data.source === "demo") return { status: "error", message: "Link a bank first. This is for your own accounts." };
+    const account = typeof accountId === "string" ? [...data.accounts, ...(data.hiddenAccounts ?? [])].find((a) => a.id === accountId) : undefined;
+    if (!account) return { status: "error", message: "That account isn't one of yours." };
+    const current = await loadAccountDetails(me.account, me.key);
+    await saveAccountDetails(me.account, withHidden(current, account.id, counted !== true), me.key);
+    refresh();
+    return {
+      status: "saved",
+      message: counted === true ? `${account.name} counts in your totals again.` : `${account.name} is left out of your totals. It's still connected.`,
+      at: Date.now(),
+    };
   } catch {
     return { status: "error", message: "That didn't save. Try again in a moment." };
   }

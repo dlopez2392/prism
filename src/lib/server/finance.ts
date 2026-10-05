@@ -24,7 +24,7 @@ import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
 import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiability, type StoredLiability } from "@/lib/plaid/liabilities";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
-import { applyDetails, NO_DETAILS, type SplitRule, type TxnDetails } from "@/lib/finance/details";
+import { applyDetails, hideAccounts, NO_DETAILS, type SplitRule, type TxnDetails } from "@/lib/finance/details";
 import { applyP2pNotes, NO_P2P_NOTES, type P2pNotes } from "@/lib/finance/p2p";
 import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
@@ -476,7 +476,7 @@ export const getFinance = cache(async (): Promise<Loaded> => {
   if ((await cookies()).get(VIEW_COOKIE)?.value !== "household" || !src.account || !src.inHousehold) return loaded;
   try {
     // After the calendar's refresh in ownMoney: the feed is only ever the person's own bills.
-    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household", splitRules: [] };
+    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household", splitRules: [], hiddenAccounts: [], hiddenHoldings: [] };
   } catch {
     return { ...loaded, notice: "We couldn't load your household just now. This is your own money." };
   }
@@ -498,9 +498,9 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
     rememberZone(src.account, src.timeZone, zone);
     if (src.coinbaseShared) rememberCoinbase(src.account, src.coinbaseShared, base);
   }
-  // The person's own edits win over seeded or drafted budgets and goals.
+  // The person's own edits win over seeded or drafted budgets and goals; then the accounts they left out of their totals step aside.
   const personal: Loaded = {
-    ...applyPlan(base, src.plan),
+    ...hideAccounts(applyPlan(base, src.plan), src.details ?? null),
     localHour,
     planEdited,
     accountsEnabled: supabaseEnv() !== null,
@@ -663,7 +663,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
   };
   const base = greeted((await moneyFor(src, today, "Coinbase balances update the next time you open Prism.")).money, a.firstName, isLive(src));
-  const planned = applyPlan(base, a.plan);
+  const planned = hideAccounts(applyPlan(base, a.plan), a.details);
   return {
     source: planned.source,
     today: planned.today,
@@ -674,6 +674,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     budgets: planned.budgets,
     goals: planned.goals,
     holdings: planned.holdings,
+    hiddenAccounts: planned.hiddenAccounts,
     credit: planned.credit,
     notice: planned.notice,
     demo: !isLive(src),
@@ -690,7 +691,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
  */
 export async function morningFinance(src: Money, plan: Plan, today: ISODate): Promise<FinanceData | null> {
   if (!isLive(src)) return null;
-  return applyPlan((await moneyFor(src, today)).money, plan);
+  return hideAccounts(applyPlan((await moneyFor(src, today)).money, plan), src.details ?? null);
 }
 
 const FEED_STALE_MS = 6 * 60 * 60_000;

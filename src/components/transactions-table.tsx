@@ -172,8 +172,9 @@ export function TransactionsTable({
                     {t.split ? ` · part ${t.split.part} of ${t.split.parts}, split by you` : t.bankCategory ? " (changed by you)" : ""} · {accountNames[t.accountId] ?? "Account"}
                     {t.pending ? " · Pending" : ""}
                   </div>
-                  {t.owed || t.tags?.length ? (
+                  {t.owed || t.tags?.length || t.excluded ? (
                     <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {t.excluded ? <span className="rounded-pill border border-line-strong px-2 py-0.5 text-[11px] font-semibold text-ink-2">Left out of totals</span> : null}
                       {t.owed ? (
                         <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-ink-2">
                           {t.owed.paid ? `${t.owed.who} paid you back` : `${t.owed.who} owes you ${money(t.owed.amount)}`}
@@ -202,7 +203,7 @@ export function TransactionsTable({
                   <button
                     type="button"
                     onClick={() => fix(t)}
-                    aria-label={`Open ${t.merchant}${t.p2p ? `, ${p2pLabel(t.p2p)}` : ""}, ${money(t.amount)} on ${shortDate(t.date)}: ${CATEGORIES[t.category].label}${t.split ? `, part ${t.split.part} of ${t.split.parts}` : t.bankCategory ? ", changed by you" : ""}. Change its category, split it, tag it, or note who owes you.`}
+                    aria-label={`Open ${t.merchant}${t.p2p ? `, ${p2pLabel(t.p2p)}` : ""}, ${money(t.amount)} on ${shortDate(t.date)}: ${CATEGORIES[t.category].label}${t.split ? `, part ${t.split.part} of ${t.split.parts}` : t.bankCategory ? ", changed by you" : ""}${t.excluded ? ", left out of your totals" : ""}. Change its category, split it, tag it, note who owes you, or leave it out of your totals.`}
                     className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-ctl px-2 py-2.5 text-left transition-colors duration-150 hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-[var(--focus)]"
                   >
                     {content}

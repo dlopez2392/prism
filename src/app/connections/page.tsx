@@ -105,11 +105,13 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const joined = (await searchParams).joined === "1";
   const shares = data.inHousehold ? await myShares() : [];
   const institutionName = new Map(data.institutions.map((i) => [i.id, i.name]));
+  // Everything that's connected, accounts left out of the person's totals included: they're still connected.
+  const connected = [...data.accounts, ...(data.hiddenAccounts ?? [])];
   // Only the person's own money, and only what the household can be shown without anyone's access.
   const shareable: ShareableAccount[] =
     data.source === "demo"
       ? []
-      : data.accounts.map((a) => ({
+      : connected.map((a) => ({
           id: a.id,
           name: a.name,
           detail:
@@ -138,7 +140,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   // Imported history is listed on its own card below, where it can be removed.
   // Imported history and wallets have cards of their own below.
   const byInstitution = data.institutions.filter((inst) => inst.source !== "import" && inst.source !== "wallet").map((inst) => {
-    const accounts = data.accounts.filter((a) => a.institutionId === inst.id);
+    const accounts = connected.filter((a) => a.institutionId === inst.id);
     return { inst, accounts, total: accounts.reduce((s, a) => s + a.balance, 0) };
   });
   const attention = data.institutions.filter((i) => i.health === "needs_attention").length;
@@ -249,7 +251,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             {data.imports.length || data.lockedImports.length ? (
               <ul className="mt-3 divide-y divide-[var(--line)]">
                 {data.imports.map((imp) => {
-                  const into = imp.attachTo ? data.accounts.find((a) => a.id === imp.attachTo) : undefined;
+                  const into = imp.attachTo ? connected.find((a) => a.id === imp.attachTo) : undefined;
                   return (
                     <li key={imp.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">
                       <div className="grid size-10 shrink-0 place-items-center rounded-ctl bg-surface-2 text-ink-2">
@@ -305,7 +307,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             {data.wallets.length ? (
               <ul className="mt-3 divide-y divide-[var(--line)]">
                 {data.wallets.map((w) => {
-                  const balance = data.accounts.find((a) => a.id === `wallet-${w.id}`)?.balance ?? 0;
+                  const balance = connected.find((a) => a.id === `wallet-${w.id}`)?.balance ?? 0;
                   const held = (w.reading?.assets ?? []).filter((a) => a.units !== "0");
                   return (
                     <li key={w.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">

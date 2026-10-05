@@ -112,6 +112,8 @@ export type Transaction = {
   tags?: string[];
   /** Someone owes the person for this, until they mark it paid back. */
   owed?: Owed;
+  /** Left out of every total by the person (finance/details.ts): by itself ("line"), or with the account it's in ("account"). Still listed. */
+  excluded?: "line" | "account";
   pending: boolean;
 };
 
@@ -185,4 +187,8 @@ export type FinanceData = {
   goals: Goal[];
   holdings: Holding[];
   credit: CreditScore | null;
+  /** The person's accounts they left out of every total (finance/details.ts hideAccounts): listed, never added up. */
+  hiddenAccounts?: Account[];
+  /** What those accounts hold, set aside with them: in a download of the person's data, never in a total. */
+  hiddenHoldings?: Holding[];
 };

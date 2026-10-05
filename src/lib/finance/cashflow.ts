@@ -27,8 +27,14 @@ export function inRange(t: Transaction, from: ISODate, to: ISODate): boolean {
   return t.date >= from && t.date <= to;
 }
 
-export function isSpending(t: Transaction): boolean {
-  return isSpendCategory(t.category);
+/** Money spent: a spending category, on a line the person hasn't left out of their totals (finance/details.ts). */
+export function isSpending(t: Transaction): t is Transaction & { category: SpendCategoryId } {
+  return isSpendCategory(t.category) && !t.excluded;
+}
+
+/** Money earned: income, on a line the person hasn't left out of their totals. */
+export function isIncome(t: Transaction): boolean {
+  return t.category === "income" && !t.excluded;
 }
 
 export function monthlyCashFlow(txns: Transaction[], months: string[]): MonthFlow[] {
@@ -36,7 +42,7 @@ export function monthlyCashFlow(txns: Transaction[], months: string[]): MonthFlo
   for (const t of txns) {
     const row = byMonth.get(monthKey(t.date));
     if (!row) continue;
-    if (t.category === "income") row.income += t.amount;
+    if (isIncome(t)) row.income += t.amount;
     else if (isSpending(t)) row.spending -= t.amount;
   }
   return months.map((month) => {
@@ -51,7 +57,7 @@ export type CategoryTotal = { category: SpendCategoryId; amount: Cents };
 export function categoryTotals(txns: Transaction[], from: ISODate, to: ISODate): Record<SpendCategoryId, Cents> {
   const out = Object.fromEntries(SPEND_CATEGORIES.map((c) => [c, 0])) as Record<SpendCategoryId, Cents>;
   for (const t of txns) {
-    if (!inRange(t, from, to) || !isSpendCategory(t.category)) continue;
+    if (!inRange(t, from, to) || !isSpending(t)) continue;
     out[t.category] -= t.amount;
   }
   return out;
@@ -94,7 +100,7 @@ export function monthlyByCategory(txns: Transaction[], months: string[]): MonthB
   );
   for (const t of txns) {
     const row = rows.get(monthKey(t.date));
-    if (!row || !isSpendCategory(t.category)) continue;
+    if (!row || !isSpending(t)) continue;
     row[t.category] -= t.amount;
   }
   return months.map((m) => rows.get(m)!);
@@ -133,7 +139,7 @@ export type MerchantRow = { merchant: string; amount: Cents; count: number; cate
 export function topMerchants(txns: Transaction[], from: ISODate, to: ISODate, limit = 8): MerchantRow[] {
   const rows = new Map<string, MerchantRow>();
   for (const t of txns) {
-    if (!inRange(t, from, to) || !isSpendCategory(t.category)) continue;
+    if (!inRange(t, from, to) || !isSpending(t)) continue;
     const row = rows.get(t.merchant) ?? { merchant: t.merchant, amount: 0, count: 0, category: t.category };
     row.amount -= t.amount;
     row.count += 1;
@@ -151,7 +157,7 @@ export type IncomeSource = { name: string; amount: Cents };
 export function incomeSources(txns: Transaction[], from: ISODate, to: ISODate, max = 3): IncomeSource[] {
   const rows = new Map<string, Cents>();
   for (const t of txns) {
-    if (!inRange(t, from, to) || t.category !== "income" || t.amount <= 0) continue;
+    if (!inRange(t, from, to) || !isIncome(t) || t.amount <= 0) continue;
     const name = incomeLabel(t.merchant);
     rows.set(name, (rows.get(name) ?? 0) + t.amount);
   }
@@ -185,7 +191,7 @@ export function sumSpending(txns: Transaction[], from: ISODate, to: ISODate): Ce
 }
 
 export function sumIncome(txns: Transaction[], from: ISODate, to: ISODate): Cents {
-  return txns.reduce((s, t) => (inRange(t, from, to) && t.category === "income" ? s + t.amount : s), 0);
+  return txns.reduce((s, t) => (inRange(t, from, to) && isIncome(t) ? s + t.amount : s), 0);
 }
 
 export function categoryName(c: SpendCategoryId): string {
