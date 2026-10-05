@@ -10,8 +10,8 @@
 // comparison with the year before appears only when Prism holds that same
 // span of the year before, in full.
 
-import { categoryTotals, inRange, monthlyCashFlow, sumIncome, sumSpending, topMerchants, type MerchantRow, type MonthFlow } from "./cashflow";
-import { SPEND_CATEGORIES, isSpendCategory } from "./categories";
+import { categoryTotals, inRange, isIncome, isSpending, monthlyCashFlow, sumIncome, sumSpending, topMerchants, type MerchantRow, type MonthFlow } from "./cashflow";
+import { SPEND_CATEGORIES } from "./categories";
 import { addDays, monthKey, startOfMonth } from "./dates";
 import { incomeKind } from "./income";
 import { netWorthSeries } from "./networth";
@@ -116,7 +116,7 @@ export function yearReview(data: FinanceData, year: number): YearReview {
   const regular = new Set(streams.filter((s) => s.kind !== "income").map((s) => `${s.accountId}|${normalizeMerchant(s.merchant)}`));
   let biggest: Transaction | null = null;
   for (const t of inSpan) {
-    if (!isSpendCategory(t.category) || t.amount >= 0 || regular.has(`${t.accountId}|${normalizeMerchant(t.merchant)}`)) continue;
+    if (!isSpending(t) || t.amount >= 0 || regular.has(`${t.accountId}|${normalizeMerchant(t.merchant)}`)) continue;
     if (!biggest || t.amount < biggest.amount) biggest = t;
   }
 
@@ -125,7 +125,7 @@ export function yearReview(data: FinanceData, year: number): YearReview {
   const busiest = complete.reduce<MonthFlow | null>((b, f) => (b === null || f.spending > b.spending ? f : b), null);
   const quietest = complete.length > 1 ? complete.reduce<MonthFlow | null>((q, f) => (q === null || f.spending < q.spending ? f : q), null) : null;
 
-  const pay = inSpan.reduce((s, t) => (t.category === "income" && t.amount > 0 && incomeKind(t) === "pay" ? s + t.amount : s), 0);
+  const pay = inSpan.reduce((s, t) => (isIncome(t) && t.amount > 0 && incomeKind(t) === "pay" ? s + t.amount : s), 0);
 
   // Subscriptions, and every charge from them within the span.
   const subs = streams

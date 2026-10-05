@@ -148,7 +148,7 @@ export function incomeSummary(txns: Transaction[], streams: RecurringStream[], t
   const inMonths = new Set(months);
   const sums = new Map<IncomeKind, Cents>();
   for (const t of txns) {
-    if (t.category !== "income" || t.amount <= 0 || t.pending || !inMonths.has(monthKey(t.date))) continue;
+    if (t.category !== "income" || t.excluded || t.amount <= 0 || t.pending || !inMonths.has(monthKey(t.date))) continue;
     const k = incomeKind(t);
     sums.set(k, (sums.get(k) ?? 0) + t.amount);
   }

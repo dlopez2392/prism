@@ -211,6 +211,18 @@
   or `whole: true` always wins over it. Reminders about what's owed are
   written in the browser and handed to the share sheet or the clipboard:
   Prism never sends a message to anyone on a person's behalf.
+- Left out of the totals (same record: `TxnDetail.out` for a line,
+  `TxnDetails.hidden` for an account's id): `applyDetails` marks such lines
+  `excluded`, and `isSpending` / `isIncome` in `cashflow.ts` are the ONE place
+  every total asks — use them, never `isSpendCategory(t.category)` or
+  `t.category === "income"` on a transaction, or a left-out line counts again.
+  What looks for what REPEATS and the balance forecast deliberately ignore the
+  mark: the money still moved. `hideAccounts` runs AFTER `applyPlan` (a goal
+  can still follow a left-out account) and moves those accounts and their
+  holdings to `hiddenAccounts` / `hiddenHoldings`; anything that lists a
+  person's accounts rather than adds them up (Connections, transaction lists,
+  the data download via `everyAccount`) must include them. The household
+  never sees either flag.
   Tokens come from Supabase Auth's OAuth 2.1 server; `/mcp` accepts only
   tokens with a `client_id` and asks Supabase Auth about each one (so
   Disconnect is immediate). Read-only is a DATABASE rule — restrictive

@@ -80,11 +80,14 @@ export function citeable(t: Transaction, accounts: Map<string, Account>) {
     ...(t.split ? { split_by_user: { part: t.split.part, of_parts: t.split.parts, whole_transaction_id: t.split.of, whole_amount: usd(t.split.total) } } : {}),
     ...(t.tags ? { tags: t.tags } : {}),
     ...(t.owed ? { owed_to_user: { by: t.owed.who, amount: usd(t.owed.amount), paid_back_on: t.owed.paid } } : {}),
+    // Still a real transaction, but the person keeps it out of every total: none of these tools' sums count it.
+    ...(t.excluded ? { left_out_of_totals_by_user: true } : {}),
     ...(t.pending ? { pending: true } : {}),
   };
 }
 
-const byId = (data: FinanceData) => new Map(data.accounts.map((a) => [a.id, a]));
+// Accounts the person left out of their totals still name their own lines.
+const byId = (data: FinanceData) => new Map([...data.accounts, ...(data.hiddenAccounts ?? [])].map((a) => [a.id, a]));
 const newestFirst = (a: Transaction, b: Transaction) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.amount - a.amount);
 const biggestSpendFirst = (a: Transaction, b: Transaction) => a.amount - b.amount;
 

@@ -16,6 +16,7 @@ import { TimeSeriesChart } from "@/components/charts/time-series";
 import { TreemapChart } from "@/components/charts/treemap-chart";
 import { DebtPlanner } from "@/components/debt-planner";
 import { AddManualItem, AddWhatYouOwn, ManualItemRow } from "@/components/manual-item-editor";
+import { CountedAccounts, type CountedAccount } from "@/components/counted-accounts";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { Card, CardHeader, Change, EmptyState, PageHeader, StatusPill, type Status } from "@/components/ui";
 import { usualMonthlyKept } from "@/lib/finance/afford";
@@ -43,6 +44,17 @@ export default async function NetWorthPage() {
   const editable = new Map(canAdd && data.source !== "demo" ? data.manual.map((i) => [`manual-${i.id}`, i]) : []);
   // The way in to a home, a car or a loan: high on the page until the person has added one, then below their accounts.
   const addCard = canAdd ? <AddWhatYouOwn estimates={estimates} added={editable.size} /> : null;
+  const institution = new Map(data.institutions.map((i) => [i.id, i.name]));
+  // Which of their own accounts count in their totals: every one they have, those left out included, so any can come back.
+  const hiddenAccounts = data.hiddenAccounts ?? [];
+  const counted: CountedAccount[] = [...data.accounts.map((a) => ({ a, counted: true })), ...hiddenAccounts.map((a) => ({ a, counted: false }))].map(({ a, counted }) => ({
+    id: a.id,
+    name: a.name,
+    where: `${institution.get(a.institutionId) ?? "—"}${a.mask ? ` ·· ${a.mask}` : ""}`,
+    balance: a.balance,
+    counted,
+  }));
+  const choose = canAdd && data.source !== "demo" && counted.length > 0 ? <CountedAccounts accounts={counted} /> : null;
 
   if (data.accounts.length === 0) {
     return (
@@ -51,9 +63,16 @@ export default async function NetWorthPage() {
         <Card>
           <EmptyState
             icon={Landmark}
-            title="Your whole picture, in one number"
-            body={canAdd ? "Link your accounts, or add your home, a car or a loan below, and this becomes your net worth, month by month." : "Link your accounts and this becomes your net worth, month by month."}
+            title={hiddenAccounts.length ? "Every account is left out of your totals" : "Your whole picture, in one number"}
+            body={
+              hiddenAccounts.length
+                ? "Count one again below and your net worth comes back, month by month."
+                : canAdd
+                  ? "Link your accounts, or add your home, a car or a loan below, and this becomes your net worth, month by month."
+                  : "Link your accounts and this becomes your net worth, month by month."
+            }
           />
+          {choose ? <div className="px-5 pb-5 sm:px-6 sm:pb-6">{choose}</div> : null}
         </Card>
         {addCard}
       </div>
@@ -67,7 +86,6 @@ export default async function NetWorthPage() {
   const groups = groupAccounts(data.accounts);
   const alloc = allocation(data.holdings);
   const invested = alloc.reduce((s, x) => s + x.value, 0);
-  const institution = new Map(data.institutions.map((i) => [i.id, i.name]));
   const tiles = [...data.holdings]
     .sort((a, b) => b.value - a.value)
     .map((h) => {
@@ -241,6 +259,7 @@ export default async function NetWorthPage() {
               </section>
             ))}
           </div>
+          {choose}
         </Card>
 
         <div className="space-y-5 lg:col-span-5">

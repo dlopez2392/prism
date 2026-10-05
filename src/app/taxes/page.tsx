@@ -96,7 +96,7 @@ export default async function TaxesPage({ searchParams }: { searchParams: Promis
   const asked = typeof raw === "string" && /^\d{4}$/.test(raw) ? Number(raw) : null;
   const year = asked !== null && years.includes(asked) ? asked : defaultTaxYear(data);
   const s = taxSummary(data, year);
-  const accounts = new Map(data.accounts.map((a) => [a.id, a]));
+  const accounts = new Map([...data.accounts, ...(data.hiddenAccounts ?? [])].map((a) => [a.id, a]));
   // Only a signed-in person's own money can be downloaded; the example household and a household view can't.
   const canDownload = data.account !== null && data.source !== "demo" && data.view === "me";
   const moneyIn = s.sections.filter((x) => x.side === "in");

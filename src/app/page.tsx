@@ -48,7 +48,7 @@ export default async function OverviewPage() {
 
   const flex = a.budgets.filter((b) => ["food", "transport", "shopping", "fun"].includes(b.category));
   const recent = [...data.transactions].reverse().slice(0, 7);
-  const accountName = new Map(data.accounts.map((x) => [x.id, x.name]));
+  const accountName = new Map([...data.accounts, ...(data.hiddenAccounts ?? [])].map((x) => [x.id, x.name]));
   const upcoming = a.forecast ? a.forecast.events.filter((e) => e.date <= addDays(a.today, 14)) : [];
   const thisMonth = a.flows.at(-1)!;
   const savedRate = thisMonth.savingsRate;

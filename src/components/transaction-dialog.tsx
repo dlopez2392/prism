@@ -2,14 +2,15 @@
 
 // src/components/transaction-dialog.tsx
 //
-// One transaction, opened from the ledger: its category (category-fixer.tsx),
-// or how it splits across categories, its tags, and who owes the person for
-// it (finance/details.ts). A split line opens whole, by the id the bank gave
+// One transaction, opened from the ledger: whether it counts in the person's
+// totals at all (a switch, saved the moment it's flipped), its category
+// (category-fixer.tsx), or how it splits across categories, its tags, and who
+// owes the person for it (finance/details.ts). A split line opens whole, by the id the bank gave
 // it, whichever of its parts was tapped; its parts take their categories from
 // the split, so it has no single category to change. A split can be kept for
 // every purchase at the same shop; one there can still be kept whole.
 
-import { startTransition, useActionState, useId, useState, type FormEvent } from "react";
+import { startTransition, useActionState, useId, useState, useTransition, type FormEvent } from "react";
 import { Plus, ReceiptText, X } from "lucide-react";
 import clsx from "clsx";
 import { FixForm } from "@/components/category-fixer";
@@ -19,7 +20,8 @@ import { DETAIL_LIMITS, ruleKey } from "@/lib/finance/details";
 import { dayDate, money, shortDate } from "@/lib/finance/format";
 import { dollarsInput, parseDollars } from "@/lib/finance/plan";
 import type { Cents, SpendCategoryId, Transaction } from "@/lib/finance/types";
-import { saveTransactionDetail, type DetailState } from "@/lib/server/details-actions";
+import { Switch } from "@/components/switch";
+import { leaveOut, saveTransactionDetail, type DetailState } from "@/lib/server/details-actions";
 
 /** A line as the bank sent it, with what the person added: its parts when it's split. */
 export type Opened = { whole: Transaction; parts: Transaction[] };
@@ -77,6 +79,7 @@ export function TransactionDialog({
     >
       {t && opened ? (
         <>
+          <LeaveOut key={`${session}-${t.id}-out`} t={t} onDone={done} />
           <div role="tablist" aria-label="What to change" className="mb-4 inline-flex rounded-ctl border border-line bg-surface-2 p-1">
             {(
               [
@@ -113,6 +116,49 @@ export function TransactionDialog({
         </>
       ) : null}
     </Dialog>
+  );
+}
+
+/** Whether the line counts in the person's totals: flipped and saved at once, and flipped back to undo. */
+function LeaveOut({ t, onDone }: { t: Transaction; onDone: (message: string) => void }) {
+  // Left out with its whole account: only counting the account again brings it back.
+  const byAccount = t.excluded === "account";
+  const [out, setOut] = useState(t.excluded !== undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, start] = useTransition();
+  const flip = (next: boolean) => {
+    setOut(next);
+    setError(null);
+    start(async () => {
+      const result = await leaveOut(t.id, next);
+      if (result.status === "saved") onDone(result.message);
+      else {
+        setOut(!next);
+        setError(result.status === "error" ? result.message : null);
+      }
+    });
+  };
+  return (
+    <div className="mb-4 rounded-ctl border border-line bg-surface-2 p-3">
+      <Switch
+        checked={out}
+        onChange={flip}
+        disabled={saving || t.pending || byAccount}
+        label="Leave out of my totals"
+        description={
+          byAccount
+            ? "Its whole account is left out of your totals. To count it again, use Choose what counts on Net worth."
+            : t.pending
+              ? "Once it's no longer pending, you can leave it out."
+              : "Not counted in spending, income or budgets: for a one-off like a car, or a work trip you're paid back for. It stays in your transactions."
+        }
+      />
+      {error ? (
+        <p role="alert" className="mt-2 text-sm font-medium text-crit-ink">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

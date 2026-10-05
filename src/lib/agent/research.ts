@@ -460,7 +460,7 @@ function yearBody(d: AgentData, y: number, accounts: Map<string, Account>) {
 
 function categoryBody(d: AgentData, c: SpendCategoryId, accounts: Map<string, Account>) {
   const w = recent(d);
-  const txns = seen(d).filter((t) => inRange(t, w.from, w.to) && t.category === c);
+  const txns = seen(d).filter((t) => inRange(t, w.from, w.to) && t.category === c && !t.excluded);
   const flows = w.months.map((m) => ({ month: m, spent: -txns.filter((t) => monthKey(t.date) === m).reduce((s, t) => s + t.amount, 0) }));
   const total = flows.reduce((s, f) => s + f.spent, 0);
   return {

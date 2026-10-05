@@ -6,7 +6,12 @@
 //     belongs;
 //   - TAGS of their own ("Vacation 2026", "Work trip"), to find and total a
 //     trip or a project across categories;
-//   - who OWES them for it, and how much, until they mark it paid back.
+//   - who OWES them for it, and how much, until they mark it paid back;
+//   - that it's LEFT OUT of their totals: a one-off that would skew them (a
+//     car, a work trip paid back), still listed but counted in no spending,
+//     income or budget. A whole ACCOUNT can be left out the same way (a
+//     business card, a closed account): its balance leaves net worth and
+//     every line in it is left out (hideAccounts).
 // Kept sealed in their account by transaction id (server/details-actions.ts)
 // and applied to their own view only, after their category fixes.
 //
@@ -28,18 +33,18 @@ import { CATEGORIES, isSpendCategory } from "./categories";
 import { money, shortDate } from "./format";
 import { normalizeMerchant } from "./merchant";
 import { cleanText } from "./p2p";
-import type { Cents, ISODate, Owed, SpendCategoryId, Transaction } from "./types";
+import type { Account, Cents, FinanceData, Holding, ISODate, Owed, SpendCategoryId, Transaction } from "./types";
 
 export type { Owed };
 export type SplitPart = { category: SpendCategoryId; amount: Cents };
-/** What the person added to one transaction. Split amounts are positive: their sign is the transaction's. `whole`: not split, even by a shop's rule. */
-export type TxnDetail = { split?: SplitPart[]; tags?: string[]; owed?: Owed; whole?: true };
+/** What the person added to one transaction. Split amounts are positive: their sign is the transaction's. `whole`: not split, even by a shop's rule. `out`: left out of every total. */
+export type TxnDetail = { split?: SplitPart[]; tags?: string[]; owed?: Owed; whole?: true; out?: true };
 /** One part of a shop's split, in hundredths of a percent: 7000 is 70%. */
 export type SplitShare = { category: SpendCategoryId; share: number };
 /** Every purchase at one shop, split the same way. `name` is how the bank last wrote it. */
 export type SplitRule = { name: string; split: SplitShare[] };
-/** `rules` is keyed by the shop as normalizeMerchant writes it. */
-export type TxnDetails = { v: 1; lines: Record<string, TxnDetail>; rules?: Record<string, SplitRule> };
+/** `rules` is keyed by the shop as normalizeMerchant writes it. `hidden`: the ids of accounts left out of every total. */
+export type TxnDetails = { v: 1; lines: Record<string, TxnDetail>; rules?: Record<string, SplitRule>; hidden?: string[] };
 
 export const NO_DETAILS: TxnDetails = { v: 1, lines: {} };
 
@@ -55,7 +60,12 @@ export const DETAIL_LIMITS = {
   /** Shops with a split of their own. */
   rules: 100,
   ruleName: 60,
+  /** Accounts left out of totals. */
+  hidden: 200,
 } as const;
+
+/** The longest account id kept: Plaid's are 37 characters; a household's or a wallet's a little longer. */
+const ACCOUNT_ID_MAX = 200;
 
 /** All of a purchase, in shares. */
 export const WHOLE_SHARE = 10_000;
@@ -116,8 +126,15 @@ export function validDetail(x: unknown): TxnDetail | null {
   const owed = d.owed === undefined ? null : validOwed(d.owed);
   // Kept whole means nothing next to a split of its own.
   const whole = d.whole === true && !split;
-  if (!split && !tags && !owed && !whole) return null;
-  return { ...(split ? { split } : {}), ...(tags ? { tags } : {}), ...(owed ? { owed } : {}), ...(whole ? { whole: true as const } : {}) };
+  const out = d.out === true;
+  if (!split && !tags && !owed && !whole && !out) return null;
+  return {
+    ...(split ? { split } : {}),
+    ...(tags ? { tags } : {}),
+    ...(owed ? { owed } : {}),
+    ...(whole ? { whole: true as const } : {}),
+    ...(out ? { out: true as const } : {}),
+  };
 }
 
 /** A shop's split as stored: 2 to 8 spending categories whose shares make exactly the whole. */
@@ -187,7 +204,11 @@ export function validDetails(x: unknown): TxnDetails {
       if (rules.length === DETAIL_LIMITS.rules) break;
     }
   }
-  return { v: 1, lines: Object.fromEntries(kept), ...(rules.length ? { rules: Object.fromEntries(rules) } : {}) };
+  const listed = (x as { hidden?: unknown }).hidden;
+  const hidden = Array.isArray(listed)
+    ? [...new Set(listed.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= ACCOUNT_ID_MAX))].slice(0, DETAIL_LIMITS.hidden)
+    : [];
+  return { v: 1, lines: Object.fromEntries(kept), ...(rules.length ? { rules: Object.fromEntries(rules) } : {}), ...(hidden.length ? { hidden } : {}) };
 }
 
 /**
@@ -222,9 +243,9 @@ export function checkDetail(t: Pick<Transaction, "amount" | "category">, x: unkn
 
 const dollars = (c: Cents) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Anything to keep: a line's own details, or a shop's split with no line of its own (a split rule made from a plain purchase). */
+/** Anything to keep: a line's own details, a shop's split with no line of its own (a split rule made from a plain purchase), or an account left out. */
 export function hasDetails(details: TxnDetails): boolean {
-  return Object.keys(details.lines).length > 0 || Object.keys(details.rules ?? {}).length > 0;
+  return Object.keys(details.lines).length > 0 || Object.keys(details.rules ?? {}).length > 0 || (details.hidden?.length ?? 0) > 0;
 }
 
 /** The details with one transaction's set (or cleared, with null). */
@@ -243,21 +264,30 @@ export function withRule(old: TxnDetails, key: string, rule: SplitRule | null): 
   return validDetails({ ...old, rules });
 }
 
-/** Each transaction with what the person added: a split becomes its parts. Never changes the transactions it's given. */
+/** The details with one account left out of every total (or counted again). */
+export function withHidden(old: TxnDetails, accountId: string, hidden: boolean): TxnDetails {
+  const ids = (old.hidden ?? []).filter((id) => id !== accountId);
+  return validDetails({ ...old, hidden: hidden ? [...ids, accountId] : ids });
+}
+
+/** Each transaction with what the person added: a split becomes its parts, and a line left out (or in an account left out) says so. Never changes the transactions it's given. */
 export function applyDetails<T extends Transaction>(txns: T[], details: TxnDetails): T[] {
   if (!hasDetails(details)) return txns;
   const rules = details.rules ?? {};
+  const hidden = new Set(details.hidden ?? []);
   const out: T[] = [];
   for (const t of txns) {
     const d = Object.hasOwn(details.lines, t.id) ? details.lines[t.id]! : null;
     // A shop's split, for a purchase there the person hasn't split or kept whole themselves.
     const key = !d?.split && !d?.whole && t.amount < 0 && isSpendCategory(t.category) ? ruleKey(t.merchant) : null;
     const rule = key !== null && Object.hasOwn(rules, key) ? rules[key]! : null;
+    // Its account left out says more than the line: that's the one switch that would count it again.
+    const leftOut = hidden.has(t.accountId) ? ("account" as const) : d?.out === true ? ("line" as const) : null;
     if (!d && !rule) {
-      out.push(t);
+      out.push(leftOut ? { ...t, excluded: leftOut } : t);
       continue;
     }
-    const base: T = { ...t, ...(d?.tags ? { tags: d.tags } : {}), ...(d?.owed ? { owed: d.owed } : {}) };
+    const base: T = { ...t, ...(d?.tags ? { tags: d.tags } : {}), ...(d?.owed ? { owed: d.owed } : {}), ...(leftOut ? { excluded: leftOut } : {}) };
     const own = d?.split && t.amount < 0 && d.split.reduce((s, p) => s + p.amount, 0) === -t.amount ? d.split : null;
     const byRule = !own && rule ? partsByShare(-t.amount, rule.split) : null;
     const parts = own ?? (byRule && byRule.length >= 2 ? byRule : null);
@@ -340,4 +370,29 @@ export function tagTotals(txns: Transaction[]): { tag: string; spent: Cents; cou
     }
   }
   return [...by.values()].map(({ tag, spent, lines }) => ({ tag, spent, count: lines.size })).sort((a, b) => b.spent - a.spent || a.tag.localeCompare(b.tag));
+}
+
+/**
+ * The money with the accounts the person left out set aside: out of the
+ * accounts every total adds up (so out of net worth, and never the account a
+ * forecast follows), and their holdings with them. Applied after the plan, so
+ * a goal that follows one of them still does. Their lines are left out by
+ * applyDetails; `hiddenAccounts` lists them so they can be counted again.
+ */
+export function hideAccounts<T extends FinanceData>(data: T, details: TxnDetails | null): T & { hiddenAccounts: Account[]; hiddenHoldings: Holding[] } {
+  const hidden = new Set(details?.hidden ?? []);
+  if (!data.accounts.some((a) => hidden.has(a.id))) return { ...data, hiddenAccounts: [], hiddenHoldings: [] };
+  return {
+    ...data,
+    accounts: data.accounts.filter((a) => !hidden.has(a.id)),
+    holdings: data.holdings.filter((h) => !hidden.has(h.accountId)),
+    hiddenAccounts: data.accounts.filter((a) => hidden.has(a.id)),
+    hiddenHoldings: data.holdings.filter((h) => hidden.has(h.accountId)),
+  };
+}
+
+/** Every account and holding again, those left out of the totals included: a download of the person's data is all of it. */
+export function everyAccount<T extends FinanceData>(data: T): T {
+  if (!data.hiddenAccounts?.length) return data;
+  return { ...data, accounts: [...data.accounts, ...data.hiddenAccounts], holdings: [...data.holdings, ...(data.hiddenHoldings ?? [])], hiddenAccounts: [], hiddenHoldings: [] };
 }
