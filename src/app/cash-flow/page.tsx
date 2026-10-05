@@ -15,19 +15,18 @@ import { TimeSeriesChart } from "@/components/charts/time-series";
 import { RangeTabs } from "@/components/range-tabs";
 import { Card, Change, EmptyState, PageHeader } from "@/components/ui";
 import { categoryTotals, incomeSources, monthlyCashFlow, sumIncome, sumSpending } from "@/lib/finance/cashflow";
-import { dayRange, money0, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
+import { money0, monthLong, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
 import { incomeSummary } from "@/lib/finance/income";
 import { detectRecurring } from "@/lib/finance/recurring";
 import { buildCashFlowSankey } from "@/lib/finance/sankey";
-import { monthWindow, parseRange, periodLabel } from "@/lib/finance/view";
+import { againstLabel, periodLabel, rangeView } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Cash flow" };
 
 export default async function CashFlowPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const range = parseRange((await searchParams).range);
   const data = await getFinance();
-  const w = monthWindow(data.today, range);
+  const { range, month, w, step } = rangeView(await searchParams, data.today, data.transactions);
   const txns = data.transactions;
 
   const income = sumIncome(txns, w.from, w.to);
@@ -41,22 +40,24 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
   const flows = monthlyCashFlow(txns, w.trend);
   const labels = flows.map((f) => monthYear(`${f.month}-01`));
   const axis = flows.map((f) => monthShort(`${f.month}-01`));
-  const partial = [flows.length - 1];
+  // The last month is still in progress unless a past month is being looked at.
+  const inProgress = w.to === data.today;
+  const partial = inProgress ? [flows.length - 1] : [];
   const period = periodLabel(w.from, w.to);
   // One month is set against the same days of the last one; longer windows against the stretch before.
-  const against = range === 1 ? `vs ${dayRange(w.prevFrom, w.prevTo)}` : `vs previous ${range} mo`;
+  const against = range === 1 ? `vs ${againstLabel(w.prevFrom, w.prevTo)}` : `vs previous ${range} mo`;
   const earning = incomeSummary(txns, detectRecurring(txns, data.today), data.today);
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={period} title="Cash flow" subtitle="Every dollar in, and exactly where it went." action={<RangeTabs path="/cash-flow" active={range} />} />
+      <PageHeader eyebrow={period} title="Cash flow" subtitle="Every dollar in, and exactly where it went." action={<RangeTabs path="/cash-flow" active={range} step={step} />} />
 
       <div className="grid grid-cols-1 gap-3 sm:gap-5 md:grid-cols-4">
         <Card hero className="p-5 md:col-span-2">
           <div className="text-sm font-semibold text-[var(--on-hero-soft)]">You kept</div>
           <div className="mt-1 text-[44px] font-extrabold leading-none tracking-tight">{money0(Math.max(0, kept))}</div>
           <p className="mt-2 text-sm text-[var(--on-hero-soft)]">
-            {rate !== null ? `${percent(Math.max(0, rate))} of everything that came in ${range === 1 ? "this month so far" : `over ${range} months`}.` : "No income in this period yet."}
+            {rate !== null ? `${percent(Math.max(0, rate))} of everything that came in ${range > 1 ? `over ${range} months` : month ? `during ${monthLong(w.from)}` : "this month so far"}.` : "No income in this period yet."}
           </p>
         </Card>
         <StatTile
@@ -101,7 +102,7 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
         <ChartCard
           className="lg:col-span-7"
           title="In vs out, month by month"
-          subtitle={`${monthShort(w.to)} is still in progress`}
+          subtitle={inProgress ? `${monthShort(w.to)} is still in progress` : "Both months in full"}
           legend={
             <Legend
               items={[

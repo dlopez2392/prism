@@ -13,12 +13,12 @@ import { ChartCard } from "@/components/chart-card";
 import { Legend } from "@/components/charts/core";
 import { ActivityRings } from "@/components/charts/radial";
 import { Sparkline } from "@/components/charts/sparkline";
-import { TimeSeriesChart } from "@/components/charts/time-series";
 import { SpendingDonut } from "@/components/spending-donut";
+import { SpendingPace } from "@/components/spending-pace";
 import { Card, CardHeader, Change, EmptyState, StatusPill } from "@/components/ui";
 import { categoryBreakdown, cumulativeSpend } from "@/lib/finance/cashflow";
 import { CATEGORIES, categoryColor } from "@/lib/finance/categories";
-import { addDays, daysInMonth } from "@/lib/finance/dates";
+import { addDays } from "@/lib/finance/dates";
 import { dayDate, money0, monthLong, monthShort, signedMoney0, signedPercent } from "@/lib/finance/format";
 import { analyze } from "@/lib/finance/model";
 import { foldSlices, greeting } from "@/lib/finance/view";
@@ -39,11 +39,8 @@ export default async function OverviewPage() {
   const lastMonthNet = nw.at(-2)?.net ?? nowNet;
   const yearAgoNet = nw[0]?.net ?? nowNet;
 
-  // Spending pace: this month so far vs the whole of last month, by day.
+  // This month so far, added up day by day: the Spent tile's sparkline.
   const thisCurve = cumulativeSpend(data.transactions, a.mtd.from, a.today);
-  const lastCurve = cumulativeSpend(data.transactions, a.mtd.prevFrom);
-  const days = Math.max(daysInMonth(a.mtd.from), lastCurve.length);
-  const dayLabels = Array.from({ length: days }, (_, i) => `Day ${i + 1}`);
   const paceDelta = a.spentMTD - a.spentPrevSpan;
 
   const rows = categoryBreakdown(data.transactions, { from: a.mtd.from, to: a.today }, { from: a.mtd.prevFrom, to: a.mtd.prevTo });
@@ -181,40 +178,7 @@ export default async function OverviewPage() {
 
       {/* Row 3 — pace and categories. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <ChartCard
-          className="lg:col-span-7"
-          title="Spending pace"
-          subtitle={`${monthLong(a.today)} so far against all of ${monthLong(a.mtd.prevFrom)}`}
-          legend={
-            <Legend
-              items={[
-                { label: monthLong(a.today), color: "var(--accent)", kind: "line", value: money0(a.spentMTD) },
-                { label: monthLong(a.mtd.prevFrom), color: "var(--c-other)", kind: "line", value: money0(a.spentPrevMonth) },
-              ]}
-            />
-          }
-          table={{
-            caption: "Cumulative spending by day of month",
-            columns: ["Day", monthLong(a.today), monthLong(a.mtd.prevFrom)],
-            rows: Array.from({ length: days }, (_, i) => [
-              `Day ${i + 1}`,
-              thisCurve[i] !== undefined ? money0(thisCurve[i]!) : "—",
-              lastCurve[i] !== undefined ? money0(lastCurve[i]!) : "—",
-            ]),
-          }}
-        >
-          <TimeSeriesChart
-            labels={dayLabels}
-            axisLabels={dayLabels.map((_, i) => String(i + 1))}
-            series={[
-              { id: "last", label: monthLong(a.mtd.prevFrom), color: "var(--c-other)", values: lastCurve, muted: true },
-              { id: "this", label: monthLong(a.today), color: "var(--accent)", values: thisCurve, area: true },
-            ]}
-            include={0}
-            height={250}
-            ariaLabel={`Cumulative spending: ${money0(a.spentMTD)} so far in ${monthLong(a.today)}, against ${money0(a.spentPrevSpan)} by the same day last month.`}
-          />
-        </ChartCard>
+        <SpendingPace className="lg:col-span-7" transactions={data.transactions} from={a.mtd.from} to={a.today} />
 
         <ChartCard
           className="lg:col-span-5"

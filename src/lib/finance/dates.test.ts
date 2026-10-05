@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, addMonths, bankHolidays, daysBetween, eachDay, isBusinessDay, lastMonths, nthWeekdayOfMonth, previousBusinessDay } from "./dates";
+import { addDays, addMonths, bankHolidays, daysBetween, eachDay, endOfMonth, isBusinessDay, lastMonths, nthWeekdayOfMonth, previousBusinessDay } from "./dates";
 import { dayRange, money, money0, moneyCompact, shortDate, signedMoney0 } from "./format";
 
 describe("calendar arithmetic", () => {
@@ -7,6 +7,13 @@ describe("calendar arithmetic", () => {
     expect(addMonths("2026-01-31", 1)).toBe("2026-02-28");
     expect(addMonths("2028-01-31", 1)).toBe("2028-02-29");
     expect(addMonths("2026-03-31", -1)).toBe("2026-02-28");
+  });
+
+  it("finds a month's last day", () => {
+    expect(endOfMonth("2026-02-10")).toBe("2026-02-28");
+    expect(endOfMonth("2028-02-01")).toBe("2028-02-29");
+    expect(endOfMonth("2026-09-30")).toBe("2026-09-30");
+    expect(endOfMonth("2026-12-01")).toBe("2026-12-31");
   });
 
   it("counts calendar days across a DST change", () => {

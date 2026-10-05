@@ -15,6 +15,7 @@ import { Legend } from "@/components/charts/core";
 import { CategoryIcon } from "@/components/category-icon";
 import { OwedList } from "@/components/owed-list";
 import { SplitRules } from "@/components/split-rules";
+import { SpendingPace } from "@/components/spending-pace";
 import { RangeTabs } from "@/components/range-tabs";
 import { TransactionsTable } from "@/components/transactions-table";
 import { Card, CardHeader, Change, EmptyState, PageHeader } from "@/components/ui";
@@ -22,8 +23,8 @@ import { categoryBreakdown, dailySpend, monthlyByCategory, sumSpending, topMerch
 import { CATEGORIES, categoryColor, SPEND_CATEGORIES } from "@/lib/finance/categories";
 import { addDays, daysBetween } from "@/lib/finance/dates";
 import { stillOwed, tagTotals } from "@/lib/finance/details";
-import { dayRange, money, money0, monthShort, monthYear, signedMoney0, signedPercent } from "@/lib/finance/format";
-import { ledgerHash, monthWindow, parseRange, periodLabel } from "@/lib/finance/view";
+import { money, money0, monthLong, monthShort, monthYear, signedMoney0, signedPercent } from "@/lib/finance/format";
+import { againstLabel, ledgerHash, monthWindow, periodLabel, rangeView } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Spending" };
@@ -31,14 +32,13 @@ export const metadata: Metadata = { title: "Spending" };
 const HEATMAP_DAYS = 7 * 53;
 
 export default async function SpendingPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const range = parseRange((await searchParams).range);
   const data = await getFinance();
-  const w = monthWindow(data.today, range);
+  const { range, month, w, step } = rangeView(await searchParams, data.today, data.transactions);
   const txns = data.transactions;
 
   const spent = sumSpending(txns, w.from, w.to);
   const before = sumSpending(txns, w.prevFrom, w.prevTo);
-  // One month so far averages over its days; longer windows over their months.
+  // One month averages over its days; longer windows over their months.
   const average = range === 1 ? { label: "Per day", value: spent / (daysBetween(w.from, w.to) + 1) } : { label: "Per month", value: spent / range };
   const rows = categoryBreakdown(txns, { from: w.from, to: w.to }, { from: w.prevFrom, to: w.prevTo });
   const byMonth = monthlyByCategory(txns, w.trend);
@@ -70,15 +70,15 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow={period} title="Spending" subtitle="What you spent, where, and when — against the same stretch before it." action={<RangeTabs path="/spending" active={range} />} />
+      <PageHeader eyebrow={period} title="Spending" subtitle="What you spent, where, and when — against the same stretch before it." action={<RangeTabs path="/spending" active={range} step={step} />} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card hero className="flex flex-col justify-between p-5 sm:p-6 lg:col-span-4">
           <div>
-            <div className="text-sm font-semibold text-[var(--on-hero-soft)]">{range === 1 ? "Spent this month" : `Spent over ${range} months`}</div>
+            <div className="text-sm font-semibold text-[var(--on-hero-soft)]">{range > 1 ? `Spent over ${range} months` : month ? `Spent in ${monthLong(w.from)}` : "Spent this month"}</div>
             <div className="mt-1 text-[44px] font-extrabold leading-none tracking-tight">{money0(spent)}</div>
             <div className="mt-3">
-              <Change onHero text={signedMoney0(spent - before)} up={spent > before} goodWhenUp={false} suffix={range === 1 ? `vs ${dayRange(w.prevFrom, w.prevTo)}` : "vs the period before"} />
+              <Change onHero text={signedMoney0(spent - before)} up={spent > before} goodWhenUp={false} suffix={range === 1 ? `vs ${againstLabel(w.prevFrom, w.prevTo)}` : "vs the period before"} />
             </div>
           </div>
           <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
@@ -93,33 +93,38 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
           </dl>
         </Card>
 
-        <ChartCard
-          className="lg:col-span-8"
-          title="Month by month, by category"
-          subtitle={`Each colour is one category — ${monthShort(w.to)} is still in progress`}
-          legend={<Legend items={SPEND_CATEGORIES.map((c) => ({ label: CATEGORIES[c].label, color: categoryColor(c) }))} />}
-          table={{
-            caption: "Monthly spending by category",
-            columns: ["Month", ...SPEND_CATEGORIES.map((c) => CATEGORIES[c].label)],
-            rows: byMonth.map((r, i) => [labels[i]!, ...SPEND_CATEGORIES.map((c) => money0(r[c]))]),
-          }}
-        >
-          <BarChart
-            mode="stacked"
-            labels={labels}
-            axisLabels={w.trend.map((m) => monthShort(`${m}-01`))}
-            series={SPEND_CATEGORIES.map((c) => ({ id: c, label: CATEGORIES[c].label, color: categoryColor(c), values: byMonth.map((r) => Math.max(0, r[c])) }))}
-            partial={[labels.length - 1]}
-            maxBar={40}
-            height={280}
-            ariaLabel="Monthly spending stacked by category"
-          />
-        </ChartCard>
+        {/* One month is read day by day, against the month before; longer ranges month by month. */}
+        {range === 1 ? (
+          <SpendingPace className="lg:col-span-8" transactions={txns} from={w.from} to={w.to} />
+        ) : (
+          <ChartCard
+            className="lg:col-span-8"
+            title="Month by month, by category"
+            subtitle={`Each colour is one category — ${monthShort(w.to)} is still in progress`}
+            legend={<Legend items={SPEND_CATEGORIES.map((c) => ({ label: CATEGORIES[c].label, color: categoryColor(c) }))} />}
+            table={{
+              caption: "Monthly spending by category",
+              columns: ["Month", ...SPEND_CATEGORIES.map((c) => CATEGORIES[c].label)],
+              rows: byMonth.map((r, i) => [labels[i]!, ...SPEND_CATEGORIES.map((c) => money0(r[c]))]),
+            }}
+          >
+            <BarChart
+              mode="stacked"
+              labels={labels}
+              axisLabels={w.trend.map((m) => monthShort(`${m}-01`))}
+              series={SPEND_CATEGORIES.map((c) => ({ id: c, label: CATEGORIES[c].label, color: categoryColor(c), values: byMonth.map((r) => Math.max(0, r[c])) }))}
+              partial={[labels.length - 1]}
+              maxBar={40}
+              height={280}
+              ariaLabel="Monthly spending stacked by category"
+            />
+          </ChartCard>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card className="p-5 sm:p-6 lg:col-span-6">
-          <CardHeader title="Categories" subtitle={`Against ${range === 1 ? dayRange(w.prevFrom, w.prevTo) : periodLabel(w.prevFrom, w.prevTo)}`} />
+          <CardHeader title="Categories" subtitle={`Against ${range === 1 ? againstLabel(w.prevFrom, w.prevTo) : periodLabel(w.prevFrom, w.prevTo)}`} />
           {rows.length ? (
             <ul className="mt-4 space-y-3.5">
               {rows.map((r) => (

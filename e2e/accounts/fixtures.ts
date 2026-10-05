@@ -132,7 +132,17 @@ export function csvOf(rows: Row[], account = "Everyday Checking"): string {
 /** Imports `rows` through Connections → Import a file, as a person would, and waits until they're saved. */
 export async function importRows(page: Page, rows: Row[] = household()): Promise<void> {
   await page.goto("/connections/import");
-  await page.locator('input[type="file"]').setInputFiles({ name: "checking.csv", mimeType: "text/csv", buffer: Buffer.from(csvOf(rows)) });
+  const file = { name: "checking.csv", mimeType: "text/csv", buffer: Buffer.from(csvOf(rows)) };
+  // Through the button and the file picker, as a person chooses it. A file set straight into the hidden
+  // input before the page has come alive is never read: a busy machine lost one that way. The button
+  // answers only once the page is alive, so a click that opens no picker is simply tried again.
+  await expect(async () => {
+    const picker = page.waitForEvent("filechooser", { timeout: 2_000 }).catch(() => null);
+    await page.getByRole("button", { name: "Choose a CSV file" }).click();
+    const chooser = await picker;
+    if (!chooser) throw new Error("The file picker didn't open yet.");
+    await chooser.setFiles(file);
+  }).toPass({ timeout: 20_000 });
   await page.getByRole("button", { name: "Next: check the accounts" }).click();
   await page.getByRole("button", { name: `Import ${rows.length} transactions` }).click();
   await expect(page.getByRole("heading", { name: `${rows.length} transactions imported from 1 account` })).toBeVisible({ timeout: 30_000 });
