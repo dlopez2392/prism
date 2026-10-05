@@ -47,6 +47,7 @@ export const STORED_ON_DEVICE: StoredOnDevice[] = [
     lasts: "400 days",
   },
   { name: "prism-coinbase-oauth", kind: "Cookie", what: "Keeps a Coinbase sign-in secure while it's in progress.", lasts: "10 minutes" },
+  { name: "prism-lang", kind: "Cookie", what: "Remembers the language you chose for Prism, English or Spanish.", lasts: "1 year" },
   { name: "prism-budgets", kind: "Cookie", what: "Budgets you set on this device without an account.", lasts: "400 days" },
   { name: "prism-goals", kind: "Cookie", what: "Goals you set on this device without an account.", lasts: "400 days" },
   { name: "prism-carryover", kind: "Cookie", what: "Remembers that you chose to decide later about moving this device's budgets and goals into your account.", lasts: "30 days" },

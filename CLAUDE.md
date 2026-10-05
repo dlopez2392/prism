@@ -194,6 +194,30 @@
   OTHER people's words: keep them cleaned (`cleanText`), sealed
   (`profiles.sealed_p2p_notes`), out of the household and the morning job, and
   presented to connected apps as data, never instructions.
+- Spanish (`src/lib/i18n`): every sentence a person reads goes through a
+  translator `t`, and its English IS the key (`t("Spent this month")`); the
+  Spanish is in `es.ts`. Server components and actions take `await getT()`,
+  client components `useT()`, and shared server-safe components and pure
+  functions take a `t` prop or argument that defaults to English (`EN`), so
+  emails, connected apps and tests stay English until they're asked
+  otherwise. Write WHOLE sentences with `{names}` (`t("{who} owes you
+  {amount}", …)`), never English fragments glued together, and a separate
+  sentence for one and for many. A month mid-sentence is lower case in
+  Spanish: pass `monthLong(d, t.locale)` and let a Spanish sentence that
+  starts with it write `{Month}`. Dates take `t.locale` (`format.ts`); amounts
+  stay `$1,234.56`. A sentence defined away from where it's shown (a nav
+  label, a category, a validation message) is marked `msg("…")` and
+  translated where it's shown. `i18n.test.ts` fails on a sentence with no
+  Spanish, a name the Spanish drops, or Spanish nobody asks for, and
+  `e2e/spanish.spec.ts` checks the toggle and that Spanish never scrolls
+  sideways at 360px (it found a grid sized to "Comida y restaurantes" and
+  Sankey labels cut short). The choice is the `prism-lang` cookie, set by a
+  server action (`language-actions.ts`), else the browser's
+  Accept-Language. Translated so far: the shell, sign-in, Overview, Spending,
+  Cash flow and Budgets. A screen still only in English is listed in
+  `ENGLISH_ONLY` (`locale.ts`), which marks its content `lang="en"` inside a
+  Spanish page so a screen reader reads it in an English voice: take it off
+  the list in the same change that translates it.
 - Amazon orders (`src/lib/finance/orders.ts`): the same shape as the payment
   notes above. The order history is read in the browser and never uploaded;
   only matches travel, a batch at a time (`ORDER_LIMITS.batch`), and the

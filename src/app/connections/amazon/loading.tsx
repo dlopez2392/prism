@@ -1,10 +1,11 @@
 // Amazon orders, while it loads: the header, then the card that chooses the file.
 
 import { Block, CardTitle, Frame, Header, Loading } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function AmazonLoading() {
   return (
-    <Loading label="Loading your Amazon orders">
+    <Loading label={msg("Loading your Amazon orders")}>
       <Header eyebrow />
       <Frame>
         <CardTitle />

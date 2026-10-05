@@ -16,6 +16,7 @@ import { StatusPill } from "@/components/ui";
 import { registerFactor, startSetup, turnOff, type SetupStart } from "@/lib/server/two-step-actions";
 import { checkCode } from "@/lib/supabase/browser";
 import type { SupabaseEnv } from "@/lib/supabase/config";
+import { useT } from "@/components/locale";
 
 const input =
   "h-11 w-full rounded-ctl border border-line-strong bg-surface-2 px-3 text-[15px] text-ink-1 placeholder:text-ink-3 focus:border-[var(--focus)] aria-[invalid=true]:border-crit";
@@ -54,9 +55,10 @@ const errorOf = (s: FormState) => (s.status === "error" ? s.message : undefined)
 
 /** The second step of signing in, against the authenticator the server says is this person's. */
 export function TwoStepForm({ next, factorId, supabase }: { next: string | null; factorId: string; supabase: SupabaseEnv }) {
+  const t = useT();
   const [state, action, pending] = useActionState<FormState, FormData>(async (_prev, form) => {
     const checked = await checkCode(supabase, factorId, readCode(form));
-    if (!checked.ok) return { status: "error", message: checked.error };
+    if (!checked.ok) return { status: "error", message: t(checked.error) };
     // A full load, not a client navigation: every server component re-reads the upgraded session.
     window.location.assign(next ?? "/");
     return { status: "done" };
@@ -64,9 +66,9 @@ export function TwoStepForm({ next, factorId, supabase }: { next: string | null;
   const busy = pending || state.status === "done";
   return (
     <form action={action} noValidate>
-      <CodeField id="code" label="Code from your authenticator app" error={errorOf(state)} />
+      <CodeField id="code" label={t("Code from your authenticator app")} error={errorOf(state)} />
       <button type="submit" disabled={busy} className={`${buttonPrimary} mt-5 w-full`}>
-        {state.status === "done" ? "Signing you in…" : pending ? "Checking…" : "Finish signing in"}
+        {state.status === "done" ? t("Signing you in…") : pending ? t("Checking…") : t("Finish signing in")}
       </button>
     </form>
   );

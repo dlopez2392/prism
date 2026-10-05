@@ -16,6 +16,7 @@ import { addDays, daysBetween } from "./dates";
 import { dayDate, money, money0, shortDate } from "./format";
 import type { Analysis } from "./model";
 import { normalizeMerchant, perYear } from "./recurring";
+import { EN, type T } from "@/lib/i18n/t";
 import type { ISODate } from "./types";
 
 export type AlertKind = "bank" | "bill-short" | "price-rise";
@@ -42,32 +43,36 @@ const PRICE_NEWS_DAYS = 35;
 
 const isoDay = (t: string): ISODate => t.slice(0, 10) as ISODate;
 
-function bankAlerts(a: Analysis): Alert[] {
+function bankAlerts(a: Analysis, t: T): Alert[] {
   const out: Alert[] = [];
+  const { locale } = t;
   for (const inst of a.data.institutions) {
     if (inst.source !== "plaid" && inst.source !== "coinbase") continue;
     if (inst.signInAgain) {
-      const since = inst.lastSyncedAt ? ` It last updated ${shortDate(isoDay(inst.lastSyncedAt))}.` : "";
-      const detail = `Sign in again on Connections and it carries on where it left off.${since}`;
+      const detail = inst.lastSyncedAt
+        ? t("Sign in again on Connections and it carries on where it left off. It last updated {date}.", { date: shortDate(isoDay(inst.lastSyncedAt), locale) })
+        : t("Sign in again on Connections and it carries on where it left off.");
+      const title = t("{bank} needs you to sign in again", { bank: inst.name });
       out.push({
         id: `bank:${inst.id}:sign-in`,
         kind: "bank",
-        title: `${inst.name} needs you to sign in again`,
+        title,
         detail,
-        quiet: { title: `${inst.name} needs you to sign in again`, detail },
+        quiet: { title, detail },
         on: null,
         href: "/connections",
         urgent: true,
       });
     } else if (inst.disconnectsAt) {
       const on = isoDay(inst.disconnectsAt);
-      const detail = `Unless you sign in again before then. It takes a minute on Connections, and nothing is lost.`;
+      const detail = t("Unless you sign in again before then. It takes a minute on Connections, and nothing is lost.");
+      const title = t("{bank} stops updating on {date}", { bank: inst.name, date: dayDate(on, locale) });
       out.push({
         id: `bank:${inst.id}:disconnect:${on}`,
         kind: "bank",
-        title: `${inst.name} stops updating on ${dayDate(on)}`,
+        title,
         detail,
-        quiet: { title: `${inst.name} stops updating on ${dayDate(on)}`, detail },
+        quiet: { title, detail },
         on,
         href: "/connections",
         urgent: true,
@@ -83,7 +88,8 @@ function bankAlerts(a: Analysis): Alert[] {
  * paycheck in. One alert, not one per bill: the first is the one to act on,
  * and the rest are on the Future screen.
  */
-function shortBill(a: Analysis): Alert | null {
+function shortBill(a: Analysis, t: T): Alert | null {
+  const { locale } = t;
   const f = a.forecast;
   if (!f || !a.checking) return null;
   const payday = f.events.find((e) => e.amount > 0 && e.kind === "income")?.date ?? null;
@@ -94,17 +100,23 @@ function shortBill(a: Analysis): Alert | null {
     // The balance at the end of that day, every bill and paycheck of the day in.
     const after = expected.get(e.date);
     if (after === undefined || after >= 0) continue;
-    const before =
-      payday === e.date ? `on payday, and even with your paycheck in,` : payday ? `before your paycheck on ${dayDate(payday)}, and` : `in the next ${daysBetween(a.today, until)} days, and`;
     const account = a.checking.name;
+    const fix = t("Moving money in before then avoids a declined payment or an overdraft fee.");
+    const due = (short: string | null) => {
+      const vars = { account, short: short ?? "", payday: payday ? dayDate(payday, locale) : "", n: daysBetween(a.today, until) };
+      // Whole sentences, so each language can put the parts in its own order.
+      if (payday === e.date) return short ? t("It's due on payday, and even with your paycheck in, {account} is on track to be {short} short after it.", vars) : t("It's due on payday, and even with your paycheck in, {account} is on track to be short after it.", vars);
+      if (payday) return short ? t("It's due before your paycheck on {payday}, and {account} is on track to be {short} short after it.", vars) : t("It's due before your paycheck on {payday}, and {account} is on track to be short after it.", vars);
+      return short ? t("It's due in the next {n} days, and {account} is on track to be {short} short after it.", vars) : t("It's due in the next {n} days, and {account} is on track to be short after it.", vars);
+    };
     return {
       id: `bill-short:${normalizeMerchant(e.merchant)}:${e.date}`,
       kind: "bill-short",
-      title: `${e.merchant} (${money0(-e.amount)}) may not be covered on ${dayDate(e.date)}`,
-      detail: `It's due ${before} ${account} is on track to be ${money0(-after)} short after it. Moving money in before then avoids a declined payment or an overdraft fee.`,
+      title: t("{bill} ({amount}) may not be covered on {date}", { bill: e.merchant, amount: money0(-e.amount), date: dayDate(e.date, locale) }),
+      detail: `${due(money0(-after))} ${fix}`,
       quiet: {
-        title: `${e.merchant} may not be covered on ${dayDate(e.date)}`,
-        detail: `It's due ${before} ${account} is on track to be short after it. Moving money in before then avoids a declined payment or an overdraft fee.`,
+        title: t("{bill} may not be covered on {date}", { bill: e.merchant, date: dayDate(e.date, locale) }),
+        detail: `${due(null)} ${fix}`,
       },
       on: e.date,
       href: "/future",
@@ -115,7 +127,7 @@ function shortBill(a: Analysis): Alert | null {
 }
 
 /** A recurring charge whose newest amount is higher than the one before it, while that's still news. */
-function priceRises(a: Analysis): Alert[] {
+function priceRises(a: Analysis, t: T): Alert[] {
   const out: Alert[] = [];
   for (const s of a.streams) {
     const change = s.priceChange;
@@ -127,9 +139,12 @@ function priceRises(a: Analysis): Alert[] {
     out.push({
       id: `price-rise:${s.id}:${to}`,
       kind: "price-rise",
-      title: `${s.merchant} went up to ${money(to)}`,
-      detail: `It was ${money(from)}. That's ${money0(yearly)} more a year, if you still use it.`,
-      quiet: { title: `${s.merchant} raised its price`, detail: `Its latest charge, on ${shortDate(change.date)}, was higher than the one before.` },
+      title: t("{merchant} went up to {amount}", { merchant: s.merchant, amount: money(to) }),
+      detail: t("It was {before}. That's {yearly} more a year, if you still use it.", { before: money(from), yearly: money0(yearly) }),
+      quiet: {
+        title: t("{merchant} raised its price", { merchant: s.merchant }),
+        detail: t("Its latest charge, on {date}, was higher than the one before.", { date: shortDate(change.date, t.locale) }),
+      },
       on: change.date,
       href: "/cash-flow",
       urgent: false,
@@ -138,8 +153,8 @@ function priceRises(a: Analysis): Alert[] {
   return out;
 }
 
-/** Everything worth a heads-up, the urgent first. */
-export function alertsFor(a: Analysis): Alert[] {
-  const bill = shortBill(a);
-  return [...bankAlerts(a), ...(bill ? [bill] : []), ...priceRises(a)].sort((x, y) => Number(y.urgent) - Number(x.urgent));
+/** Everything worth a heads-up, the urgent first, in the language of `t` (English unless asked). */
+export function alertsFor(a: Analysis, t: T = EN): Alert[] {
+  const bill = shortBill(a, t);
+  return [...bankAlerts(a, t), ...(bill ? [bill] : []), ...priceRises(a, t)].sort((x, y) => Number(y.urgent) - Number(x.urgent));
 }

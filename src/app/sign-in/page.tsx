@@ -11,16 +11,25 @@ import { supabaseEnv } from "@/lib/supabase/config";
 import { connectReason } from "@/lib/linking";
 import { safeNext } from "@/lib/profile";
 import { awaitingSecondStep, currentAccount, twoStepPath } from "@/lib/supabase/server";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Sign in" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Sign in") };
+}
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const t = await getT();
   if (!supabaseEnv()) {
     return (
       <div>
-        <PageHeader title="Sign in" />
+        <PageHeader title={t("Sign in")} />
         <Card>
-          <EmptyState icon={CloudOff} title="Accounts are coming to Prism" body="For now everything you set up stays on this device — budgets, goals and linked accounts included." />
+          <EmptyState
+            icon={CloudOff}
+            title={t("Accounts are coming to Prism")}
+            body={t("For now everything you set up stays on this device — budgets, goals and linked accounts included.")}
+          />
         </Card>
       </div>
     );
@@ -37,34 +46,38 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
     <div className="mx-auto max-w-md pt-2 sm:pt-8">
       <Card className="p-6 sm:p-8">
         <PrismMark className="size-10" />
-        <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink-1">Sign in to Prism</h1>
+        <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink-1">{t("Sign in to Prism")}</h1>
         <p className="mt-1 mb-6 text-sm text-ink-2">
           {next?.startsWith("/oauth/consent")
-            ? "Sign in first, then you'll choose whether to connect the app."
-            : reason
-              ? `Sign in first, then connect ${reason === "coinbase" ? "Coinbase" : reason === "investments" ? "your investment account" : "your bank"}. It's kept in your account, where two-step sign-in can protect it and deleting your account removes it.`
-              : "Keep your banks, budgets and goals in one account, on every device."}
+            ? t("Sign in first, then you'll choose whether to connect the app.")
+            : reason === "coinbase"
+              ? t("Sign in first, then connect Coinbase. It's kept in your account, where two-step sign-in can protect it and deleting your account removes it.")
+              : reason === "investments"
+                ? t("Sign in first, then connect your investment account. It's kept in your account, where two-step sign-in can protect it and deleting your account removes it.")
+                : reason
+                  ? t("Sign in first, then connect your bank. It's kept in your account, where two-step sign-in can protect it and deleting your account removes it.")
+                  : t("Keep your banks, budgets and goals in one account, on every device.")}
         </p>
         <SignInForm linkError={linkError} next={next} />
       </Card>
       <ul className="mt-5 space-y-2.5 px-1 text-[13px] text-ink-2">
         <li className="flex gap-2.5">
           <Lock aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-ink" />
-          Bank and Coinbase tokens stay encrypted; the database only ever holds ciphertext.
+          {t("Bank and Coinbase tokens stay encrypted; the database only ever holds ciphertext.")}
         </li>
         <li className="flex gap-2.5">
           <Smartphone aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-ink" />
-          Anything you set up on this device before signing in can come with you — you&apos;ll be asked first.
+          {t("Anything you set up on this device before signing in can come with you — you'll be asked first.")}
         </li>
         <li className="flex gap-2.5">
           <Trash2 aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-ink" />
-          Delete the account any time, and every link is revoked at the source.
+          {t("Delete the account any time, and every link is revoked at the source.")}
         </li>
       </ul>
       <p className="mt-4 px-1 text-xs text-ink-3">
-        What Prism collects, who else sees it, and your choices:{" "}
+        {t("What Prism collects, who else sees it, and your choices:")}{" "}
         <Link href="/privacy" className="font-semibold text-accent-ink hover:underline">
-          Privacy policy
+          {t("Privacy policy")}
         </Link>
       </p>
     </div>

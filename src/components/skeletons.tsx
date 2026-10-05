@@ -1,3 +1,5 @@
+"use client";
+
 // src/components/skeletons.tsx
 //
 // Loading = skeletons shaped like the content (DESIGN.md rule 5). Each
@@ -7,11 +9,13 @@
 
 import clsx from "clsx";
 import type { ReactNode } from "react";
+import { useT } from "@/components/locale";
 
-/** The whole placeholder: announced once to assistive tech, silent otherwise. */
+/** The whole placeholder: announced once to assistive tech, silent otherwise. `label` is English, said in the page's language. */
 export function Loading({ label, children }: { label: string; children: ReactNode }) {
+  const t = useT();
   return (
-    <div aria-busy="true" aria-label={label} className="space-y-5">
+    <div aria-busy="true" aria-label={t(label)} className="space-y-5">
       {children}
     </div>
   );

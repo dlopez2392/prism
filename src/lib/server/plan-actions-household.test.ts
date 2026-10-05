@@ -9,7 +9,7 @@ import type { GoalSettings } from "@/lib/finance/plan";
 vi.mock("server-only", () => ({}));
 const refresh = vi.fn();
 vi.mock("next/cache", () => ({ refresh }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, set: vi.fn(), delete: vi.fn() }) }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, set: vi.fn(), delete: vi.fn() }), headers: async () => new Headers() }));
 vi.mock("./finance", () => ({
   requestToday: async () => "2026-09-30",
   readSources: async () => ({ plan: { budgets: null, goals: [] } }),

@@ -9,6 +9,7 @@
 import { useState, type ReactNode } from "react";
 import { ChartColumn, Table2 } from "lucide-react";
 import clsx from "clsx";
+import { useT } from "@/components/locale";
 
 export type TableData = { columns: string[]; rows: (string | number)[][]; caption: string };
 
@@ -32,6 +33,7 @@ export function ChartCard({
   bodyClassName?: string;
 }) {
   const [asTable, setAsTable] = useState(false);
+  const t = useT();
   return (
     <section className={clsx("fade-up rounded-card border border-line bg-surface-1 p-4 shadow-card sm:p-5", className)}>
       <div className="flex items-start justify-between gap-3">
@@ -49,7 +51,7 @@ export function ChartCard({
               className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-line px-2.5 text-xs font-semibold text-ink-2 transition-colors duration-150 hover:bg-surface-3 print:hidden"
             >
               {asTable ? <ChartColumn aria-hidden className="size-3.5" /> : <Table2 aria-hidden className="size-3.5" />}
-              {asTable ? "Chart" : "Table"}
+              {asTable ? t("Chart") : t("Table")}
             </button>
           ) : null}
         </div>

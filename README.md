@@ -747,6 +747,25 @@ select what, key_id, count(*) from (
 Connections kept on a device from before connecting needed an account open
 with any key in the ring too, so retiring a key ends those as well.
 
+## En español (Spanish)
+
+**EN | ES** in the top bar switches Prism's words between English and Spanish
+at the same address, as bis-rgv.com does, and keeps the choice for a year in
+the `prism-lang` cookie (set by the server, unreadable to the page's
+scripts). Until someone picks, a browser that asks for Spanish first gets
+Spanish. Dates read the Spanish way ("lun, 5 oct"); amounts stay `$1,234.56`,
+as U.S. banks write them in either language.
+
+- Every sentence on screen goes through a translator whose key is the English
+  sentence (`src/lib/i18n/t.ts`); the Spanish is in `src/lib/i18n/es.ts`,
+  written in "tú", in the voice of bis-rgv.com. A sentence with no Spanish
+  shows in English, and `pnpm test` names it.
+- The browser is handed the Spanish only on a page that's in Spanish, so an
+  English page downloads none of it.
+- In Spanish so far: the shell, sign-in, Overview, Spending, Cash flow and
+  Budgets. The other screens, emails and push follow (`docs/ROADMAP.md`,
+  item 29); connected apps (MCP) answer in English.
+
 ## Screens
 
 | Screen | What it shows |

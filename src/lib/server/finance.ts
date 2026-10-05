@@ -58,6 +58,7 @@ import { analyze } from "@/lib/finance/model";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { loadHouseholdPlan, loadShares, loadSharedMoney, type HouseholdPlan, type SharedMoneyRow } from "./household-store";
 import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
+import { msg } from "@/lib/i18n/t";
 
 export type Loaded = FinanceData & {
   /** A problem worth a banner — the data shown is still real, just incomplete. */
@@ -72,7 +73,8 @@ export type Loaded = FinanceData & {
   /** The signed-in person, or null on a device-only visit. */
   account: { email: string | null; firstName: string | null; calendarFeed: boolean; alerts: AlertSettings | null } | null;
   /** Signed in, with money or plans still sitting on this device from before: what they are. */
-  carryover: string[];
+  /** What's still on this device from before signing in, each a sentence to translate (with its count). */
+  carryover: Carryover[];
   /** What the signed-in person added by hand, as they entered it, for the editor on Net worth. */
   manual: ManualItem[];
   /** Their homes RentCast keeps up to date: the address and last range, for the editor. Never the household's. */
@@ -346,18 +348,20 @@ export async function sourceGoals(sources?: Sources): Promise<Goal[]> {
   return isLive(s) ? [] : buildDemoData(await requestToday()).goals;
 }
 
+export type Carryover = { text: string; n?: number };
+
 /** Money or plans a signed-in person still has on this device from before they signed in. */
-function carryoverOf(jar: Jar, signedIn: boolean): string[] {
+function carryoverOf(jar: Jar, signedIn: boolean): Carryover[] {
   if (!signedIn || jar.get(CARRYOVER_COOKIE)?.value === "later") return [];
-  const out: string[] = [];
+  const out: Carryover[] = [];
   const banks = plaidConfig() ? vaultItems(jar).length : 0;
-  if (banks) out.push(banks === 1 ? "a linked bank" : `${banks} linked banks`);
-  if (coinbaseConfig() && safeVaultKey() && readLink(jar.get(COINBASE_COOKIE)?.value, safeVaultKey()!)) out.push("Coinbase");
+  if (banks) out.push(banks === 1 ? { text: msg("a linked bank") } : { text: msg("{n} linked banks"), n: banks });
+  if (coinbaseConfig() && safeVaultKey() && readLink(jar.get(COINBASE_COOKIE)?.value, safeVaultKey()!)) out.push({ text: "Coinbase" });
   // Decoded, not merely present: a cookie deleted by an action in this same
   // request is still listed during the re-render, with an empty value.
   const plan = readPlan(jar);
-  if (plan.budgets) out.push("your budgets");
-  if (plan.goals) out.push("your goals");
+  if (plan.budgets) out.push({ text: msg("your budgets") });
+  if (plan.goals) out.push({ text: msg("your goals") });
   return out;
 }
 

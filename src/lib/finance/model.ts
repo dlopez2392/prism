@@ -13,11 +13,13 @@ import { incomeSummary } from "./income";
 import { generateInsights } from "./insights";
 import { netWorthSeries } from "./networth";
 import { detectRecurring } from "./recurring";
+import { EN, type T } from "@/lib/i18n/t";
 import type { FinanceData } from "./types";
 
 export const FORECAST_DAYS = 60;
 
-export function analyze(data: FinanceData) {
+/** `t` is the language its sentences (the insights) are in; English unless asked. */
+export function analyze(data: FinanceData, t: T = EN) {
   const { today, transactions: txns } = data;
   const months = lastMonths(today, 13);
   const flows = monthlyCashFlow(txns, months);
@@ -65,7 +67,7 @@ export function analyze(data: FinanceData) {
     forecast,
     safe,
     netWorth,
-    insights: generateInsights({ txns, today, budgets, streams, flows }),
+    insights: generateInsights({ txns, today, budgets, streams, flows, t }),
   };
 }
 

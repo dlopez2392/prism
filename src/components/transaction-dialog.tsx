@@ -15,7 +15,8 @@ import { PackageOpen, Plus, ReceiptText, X } from "lucide-react";
 import clsx from "clsx";
 import { FixForm } from "@/components/category-fixer";
 import { buttonGhost, buttonPrimary, Dialog, FormMessage } from "@/components/dialog";
-import { CATEGORIES, SPEND_CATEGORIES, isSpendCategory } from "@/lib/finance/categories";
+import { categoryLabel, SPEND_CATEGORIES, isSpendCategory } from "@/lib/finance/categories";
+import { useT } from "@/components/locale";
 import { DETAIL_LIMITS, ruleKey } from "@/lib/finance/details";
 import { itemParts } from "@/lib/finance/orders";
 import { dayDate, money, shortDate } from "@/lib/finance/format";
@@ -31,7 +32,7 @@ export type Opened = { whole: Transaction; parts: Transaction[] };
 export function openedFrom(row: Transaction, all: Transaction[]): Opened {
   if (!row.split) return { whole: row, parts: [] };
   const of = row.split.of;
-  const parts = all.filter((t) => t.split?.of === of).sort((a, b) => a.split!.part - b.split!.part);
+  const parts = all.filter((txn) => txn.split?.of === of).sort((a, b) => a.split!.part - b.split!.part);
   const first = parts[0] ?? row;
   const whole: Transaction = { ...first, id: of, amount: row.split.total, category: first.bankCategory ?? first.category };
   delete whole.split;
@@ -56,6 +57,7 @@ export function TransactionDialog({
   /** The shops whose every purchase the person splits the same way, by ruleKey. */
   ruleShops?: string[];
 }) {
+  const t = useT();
   const [tab, setTab] = useState<"category" | "details">("category");
   const [seen, setSeen] = useState(session);
   // Each opening starts on Category, or on the split for a line that has one.
@@ -63,7 +65,7 @@ export function TransactionDialog({
     setSeen(session);
     setTab(opened?.parts.length ? "details" : "category");
   }
-  const t = opened?.whole ?? null;
+  const txn = opened?.whole ?? null;
   const close = () => dialogRef.current?.close();
   const done = (message: string) => {
     onDone(message);
@@ -74,18 +76,18 @@ export function TransactionDialog({
   return (
     <Dialog
       dialogRef={dialogRef}
-      title={t ? t.merchant : "Transaction"}
-      description={t ? `${t.amount > 0 ? "+" : ""}${money(t.amount)} · ${dayDate(t.date)}` : undefined}
+      title={txn ? txn.merchant : t("Transaction")}
+      description={txn ? `${txn.amount > 0 ? "+" : ""}${money(txn.amount)} · ${dayDate(txn.date, t.locale)}` : undefined}
       icon={ReceiptText}
     >
-      {t && opened ? (
+      {txn && opened ? (
         <>
-          <LeaveOut key={`${session}-${t.id}-out`} t={t} onDone={done} />
-          <div role="tablist" aria-label="What to change" className="mb-4 inline-flex rounded-ctl border border-line bg-surface-2 p-1">
+          <LeaveOut key={`${session}-${txn.id}-out`} txn={txn} onDone={done} />
+          <div role="tablist" aria-label={t("What to change")} className="mb-4 inline-flex rounded-ctl border border-line bg-surface-2 p-1">
             {(
               [
-                ["category", "Category"],
-                ["details", "Split, tags, owed"],
+                ["category", t("Category")],
+                ["details", t("Split, tags, owed")],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -106,13 +108,13 @@ export function TransactionDialog({
           {tab === "category" ? (
             split ? (
               <div className="rounded-ctl bg-surface-2 p-3 text-sm text-ink-2">
-                This one is split, so each part has its own category. Change them under <span className="font-semibold text-ink-1">Split, tags, owed</span>, or turn the split off there.
+                {t("This one is split, so each part has its own category. Change them under Split, tags, owed, or turn the split off there.")}
               </div>
             ) : (
-              <FixForm key={`${session}-${t.id}-category`} t={t} onDone={done} onCancel={close} />
+              <FixForm key={`${session}-${txn.id}-category`} txn={txn} onDone={done} onCancel={close} />
             )
           ) : (
-            <DetailForm key={`${session}-${t.id}-details`} opened={opened} onDone={done} onCancel={close} shopHasRule={ruleShops.includes(ruleKey(t.merchant) ?? "")} />
+            <DetailForm key={`${session}-${txn.id}-details`} opened={opened} onDone={done} onCancel={close} shopHasRule={ruleShops.includes(ruleKey(txn.merchant) ?? "")} />
           )}
         </>
       ) : null}
@@ -121,17 +123,18 @@ export function TransactionDialog({
 }
 
 /** Whether the line counts in the person's totals: flipped and saved at once, and flipped back to undo. */
-function LeaveOut({ t, onDone }: { t: Transaction; onDone: (message: string) => void }) {
+function LeaveOut({ txn, onDone }: { txn: Transaction; onDone: (message: string) => void }) {
+  const t = useT();
   // Left out with its whole account: only counting the account again brings it back.
-  const byAccount = t.excluded === "account";
-  const [out, setOut] = useState(t.excluded !== undefined);
+  const byAccount = txn.excluded === "account";
+  const [out, setOut] = useState(txn.excluded !== undefined);
   const [error, setError] = useState<string | null>(null);
   const [saving, start] = useTransition();
   const flip = (next: boolean) => {
     setOut(next);
     setError(null);
     start(async () => {
-      const result = await leaveOut(t.id, next);
+      const result = await leaveOut(txn.id, next);
       if (result.status === "saved") onDone(result.message);
       else {
         setOut(!next);
@@ -144,14 +147,14 @@ function LeaveOut({ t, onDone }: { t: Transaction; onDone: (message: string) => 
       <Switch
         checked={out}
         onChange={flip}
-        disabled={saving || t.pending || byAccount}
-        label="Leave out of my totals"
+        disabled={saving || txn.pending || byAccount}
+        label={t("Leave out of my totals")}
         description={
           byAccount
-            ? "Its whole account is left out of your totals. To count it again, use Choose what counts on Net worth."
-            : t.pending
-              ? "Once it's no longer pending, you can leave it out."
-              : "Not counted in spending, income or budgets: for a one-off like a car, or a work trip you're paid back for. It stays in your transactions."
+            ? t("Its whole account is left out of your totals. To count it again, use Choose what counts on Net worth.")
+            : txn.pending
+              ? t("Once it's no longer pending, you can leave it out.")
+              : t("Not counted in spending, income or budgets: for a one-off like a car, or a work trip you're paid back for. It stays in your transactions.")
         }
       />
       {error ? (
@@ -168,14 +171,15 @@ type Part = { category: SpendCategoryId; amount: string; label?: string };
 
 function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened; onDone: (message: string) => void; onCancel: () => void; shopHasRule: boolean }) {
   const id = useId();
-  const { whole: t, parts: given } = opened;
-  const total: Cents = Math.abs(t.amount);
-  const canSplit = t.amount < 0 && t.category !== "income";
-  const first: SpendCategoryId = isSpendCategory(t.category) ? t.category : "other";
+  const t = useT();
+  const { whole: txn, parts: given } = opened;
+  const total: Cents = Math.abs(txn.amount);
+  const canSplit = txn.amount < 0 && txn.category !== "income";
+  const first: SpendCategoryId = isSpendCategory(txn.category) ? txn.category : "other";
   const [splitOn, setSplitOn] = useState(given.length > 0);
   // Every purchase at this shop split this way: ticked while the shop has a split of its own.
   const [ruleOn, setRuleOn] = useState(shopHasRule);
-  const shopNamed = ruleKey(t.merchant) !== null;
+  const shopNamed = ruleKey(txn.merchant) !== null;
   // The first part is always "the rest", so the parts add up by construction.
   const [rest, setRest] = useState<Part[]>(
     given.length ? given.slice(1).map((p) => ({ category: p.category as SpendCategoryId, amount: dollarsInput(-p.amount) })) : [{ category: first === "shopping" ? "food" : "shopping", amount: "" }],
@@ -183,7 +187,7 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
   const [firstCategory, setFirstCategory] = useState<SpendCategoryId>(given[0] && isSpendCategory(given[0].category) ? given[0].category : first);
   const [firstLabel, setFirstLabel] = useState<string | null>(null);
   // An Amazon charge can be split by what it paid for: one part per item (the smallest added up past the limit), each in this line's category to start.
-  const items = canSplit && t.order && t.order.items.length >= 2 ? t.order.items : null;
+  const items = canSplit && txn.order && txn.order.items.length >= 2 ? txn.order.items : null;
   const byItems = () => {
     const parts = itemParts(items!, DETAIL_LIMITS.parts);
     setSplitOn(true);
@@ -193,12 +197,12 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
     setFirstLabel(parts[0]!.name);
     setRest(parts.slice(1).map((p) => ({ category: first, amount: dollarsInput(p.amount), label: p.name })));
   };
-  const [tags, setTags] = useState((t.tags ?? []).join(", "));
-  const [owedOn, setOwedOn] = useState(Boolean(t.owed));
-  const [who, setWho] = useState(t.owed?.who ?? "");
-  const [owedAmount, setOwedAmount] = useState(t.owed ? dollarsInput(t.owed.amount) : "");
+  const [tags, setTags] = useState((txn.tags ?? []).join(", "));
+  const [owedOn, setOwedOn] = useState(Boolean(txn.owed));
+  const [who, setWho] = useState(txn.owed?.who ?? "");
+  const [owedAmount, setOwedAmount] = useState(txn.owed ? dollarsInput(txn.owed.amount) : "");
   const [state, action, pending] = useActionState(async (_prev: DetailState, detail: unknown) => {
-    const next = await saveTransactionDetail(t.id, detail);
+    const next = await saveTransactionDetail(txn.id, detail);
     if (next.status === "saved") onDone(next.message);
     return next;
   }, { status: "idle" } as DetailState);
@@ -206,9 +210,21 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
   const amounts = rest.map((p) => (p.amount.trim() ? parseDollars(p.amount) : null));
   const placed = amounts.reduce<number>((s, a) => s + (a ?? 0), 0);
   const left = total - placed;
-  const partError = amounts.some((a) => a === null || a === 0) ? "Give every part an amount." : left <= 0 ? `The other parts add up to ${money(placed)}, more than the ${money(total)} this cost.` : null;
+  const partError = amounts.some((a) => a === null || a === 0)
+    ? t("Give every part an amount.")
+    : left <= 0
+      ? t("The other parts add up to {placed}, more than the {total} this cost.", { placed: money(placed), total: money(total) })
+      : null;
   const owedCents = owedAmount.trim() ? parseDollars(owedAmount) : null;
-  const owedError = !owedOn ? null : !who.trim() ? "Say who owes you." : owedCents === null || owedCents === 0 ? "Say how much they owe you." : owedCents > total ? `At most ${money(total)}, what this cost.` : null;
+  const owedError = !owedOn
+    ? null
+    : !who.trim()
+      ? t("Say who owes you.")
+      : owedCents === null || owedCents === 0
+        ? t("Say how much they owe you.")
+        : owedCents > total
+          ? t("At most {total}, what this cost.", { total: money(total) })
+          : null;
   const blocked = (splitOn && partError !== null) || owedError !== null;
 
   function submit(e: FormEvent<HTMLFormElement>) {
@@ -227,7 +243,7 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
     <select value={value} onChange={(e) => onChange(e.target.value as SpendCategoryId)} aria-label={label} className={clsx(field, "px-2 font-semibold")}>
       {SPEND_CATEGORIES.map((c) => (
         <option key={c} value={c}>
-          {CATEGORIES[c].label}
+          {categoryLabel(c, t)}
         </option>
       ))}
     </select>
@@ -237,25 +253,25 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
     <form onSubmit={submit} noValidate>
       {canSplit ? (
         <fieldset>
-          <legend className="sr-only">Split</legend>
+          <legend className="sr-only">{t("Split")}</legend>
           <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink-1">
             <input type="checkbox" checked={splitOn} onChange={(e) => setSplitOn(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-[var(--button)]" />
             <span>
-              <span className="font-semibold">Split across categories</span>
-              <span className="block text-[13px] text-ink-3">Every total, budget and chart counts each part where it belongs.</span>
+              <span className="font-semibold">{t("Split across categories")}</span>
+              <span className="block text-[13px] text-ink-3">{t("Every total, budget and chart counts each part where it belongs.")}</span>
             </span>
           </label>
           {items ? (
             <button type="button" onClick={byItems} className="mt-2 ml-6.5 inline-flex items-center gap-1 text-[13px] font-semibold text-accent-ink hover:underline">
               <PackageOpen aria-hidden className="size-3.5" />
-              Split by its {items.length} items, then choose each one&apos;s category
+              {t("Split by its {n} items, then choose each one's category", { n: items.length })}
             </button>
           ) : null}
           {splitOn ? (
             <div className="mt-3 space-y-2">
               {firstLabel ? <p className="truncate text-xs text-ink-3">{firstLabel}</p> : null}
               <div className="grid grid-cols-[1fr_8rem_2rem] items-center gap-2">
-                {select(firstCategory, setFirstCategory, firstLabel ? `Part 1 category, ${firstLabel}` : "Part 1 category")}
+                {select(firstCategory, setFirstCategory, firstLabel ? t("Part {n} category, {item}", { n: 1, item: firstLabel }) : t("Part {n} category", { n: 1 }))}
                 <div className="num px-1 text-right text-sm font-bold text-ink-1" aria-live="polite">
                   {left > 0 ? money(left) : "—"}
                 </div>
@@ -265,7 +281,7 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
                 <div key={i}>
                   {p.label ? <p className="mb-1 truncate text-xs text-ink-3">{p.label}</p> : null}
                   <div className="grid grid-cols-[1fr_8rem_2rem] items-center gap-2">
-                    {select(p.category, (c) => setRest((r) => r.map((x, j) => (j === i ? { ...x, category: c } : x))), p.label ? `Part ${i + 2} category, ${p.label}` : `Part ${i + 2} category`)}
+                    {select(p.category, (c) => setRest((r) => r.map((x, j) => (j === i ? { ...x, category: c } : x))), p.label ? t("Part {n} category, {item}", { n: i + 2, item: p.label }) : t("Part {n} category", { n: i + 2 }))}
                     <div className="relative">
                       <span aria-hidden className="pointer-events-none absolute inset-y-0 left-2.5 grid place-items-center text-sm text-ink-3">
                         $
@@ -275,7 +291,7 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
                         onChange={(e) => setRest((r) => r.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
                         inputMode="decimal"
                         autoComplete="off"
-                        aria-label={`Part ${i + 2} amount`}
+                        aria-label={t("Part {n} amount", { n: i + 2 })}
                         aria-invalid={amounts[i] === null && p.amount.trim() !== "" ? true : undefined}
                         className={clsx(field, "num pr-2 pl-6")}
                       />
@@ -284,7 +300,7 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
                       type="button"
                       onClick={() => setRest((r) => r.filter((_, j) => j !== i))}
                       disabled={rest.length === 1}
-                      aria-label={`Remove part ${i + 2}`}
+                      aria-label={t("Remove part {n}", { n: i + 2 })}
                       className="grid size-8 place-items-center rounded-ctl text-ink-3 hover:bg-surface-3 disabled:opacity-40"
                     >
                       <X aria-hidden className="size-4" />
@@ -293,11 +309,11 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
                 </div>
               ))}
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-3">
-                <span>The first part is whatever the others leave of {money(total)}.</span>
+                <span>{t("The first part is whatever the others leave of {total}.", { total: money(total) })}</span>
                 {rest.length + 1 < DETAIL_LIMITS.parts ? (
                   <button type="button" onClick={() => setRest((r) => [...r, { category: "other", amount: "" }])} className="inline-flex items-center gap-1 font-semibold text-accent-ink hover:underline">
                     <Plus aria-hidden className="size-3.5" />
-                    Add a part
+                    {t("Add a part")}
                   </button>
                 ) : null}
               </div>
@@ -306,44 +322,46 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
                 <label className="flex cursor-pointer items-start gap-2.5 pt-1 text-sm text-ink-1">
                   <input type="checkbox" checked={ruleOn} onChange={(e) => setRuleOn(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-[var(--button)]" />
                   <span>
-                    <span className="font-semibold [overflow-wrap:anywhere]">Split every {t.merchant} purchase this way</span>
-                    <span className="block text-[13px] text-ink-3">By the same shares, the ones before this and the ones to come. One you split yourself keeps its own.</span>
+                    <span className="font-semibold [overflow-wrap:anywhere]">{t("Split every {merchant} purchase this way", { merchant: txn.merchant })}</span>
+                    <span className="block text-[13px] text-ink-3">{t("By the same shares, the ones before this and the ones to come. One you split yourself keeps its own.")}</span>
                   </span>
                 </label>
               ) : null}
             </div>
           ) : shopHasRule ? (
-            <p className="mt-2 text-[13px] text-ink-3">This one stays whole. Other {t.merchant} purchases still follow your split; remove it under Split rules on Spending.</p>
+            <p className="mt-2 text-[13px] text-ink-3">
+              {t("This one stays whole. Other {merchant} purchases still follow your split; remove it under Split rules on Spending.", { merchant: txn.merchant })}
+            </p>
           ) : null}
         </fieldset>
       ) : null}
 
       <div className={canSplit ? "mt-5" : ""}>
         <label htmlFor={`${id}-tags`} className="mb-1 block text-[13px] font-semibold text-ink-2">
-          Tags
+          {t("Tags")}
         </label>
-        <input id={`${id}-tags`} value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Vacation 2026, Work trip" autoComplete="off" className={clsx(field, "px-3")} />
-        <p className="mt-1 text-xs text-ink-3">Separate them with commas. Up to {DETAIL_LIMITS.tags}; search the list for one to see them all.</p>
+        <input id={`${id}-tags`} value={tags} onChange={(e) => setTags(e.target.value)} placeholder={t("Vacation 2026, Work trip")} autoComplete="off" className={clsx(field, "px-3")} />
+        <p className="mt-1 text-xs text-ink-3">{t("Separate them with commas. Up to {n}; search the list for one to see them all.", { n: DETAIL_LIMITS.tags })}</p>
       </div>
 
-      {t.amount < 0 ? (
+      {txn.amount < 0 ? (
         <fieldset className="mt-5">
-          <legend className="sr-only">Someone owes you</legend>
+          <legend className="sr-only">{t("Someone owes you")}</legend>
           <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink-1">
             <input type="checkbox" checked={owedOn} onChange={(e) => setOwedOn(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-[var(--button)]" />
-            <span className="font-semibold">Someone owes me for this</span>
+            <span className="font-semibold">{t("Someone owes me for this")}</span>
           </label>
           {owedOn ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_9rem]">
               <div>
                 <label htmlFor={`${id}-who`} className="mb-1 block text-[13px] font-semibold text-ink-2">
-                  Who
+                  {t("Who")}
                 </label>
                 <input id={`${id}-who`} value={who} onChange={(e) => setWho(e.target.value)} maxLength={DETAIL_LIMITS.whoLength} autoComplete="off" placeholder="Sam" className={clsx(field, "px-3")} />
               </div>
               <div>
                 <label htmlFor={`${id}-owed`} className="mb-1 block text-[13px] font-semibold text-ink-2">
-                  How much
+                  {t("How much")}
                 </label>
                 <div className="relative">
                   <span aria-hidden className="pointer-events-none absolute inset-y-0 left-2.5 grid place-items-center text-sm text-ink-3">
@@ -352,7 +370,7 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
                   <input id={`${id}-owed`} value={owedAmount} onChange={(e) => setOwedAmount(e.target.value)} inputMode="decimal" autoComplete="off" placeholder={dollarsInput(Math.round(total / 2))} className={clsx(field, "num pr-2 pl-6")} />
                 </div>
               </div>
-              {t.owed?.paid ? <p className="text-xs text-ink-3 sm:col-span-2">Marked paid back on {shortDate(t.owed.paid)}.</p> : null}
+              {txn.owed?.paid ? <p className="text-xs text-ink-3 sm:col-span-2">{t("Marked paid back on {date}.", { date: shortDate(txn.owed.paid, t.locale) })}</p> : null}
               {owedError ? <p className="text-xs font-medium text-crit-ink sm:col-span-2">{owedError}</p> : null}
             </div>
           ) : null}
@@ -363,10 +381,10 @@ function DetailForm({ opened, onDone, onCancel, shopHasRule }: { opened: Opened;
 
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onCancel} className={buttonGhost}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" disabled={pending || blocked} className={clsx(buttonPrimary, "min-w-24")}>
-          {pending ? "Saving…" : "Save"}
+          {pending ? t("Saving…") : t("Save")}
         </button>
       </div>
     </form>

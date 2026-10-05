@@ -14,13 +14,15 @@ import { RotateCcw } from "lucide-react";
 import clsx from "clsx";
 import { CategoryIcon } from "@/components/category-icon";
 import { buttonGhost, buttonPrimary, FormMessage } from "@/components/dialog";
-import { CATEGORIES } from "@/lib/finance/categories";
+import { categoryLabel } from "@/lib/finance/categories";
+import { useT } from "@/components/locale";
 import { choicesFor } from "@/lib/finance/category-rules";
 import { IDLE, type PlanFormState } from "@/lib/finance/plan";
 import type { Transaction } from "@/lib/finance/types";
 import { fixCategory } from "@/lib/server/category-actions";
 
-export function FixForm({ t, onDone, onCancel }: { t: Transaction; onDone: (message: string) => void; onCancel: () => void }) {
+export function FixForm({ txn, onDone, onCancel }: { txn: Transaction; onDone: (message: string) => void; onCancel: () => void }) {
+  const t = useT();
   const [state, action, pending] = useActionState(async (prev: PlanFormState, form: FormData) => {
     const next = await fixCategory(prev, form);
     if (next.status === "saved") onDone(next.message);
@@ -36,24 +38,24 @@ export function FixForm({ t, onDone, onCancel }: { t: Transaction; onDone: (mess
   function reset() {
     const form = new FormData();
     form.set("intent", "reset");
-    form.set("transactionId", t.id);
-    form.set("merchant", t.merchant);
+    form.set("transactionId", txn.id);
+    form.set("merchant", txn.merchant);
     startTransition(() => action(form));
   }
 
   return (
     <form onSubmit={submit} noValidate>
-      <input type="hidden" name="transactionId" value={t.id} />
-      <input type="hidden" name="merchant" value={t.merchant} />
+      <input type="hidden" name="transactionId" value={txn.id} />
+      <input type="hidden" name="merchant" value={txn.merchant} />
       <fieldset>
-        <legend className="mb-2 text-[13px] font-semibold text-ink-2">Category</legend>
+        <legend className="mb-2 text-[13px] font-semibold text-ink-2">{t("Category")}</legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {choicesFor(t.amount).map((c) => (
+          {choicesFor(txn.amount).map((c) => (
             <label key={c} className="relative">
-              <input type="radio" name="category" value={c} defaultChecked={c === t.category} className="peer sr-only" />
+              <input type="radio" name="category" value={c} defaultChecked={c === txn.category} className="peer sr-only" />
               <span className="flex min-h-12 cursor-pointer items-center gap-2 rounded-ctl border border-line bg-surface-2 px-2.5 py-2 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3 peer-checked:border-accent peer-checked:bg-accent-soft peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--focus)]">
                 <CategoryIcon category={c} size="sm" />
-                <span className="min-w-0 leading-tight">{CATEGORIES[c].label}</span>
+                <span className="min-w-0 leading-tight">{categoryLabel(c, t)}</span>
               </span>
             </label>
           ))}
@@ -62,17 +64,15 @@ export function FixForm({ t, onDone, onCancel }: { t: Transaction; onDone: (mess
 
       <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-ctl bg-surface-2 p-3 text-sm text-ink-1">
         <input type="checkbox" name="everyAtMerchant" defaultChecked className="mt-0.5 size-4 shrink-0 accent-[var(--button)]" />
-        <span>
-          Use this for every purchase at <span className="font-semibold">{t.merchant}</span>, past and future
-        </span>
+        <span>{t("Use this for every purchase at {merchant}, past and future", { merchant: txn.merchant })}</span>
       </label>
 
-      {t.bankCategory ? (
+      {txn.bankCategory ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[13px] text-ink-3">
-          <span>Your bank called this {CATEGORIES[t.bankCategory].label}.</span>
+          <span>{t("Your bank called this {category}.", { category: categoryLabel(txn.bankCategory, t) })}</span>
           <button type="button" onClick={reset} disabled={pending} className="inline-flex items-center gap-1 text-left font-semibold text-ink-2 hover:text-ink-1 hover:underline disabled:opacity-60">
             <RotateCcw aria-hidden className="size-3.5" />
-            Use the bank&apos;s categories for {t.merchant}
+            {t("Use the bank's categories for {merchant}", { merchant: txn.merchant })}
           </button>
         </div>
       ) : null}
@@ -81,10 +81,10 @@ export function FixForm({ t, onDone, onCancel }: { t: Transaction; onDone: (mess
 
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onCancel} className={buttonGhost}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" disabled={pending} className={clsx(buttonPrimary, "min-w-24")}>
-          {pending ? "Saving…" : "Save"}
+          {pending ? t("Saving…") : t("Save")}
         </button>
       </div>
     </form>

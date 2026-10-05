@@ -15,6 +15,7 @@ import { buttonGhost, buttonPrimary, buttonSmall, Dialog, TextInput } from "@/co
 import { StatusPill } from "@/components/ui";
 import { cancelHouseholdInvite, inviteToHousehold, leaveTheHousehold, setAccountShared, setHouseholdView, type InviteState } from "@/lib/server/household-actions";
 import type { Household } from "@/lib/server/household-store";
+import { useT } from "@/components/locale";
 
 const MAX = 4;
 
@@ -271,6 +272,7 @@ export function ShareAccounts({ accounts, shared }: { accounts: ShareableAccount
 
 /** Me / Household, in the top bar, for someone in a household. */
 export function ViewSwitch({ view }: { view: "me" | "household" }) {
+  const t = useT();
   const router = useRouter();
   const [pending, start] = useTransition();
   const choose = (v: "me" | "household") =>
@@ -279,7 +281,7 @@ export function ViewSwitch({ view }: { view: "me" | "household" }) {
       router.refresh();
     });
   return (
-    <div role="group" aria-label="Whose money" className="inline-flex h-9 items-center rounded-pill border border-line bg-surface-2 p-0.5 text-xs font-semibold">
+    <div role="group" aria-label={t("Whose money")} className="inline-flex h-9 items-center rounded-pill border border-line bg-surface-2 p-0.5 text-xs font-semibold">
       {(["me", "household"] as const).map((v) => (
         <button
           key={v}
@@ -289,7 +291,7 @@ export function ViewSwitch({ view }: { view: "me" | "household" }) {
           onClick={() => choose(v)}
           className={clsx("h-8 rounded-pill px-3 transition-colors duration-150", view === v ? "bg-surface-1 text-ink-1 shadow-card" : "text-ink-3 hover:text-ink-1")}
         >
-          {v === "me" ? "Me" : "Household"}
+          {v === "me" ? t("Me") : t("Household")}
         </button>
       ))}
     </div>

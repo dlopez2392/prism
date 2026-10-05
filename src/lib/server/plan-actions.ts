@@ -31,11 +31,14 @@ import {
   readGoalForm,
   validBudgets,
   validGoals,
+  type FieldErrors,
   type GoalSettings,
   type PlanFormState,
 } from "@/lib/finance/plan";
 import type { Budget } from "@/lib/finance/types";
 import { currentAccount } from "@/lib/supabase/server";
+import { getT } from "@/lib/i18n/server";
+import { msg, type T } from "@/lib/i18n/t";
 import { saveAccountBudgets, saveAccountGoals } from "./account-store";
 import { readSources, requestToday, sourceGoals } from "./finance";
 import { HouseholdError, loadHouseholdPlan, saveHouseholdBudgets, saveHouseholdGoals } from "./household-store";
@@ -47,8 +50,11 @@ const failed = (message: string, fields?: Record<string, string | undefined>): P
 /** Whose plan a form edits: the person's own, unless it says the household's. */
 const forHousehold = (form: FormData | undefined) => form?.get("scope") === "household";
 
-const NOT_IN_HOUSEHOLD = "You're not in a household any more. Your own plan is under Me.";
-const DIDNT_SAVE = "That didn't save. Try again in a moment.";
+const NOT_IN_HOUSEHOLD = msg("You're not in a household any more. Your own plan is under Me.");
+const DIDNT_SAVE = msg("That didn't save. Try again in a moment.");
+
+/** Each highlighted field's message, in the person's language. */
+const fieldsIn = (t: T, fields: FieldErrors): FieldErrors => Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v === undefined ? v : t(v)]));
 
 /** Budgets go to the account when signed in, else to this device. Null means "back to suggested". */
 async function writeBudgets(budgets: Budget[] | null): Promise<void> {
@@ -64,51 +70,54 @@ async function writeBudgets(budgets: Budget[] | null): Promise<void> {
 }
 
 /** The household's budgets, from the version the editor was showing. Null means "back to drafted". */
-async function writeHouseholdBudgets(form: FormData, budgets: Budget[] | null, message: string): Promise<PlanFormState> {
+async function writeHouseholdBudgets(form: FormData, budgets: Budget[] | null, message: string, t: T): Promise<PlanFormState> {
   const account = await currentAccount();
-  if (!account) return failed("Sign in to change your household's budgets.");
+  if (!account) return failed(t("Sign in to change your household's budgets."));
   const raw = form.get("version");
-  if (typeof raw !== "string" || !/^\d{1,9}$/.test(raw)) return failed("Something in that form didn't check out. Reload the page and try again.");
+  if (typeof raw !== "string" || !/^\d{1,9}$/.test(raw)) return failed(t("Something in that form didn't check out. Reload the page and try again."));
   const version = Number(raw);
-  if (budgets && validBudgets(budgets) === null) return failed("Something in those budgets didn't check out. Try again.");
+  if (budgets && validBudgets(budgets) === null) return failed(t("Something in those budgets didn't check out. Try again."));
   try {
     await saveHouseholdBudgets(account, budgets, version);
   } catch (e) {
     if (e instanceof HouseholdError && e.reason === "stale") {
-      const who = (await loadHouseholdPlan(account).catch(() => null))?.budgetsChanged?.by ?? "Someone in your household";
+      const who = (await loadHouseholdPlan(account).catch(() => null))?.budgetsChanged?.by ?? t("Someone in your household");
       refresh();
-      return failed(`${who} changed these budgets a moment ago, so yours weren't saved. Theirs are showing now: check them and save again.`);
+      return failed(t("{who} changed these budgets a moment ago, so yours weren't saved. Theirs are showing now: check them and save again.", { who }));
     }
-    if (e instanceof HouseholdError && e.reason === "outside") return failed(NOT_IN_HOUSEHOLD);
-    return failed(DIDNT_SAVE);
+    if (e instanceof HouseholdError && e.reason === "outside") return failed(t(NOT_IN_HOUSEHOLD));
+    return failed(t(DIDNT_SAVE));
   }
   refresh();
   return saved(message);
 }
 
 export async function saveBudgets(_prev: PlanFormState, form: FormData): Promise<PlanFormState> {
+  const t = await getT();
   const read = readBudgetForm(form);
-  if ("errors" in read) return failed("Check the highlighted amounts.", read.errors);
+  if ("errors" in read) return failed(t("Check the highlighted amounts."), fieldsIn(t, read.errors));
   if (forHousehold(form)) {
-    return writeHouseholdBudgets(form, read.budgets, read.budgets.length ? "Household budgets saved. Everyone in your household sees them." : "Household budgets cleared.");
+    return writeHouseholdBudgets(form, read.budgets, read.budgets.length ? t("Household budgets saved. Everyone in your household sees them.") : t("Household budgets cleared."), t);
   }
   try {
     await writeBudgets(read.budgets);
   } catch {
-    return failed(DIDNT_SAVE);
+    return failed(t(DIDNT_SAVE));
   }
-  const where = (await currentAccount()) ? "to your account" : "on this device";
-  return saved(read.budgets.length ? `Budgets saved ${where}.` : `Budgets cleared ${where}.`);
+  const signedIn = (await currentAccount()) !== null;
+  if (read.budgets.length) return saved(signedIn ? t("Budgets saved to your account.") : t("Budgets saved on this device."));
+  return saved(signedIn ? t("Budgets cleared to your account.") : t("Budgets cleared on this device."));
 }
 
 export async function resetBudgets(form?: FormData): Promise<PlanFormState> {
-  if (form && forHousehold(form)) return writeHouseholdBudgets(form, null, "Back to the budgets drafted from what your household shares.");
+  const t = await getT();
+  if (form && forHousehold(form)) return writeHouseholdBudgets(form, null, t("Back to the budgets drafted from what your household shares."), t);
   try {
     await writeBudgets(null);
   } catch {
-    return failed(DIDNT_SAVE);
+    return failed(t(DIDNT_SAVE));
   }
-  return saved("Back to the suggested budgets.");
+  return saved(t("Back to the suggested budgets."));
 }
 
 /** The goals as they stand: the person's own edits if any, else the source's. */

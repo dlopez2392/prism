@@ -17,6 +17,7 @@ import type { PlanFormState } from "@/lib/finance/plan";
 import { currentAccount } from "@/lib/supabase/server";
 import { loadAccountCategoryRules, saveAccountCategoryRules } from "./account-store";
 import { vaultKey } from "./vault";
+import { getT } from "@/lib/i18n/server";
 
 const TEXT_MAX = 200;
 
@@ -37,30 +38,31 @@ function readFix(form: FormData): CategoryFix | null {
 
 export async function fixCategory(_prev: PlanFormState, form: FormData): Promise<PlanFormState> {
   const failed = (message: string): PlanFormState => ({ status: "error", message });
+  const t = await getT();
   const account = await currentAccount();
-  if (!account) return failed("Sign in to fix categories. They're kept in your account.");
+  if (!account) return failed(t("Sign in to fix categories. They're kept in your account."));
   let key = null;
   try {
     key = vaultKey();
   } catch {
     key = null;
   }
-  if (!key) return failed("Prism can't save that right now. Try again later.");
+  if (!key) return failed(t("Prism can't save that right now. Try again later."));
   const fix = readFix(form);
-  if (!fix) return failed("Pick a category first.");
+  if (!fix) return failed(t("Pick a category first."));
 
   try {
     const current = await loadAccountCategoryRules(account, key);
     await saveAccountCategoryRules(account, withFix(current, fix), key);
   } catch {
-    return failed("That didn't save. Try again in a moment.");
+    return failed(t("That didn't save. Try again in a moment."));
   }
   refresh();
   const message =
     fix.kind === "reset"
-      ? `${fix.merchant} is back to your bank's categories.`
+      ? t("{merchant} is back to your bank's categories.", { merchant: fix.merchant })
       : fix.everyAtMerchant
-        ? `Every purchase at ${fix.merchant} is now ${categoryLabel(fix.category)}.`
-        : `That ${fix.merchant} purchase is now ${categoryLabel(fix.category)}.`;
+        ? t("Every purchase at {merchant} is now {category}.", { merchant: fix.merchant, category: categoryLabel(fix.category, t) })
+        : t("That {merchant} purchase is now {category}.", { merchant: fix.merchant, category: categoryLabel(fix.category, t) });
   return { status: "saved", message, at: Date.now() };
 }

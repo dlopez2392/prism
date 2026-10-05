@@ -10,6 +10,7 @@
 import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { areaPath, bandPath, linear, linePath, niceTicks, spreadLabels, thinIndices, type Curve, type Pt } from "@/lib/charts/geometry";
 import { ChartPlaceholder, ChartTooltip, fmt, useWidth, type TooltipRow, type ValueFormat } from "./core";
+import { useT } from "@/components/locale";
 
 export type TimeSeries = {
   id: string;
@@ -63,6 +64,7 @@ export function TimeSeriesChart({
   endLabels = false,
   curve = "smooth",
 }: Props) {
+  const tr = useT();
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const gid = useId().replace(/:/g, "");
@@ -108,14 +110,14 @@ export function TimeSeriesChart({
       const v = s.values[hover];
       if (v === null || v === undefined) continue;
       const projected = s.dashFrom !== undefined && hover > s.dashFrom;
-      rows.push({ color: s.color, key: projected ? "dash" : "line", label: projected ? `${s.label} (projected)` : s.label, value: fmt(format, v) });
+      rows.push({ color: s.color, key: projected ? "dash" : "line", label: projected ? tr("{series} (projected)", { series: s.label }) : s.label, value: fmt(format, v) });
     }
     if (band && band.low[hover] !== band.high[hover]) {
       rows.push({ label: band.label, value: `${fmt(format, band.low[hover]!)} – ${fmt(format, band.high[hover]!)}` });
     }
     const here = markers.filter((m) => m.index === hover);
     return { rows, footer: here.length ? here.map((m) => `${m.label} ${m.value}`).join(" · ") : undefined };
-  }, [hover, geo, series, band, markers, format]);
+  }, [hover, geo, series, band, markers, format, tr]);
 
   // Where each line ends, and where its label goes: apart from the others, inside the plot.
   const { ends, endYs } = useMemo(() => {
@@ -178,7 +180,7 @@ export function TimeSeriesChart({
               <g>
                 <line x1={geo.x(todayIndex)} x2={geo.x(todayIndex)} y1={M.top} y2={height - M.bottom} stroke="var(--line-strong)" strokeWidth={1} />
                 <text x={geo.x(todayIndex) + 4} y={M.top + 8} className="fill-[var(--ink-3)] text-[10px] font-semibold uppercase tracking-wider">
-                  Today
+                  {tr("Today")}
                 </text>
               </g>
             ) : null}
