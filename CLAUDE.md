@@ -39,7 +39,13 @@
   `src/lib/finance/types.ts`. Without `PLAID_CLIENT_ID`/`PLAID_SECRET` the app
   runs on the deterministic demo household in `src/lib/finance/demo.ts`.
   Linking ANYTHING real (a bank or Coinbase) ends the demo: real and made-up
-  money are never shown together.
+  money are never shown together. A brokerage account connects through the
+  investment link (`LinkKind` in `src/lib/plaid/client.ts`: Investments
+  required, transactions optional), because Plaid's Transactions never covers
+  investment accounts and a link shows only what supports every required
+  product. A connection whose accounts all hold investments has no
+  transactions, so Plaid refusing them is no outage (`holdingsOnly`), and
+  never for a connection with a bank or card account in it.
 - **Committed integrations (owner-approved, do not drop or substitute without
   the owner's sign-off)** — full notes in `docs/ROADMAP.md`:
   1. Investment accounts through Plaid (already built in).

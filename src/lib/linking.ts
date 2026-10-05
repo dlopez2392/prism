@@ -14,7 +14,7 @@
 
 import { safeNext } from "@/lib/profile";
 
-export type ConnectKind = "bank" | "coinbase";
+export type ConnectKind = "bank" | "investments" | "coinbase";
 
 export type LinkingRefusal = {
   status: 401 | 503;
@@ -24,7 +24,7 @@ export type LinkingRefusal = {
 
 export function linkingRefusal(o: { accountsEnabled: boolean; signedIn: boolean; realMoney: boolean; kind?: ConnectKind }): LinkingRefusal | null {
   if (o.signedIn) return null;
-  const what = o.kind === "coinbase" ? "Coinbase" : "a bank";
+  const what = o.kind === "coinbase" ? "Coinbase" : o.kind === "investments" ? "an investment account" : "a bank";
   if (o.accountsEnabled) {
     return { status: 401, error: "sign_in_required", message: `Sign in to connect ${what}. It's kept in your account, where two-step sign-in protects it.` };
   }
@@ -44,5 +44,5 @@ export function signInToConnect(kind: ConnectKind, back: unknown): string {
 
 /** The sign-in page's reason to show, from its `why` parameter. Anything else is ignored. */
 export function connectReason(why: unknown): ConnectKind | null {
-  return why === "bank" || why === "coinbase" ? why : null;
+  return why === "bank" || why === "investments" || why === "coinbase" ? why : null;
 }

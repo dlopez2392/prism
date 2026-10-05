@@ -2,19 +2,21 @@
 // this browser's household. 503 with `not_configured` when no Plaid keys are
 // set, which the client turns into the "you're on demo data" explanation.
 //
-// Body: `{ from, itemId? }`. `from` is the page the person is on, so that a
+// Body: `{ from, itemId?, kind? }`. `from` is the page the person is on, so that a
 // bank which signs them in on its own website can send them back to it
 // (/connections/return). `itemId` asks to sign in to one of THEIR OWN linked
 // banks again (Plaid's update mode): the same connection carries on, so
 // nothing is exchanged afterwards. Anyone else's bank, or one that's gone,
-// is a 404.
+// is a 404. `kind: "investments"` connects an investment account (a brokerage
+// such as Robinhood or Webull) rather than a bank (LinkKind in plaid/client.ts);
+// anything else is a bank.
 //
 // With accounts on, only a signed-in account may connect a bank: 401
 // `sign_in_required` otherwise (src/lib/linking.ts says why).
 
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createLinkToken, plaidConfig, PlaidError, plaidFailure, redirectUriFor } from "@/lib/plaid/client";
+import { createLinkToken, plaidConfig, PlaidError, plaidFailure, redirectUriFor, type LinkKind } from "@/lib/plaid/client";
 import { clearedReturnCookie, packReturn, RETURN_COOKIE, returnCookieOptions, returnPath } from "@/lib/plaid/return";
 import { linkingRefusal } from "@/lib/linking";
 import { requestOrigin } from "@/lib/server/origin";
@@ -38,7 +40,8 @@ export async function POST(req: Request) {
   }
   if (!key) return NextResponse.json({ error: "vault_key_missing", message: "Set PRISM_VAULT_KEY to link banks in production." }, { status: 500 });
 
-  const body = (await req.json().catch(() => null)) as { from?: unknown; itemId?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { from?: unknown; itemId?: unknown; kind?: unknown } | null;
+  const kind: LinkKind = body?.kind === "investments" ? "investments" : "bank";
   const account = await currentAccount();
   const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: config.env !== "sandbox" });
   if (refusal) return NextResponse.json({ error: refusal.error, message: refusal.message }, { status: refusal.status });
@@ -63,14 +66,14 @@ export async function POST(req: Request) {
     let redirectUri = redirect.uri;
     let linkToken: string;
     try {
-      linkToken = (await createLinkToken(config, userId, { webhookUrl, redirectUri, accessToken })).link_token;
+      linkToken = (await createLinkToken(config, userId, { webhookUrl, redirectUri, accessToken, kind })).link_token;
     } catch (e) {
       // Plaid refuses an address missing from its allow-list, and a setting made before (or
       // without) that step must never stop anyone linking: without it the bank opens in a pop-up.
       if (!redirectUri || !(e instanceof PlaidError) || !["INVALID_FIELD", "INVALID_REQUEST"].includes(e.code)) throw e;
       console.error(`Plaid refused PLAID_REDIRECT_URI (${redirectUri}): ${e.message}. Add it to Allowed redirect URIs in Plaid's dashboard. Linking without it.`);
       redirectUri = null;
-      linkToken = (await createLinkToken(config, userId, { webhookUrl, accessToken })).link_token;
+      linkToken = (await createLinkToken(config, userId, { webhookUrl, accessToken, kind })).link_token;
     }
     if (vault) jar.set(VAULT_COOKIE, seal(vault, key), cookieOptions());
     // Only a token Plaid may redirect with needs remembering; any older one is dropped either way.

@@ -60,14 +60,14 @@ export const INTEGRATIONS: IntegrationGroup[] = [
         id: "plaid-investments",
         name: "Brokerage & retirement accounts",
         adds: "Holdings, balances and what they're made of — the treemap on Net worth.",
-        how: "Plaid Investments, requested in the same bank link when your institution supports it.",
+        how: "Plaid Investments: with your bank when it holds investments, or on its own with Connect an investment account, the way Robinhood, Webull, Vanguard, E*TRADE, Schwab and most US brokers connect.",
         status: "live",
       },
       {
         id: "snaptrade",
-        name: "Robinhood, Fidelity and app-first brokers",
-        adds: "Read-only positions from brokers that aggregators cover poorly.",
-        how: "SnapTrade's read-only brokerage API.",
+        name: "Brokers Plaid can't reach",
+        adds: "Read-only positions from a broker Plaid doesn't cover, if people ask for one.",
+        how: "SnapTrade's read-only brokerage API, which reaches some brokers Plaid doesn't.",
         status: "planned",
       },
       {

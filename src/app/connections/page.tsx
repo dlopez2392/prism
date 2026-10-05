@@ -161,9 +161,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           <div className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">Link a bank in about a minute.</div>
           <p className="mt-2 max-w-lg text-sm text-[var(--on-hero-soft)]">
             You sign in on your bank&apos;s own screen through Plaid, the network behind most US money apps. Prism gets read-only access — it can
-            see balances and transactions, and it can never move money.
+            see balances and transactions, and it can never move money. Investing with Robinhood, Webull or another broker? Connect it as an
+            investment account.
           </p>
-          <ConnectBank variant="hero" label={signInFirst ? "Sign in to connect a bank" : "Connect a bank"} signInFirst={signInFirst} className="mt-5" />
+          {/* Two links, because Plaid's bank link can't show a brokerage account (LinkKind in src/lib/plaid/client.ts). */}
+          <div className="mt-5 flex flex-wrap items-start gap-3">
+            <ConnectBank variant="hero" label={signInFirst ? "Sign in to connect a bank" : "Connect a bank"} signInFirst={signInFirst} />
+            <ConnectBank variant="hero-ghost" kind="investments" label={signInFirst ? "Sign in to connect investments" : "Connect an investment account"} signInFirst={signInFirst} />
+          </div>
         </Card>
 
         <Card className="p-5 sm:p-6 lg:col-span-5">
@@ -384,6 +389,9 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                         </div>
                         <p className="mt-1 text-[13px] text-ink-2">{adds}</p>
                         <p className="mt-1 text-xs text-ink-3">{how}</p>
+                        {it.id === "plaid-investments" ? (
+                          <ConnectBank kind="investments" label={signInFirst ? "Sign in to connect investments" : "Connect an investment account"} signInFirst={signInFirst} className="mt-2.5" />
+                        ) : null}
                         {it.id === "csv" && data.accountsEnabled ? (
                           <Link
                             href={signInFirst ? "/sign-in?next=%2Fconnections%2Fimport" : "/connections/import"}

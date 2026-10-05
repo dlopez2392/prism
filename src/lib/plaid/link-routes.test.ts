@@ -293,4 +293,19 @@ describe("signing in to a linked bank again", () => {
     expect(sent).not.toHaveProperty("access_token");
     expect(sent).toMatchObject({ products: ["transactions"], optional_products: ["investments"], additional_consented_products: ["liabilities"] });
   });
+
+  it("connects an investment account holdings first, which a bank link can't show, asking the same consent", async () => {
+    await post(linkToken, "/api/plaid/link-token", { from: "/connections", kind: "investments" });
+    const sent = sentToPlaid()[0]!;
+    expect(sent).toMatchObject({ products: ["investments"], optional_products: ["transactions"], additional_consented_products: ["liabilities"], transactions: { days_requested: 730 } });
+  });
+
+  it("treats any other kind as a bank, and signing in again as signing in again, whatever kind is sent", async () => {
+    for (const kind of ["INVESTMENTS", "transfer", 42, null]) await post(linkToken, "/api/plaid/link-token", { from: "/", kind });
+    for (const sent of sentToPlaid()) expect(sent).toMatchObject({ products: ["transactions"], optional_products: ["investments"] });
+    plaid.mockClear();
+    await post(linkToken, "/api/plaid/link-token", { from: "/", itemId: "item-chase", kind: "investments" });
+    const again = sentToPlaid()[0]!;
+    for (const product of ["products", "optional_products", "additional_consented_products"]) expect(again).not.toHaveProperty(product);
+  });
 });

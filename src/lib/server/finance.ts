@@ -19,7 +19,7 @@ import { feedSnapshot } from "@/lib/finance/calendar";
 import type { Cents, FinanceData, Goal, Holding, Institution, ISODate, Transaction } from "@/lib/finance/types";
 import { importAccountId, summarize, type ImportedHistory, type ImportSummary, type LockedImport } from "@/lib/finance/import";
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
-import { needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
+import { holdingsOnly, needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
 import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiability, type StoredLiability } from "@/lib/plaid/liabilities";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
@@ -794,8 +794,12 @@ async function bankFor(
   const startedAt = new Date().toISOString();
   let next: SyncState;
   try {
-    const [acc, synced] = await Promise.all([getAccounts(config, item.accessToken), syncTransactions(config, item.accessToken, copy, { today })]);
-    next = { ...synced, accounts: acc.accounts };
+    const [acc, synced] = await Promise.allSettled([getAccounts(config, item.accessToken), syncTransactions(config, item.accessToken, copy, { today })]);
+    if (acc.status === "rejected") throw acc.reason;
+    if (synced.status === "fulfilled") next = { ...synced.value, accounts: acc.value.accounts };
+    // An investment account on its own has no transactions to give, so Plaid refusing them is no outage: its holdings are the news.
+    else if (holdingsOnly(acc.value.accounts)) next = { v: 1, cursor: "", transactions: [], ready: true, accounts: acc.value.accounts };
+    else throw synced.reason;
   } catch (e) {
     if (copy?.accounts && stored?.syncedAt) {
       return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true, signInAgain: isReauth(e), answered: false };

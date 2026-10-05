@@ -1,9 +1,23 @@
 // What a visitor can do on the example household, end to end: try a
 // purchase on Future and see the bills that don't come monthly, plan paying
 // off the loans on Net worth, read the tax summary year by year, and search
-// the ledger, including from a link that names what to look for.
+// the ledger, including from a link that names what to look for; and find
+// the link for an investment account beside the bank's on Connections.
 
 import { expect, test } from "@playwright/test";
+
+test("Connections offers an investment account beside a bank, and on the example household says there's nothing to link", async ({ page }) => {
+  await page.goto("/connections");
+  // Beside "Connect a bank" in the card at the top, and again under Investing.
+  const links = page.getByRole("button", { name: "Connect an investment account" });
+  await expect(links).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Connect a bank" }).first()).toBeVisible();
+  // It asks for an investment account, and this deployment has no Plaid keys: the example household explains itself.
+  const asked = page.waitForRequest((r) => r.url().endsWith("/api/plaid/link-token") && r.method() === "POST");
+  await links.first().click();
+  expect((await asked).postDataJSON()).toMatchObject({ kind: "investments", from: "/connections" });
+  await expect(page.getByRole("dialog").getByRole("heading", { name: "You're exploring a demo household" })).toBeVisible();
+});
 
 test("Can I afford it? answers as you type, and says when it doesn't fit", async ({ page }) => {
   await page.goto("/future");
