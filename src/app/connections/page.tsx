@@ -19,6 +19,7 @@ import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill, StatusPill,
 import { money0, monthYear, shortDate } from "@/lib/finance/format";
 import { coinbaseConfig } from "@/lib/coinbase/client";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/finance/integrations";
+import { addLink } from "@/lib/finance/manual";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { signInToConnect } from "@/lib/linking";
@@ -391,6 +392,15 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                         <p className="mt-1 text-xs text-ink-3">{how}</p>
                         {it.id === "plaid-investments" ? (
                           <ConnectBank kind="investments" label={signInFirst ? "Sign in to connect investments" : "Connect an investment account"} signInFirst={signInFirst} className="mt-2.5" />
+                        ) : null}
+                        {(it.id === "home" || it.id === "vehicle") && data.accountsEnabled ? (
+                          <Link
+                            href={signInFirst ? "/sign-in?next=%2Fnet-worth" : addLink(it.id)}
+                            className="mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-ctl border border-line-strong px-3.5 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
+                          >
+                            <Plus aria-hidden className="size-4" />
+                            {signInFirst ? "Sign in to add it" : it.id === "home" ? "Add your home" : "Add your car"}
+                          </Link>
                         ) : null}
                         {it.id === "csv" && data.accountsEnabled ? (
                           <Link

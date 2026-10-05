@@ -17,14 +17,24 @@ export function newEmail(tag: string): string {
 
 type MailpitList = { messages?: { ID: string; Created: string }[] };
 
-/** The code in the newest sign-in email to `email` sent at or after `since`, read from the local stack's Mailpit. */
-export async function codeFor(email: string, since: number): Promise<string> {
+/** Every email the local stack's Mailpit holds for `email`, newest first. */
+async function inbox(email: string): Promise<{ ID: string }[]> {
   if (!stack) throw new Error("No local Supabase stack.");
   const search = `${stack.mailpit}/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}`;
+  return ((await (await fetch(search)).json()) as MailpitList).messages ?? [];
+}
+
+/** The emails `email` already has: ask before sending a code, so the code's own email can't be mistaken for an older one. */
+export async function mailSeen(email: string): Promise<Set<string>> {
+  return new Set((await inbox(email)).map((m) => m.ID));
+}
+
+/** The code in the sign-in email to `email` that isn't one of `seen`, read from the local stack's Mailpit. */
+export async function codeFor(email: string, seen: Set<string>): Promise<string> {
+  if (!stack) throw new Error("No local Supabase stack.");
   for (let tries = 0; tries < 80; tries++) {
-    const list = (await (await fetch(search)).json()) as MailpitList;
-    // Newest first. A second of slack: the two clocks are this machine's, but they round differently.
-    const fresh = list.messages?.find((m) => Date.parse(m.Created) >= since - 1000);
+    // Told apart by id, never by time: no clock can make an older email look new.
+    const fresh = (await inbox(email)).find((m) => !seen.has(m.ID));
     if (fresh) {
       const { Text } = (await (await fetch(`${stack.mailpit}/api/v1/message/${fresh.ID}`)).json()) as { Text: string };
       const code = /code to sign in:\D*(\d{6,10})/.exec(Text)?.[1];
@@ -40,11 +50,18 @@ export async function codeFor(email: string, since: number): Promise<string> {
 export async function signIn(page: Page, email: string): Promise<URL> {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
-  const sent = Date.now();
+  const seen = await mailSeen(email);
   await page.getByRole("button", { name: "Email me a code" }).click();
-  await page.getByLabel("Code from the email").fill(await codeFor(email, sent));
+  await page.getByLabel("Code from the email").fill(await codeFor(email, seen));
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.waitForURL((u) => u.pathname !== "/sign-in");
+  try {
+    // As soon as the address changes: the page it lands on is the test's to wait for.
+    await page.waitForURL((u) => u.pathname !== "/sign-in", { waitUntil: "commit", timeout: 20_000 });
+  } catch (e) {
+    // Prism refusing the code says so on the form; that, not a timeout, is what to report.
+    const said = await page.locator("#code-error").textContent({ timeout: 1_000 }).catch(() => null);
+    throw new Error(said ? `Sign-in refused the emailed code: ${said}` : (e as Error).message);
+  }
   return new URL(page.url());
 }
 

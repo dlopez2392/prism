@@ -15,7 +15,7 @@ import { Sparkline } from "@/components/charts/sparkline";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { TreemapChart } from "@/components/charts/treemap-chart";
 import { DebtPlanner } from "@/components/debt-planner";
-import { AddManualItem, ManualItemRow } from "@/components/manual-item-editor";
+import { AddManualItem, AddWhatYouOwn, ManualItemRow } from "@/components/manual-item-editor";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { Card, CardHeader, Change, EmptyState, PageHeader, StatusPill, type Status } from "@/components/ui";
 import { usualMonthlyKept } from "@/lib/finance/afford";
@@ -41,19 +41,21 @@ export default async function NetWorthPage() {
   // RentCast can keep a home's value up to date once the operator has switched it on.
   const estimates = homeValuesEnabled();
   const editable = new Map(canAdd && data.source !== "demo" ? data.manual.map((i) => [`manual-${i.id}`, i]) : []);
+  // The way in to a home, a car or a loan: high on the page until the person has added one, then below their accounts.
+  const addCard = canAdd ? <AddWhatYouOwn estimates={estimates} added={editable.size} /> : null;
 
   if (data.accounts.length === 0) {
     return (
-      <div>
+      <div className="space-y-5">
         <PageHeader title="Net worth" subtitle="Everything you own, minus everything you owe." />
         <Card>
           <EmptyState
             icon={Landmark}
             title="Your whole picture, in one number"
-            body={canAdd ? "Link your accounts, or add your home, a car or a loan, and this becomes your net worth, month by month." : "Link your accounts and this becomes your net worth, month by month."}
-            action={canAdd ? <AddManualItem estimates={estimates} /> : undefined}
+            body={canAdd ? "Link your accounts, or add your home, a car or a loan below, and this becomes your net worth, month by month." : "Link your accounts and this becomes your net worth, month by month."}
           />
         </Card>
+        {addCard}
       </div>
     );
   }
@@ -166,6 +168,8 @@ export default async function NetWorthPage() {
           />
         </ChartCard>
       </div>
+
+      {editable.size === 0 ? addCard : null}
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <Card className="p-5 sm:p-6 lg:col-span-7">
@@ -289,6 +293,8 @@ export default async function NetWorthPage() {
           </Card>
         </div>
       </div>
+
+      {editable.size > 0 ? addCard : null}
 
       {owed.length ? (
         <Card className="p-5 sm:p-6">

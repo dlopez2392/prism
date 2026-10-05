@@ -2,7 +2,7 @@
 // account with a real trend, and what an untrusted stored copy can do.
 
 import { describe, expect, it } from "vitest";
-import { cleanManualName, MAX_MANUAL_ITEMS, manualAccount, manualId, validManualItems, withValue, type ManualItem } from "./manual";
+import { addKindFromHash, addLink, cleanManualName, MAX_MANUAL_ITEMS, manualAccount, manualId, validManualItems, withValue, type ManualItem } from "./manual";
 
 const TODAY = "2026-09-29";
 const home: ManualItem = {
@@ -50,6 +50,14 @@ describe("updating a value", () => {
     expect(item.values).toHaveLength(24);
     expect(item.values[0]).toEqual({ month: "2024-07", value: 7 });
     expect(item.values.at(-1)).toEqual({ month: "2026-06", value: 30 });
+  });
+});
+
+describe("a link to the add form", () => {
+  it("names the kind to start with, and opens on nothing else", () => {
+    expect(addLink("home")).toBe("/net-worth#add-home");
+    for (const k of ["home", "vehicle", "asset", "debt"] as const) expect(addKindFromHash(addLink(k).slice("/net-worth".length))).toBe(k);
+    for (const other of ["", "#add", "#add-", "#add-boat", "#add-HOME", "#add-home-x", "#xadd-home", "add-home", "#add-constructor", "#add-toString"]) expect(addKindFromHash(other), other).toBeNull();
   });
 });
 

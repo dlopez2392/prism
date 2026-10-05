@@ -21,15 +21,19 @@ export function Card({
   className,
   as: As = "section",
   hero = false,
+  id,
 }: {
   children: ReactNode;
   className?: string;
+  /** For a link that lands on this card ("/net-worth#add"). */
+  id?: string;
   as?: "section" | "div" | "article" | "li";
   /** The one hero-gradient card on a screen (DESIGN.md rule 6). */
   hero?: boolean;
 }) {
   return (
     <As
+      id={id}
       data-hero={hero ? "" : undefined}
       className={clsx(
         "fade-up rounded-card",

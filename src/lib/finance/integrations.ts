@@ -101,7 +101,7 @@ export const INTEGRATIONS: IntegrationGroup[] = [
         id: "vehicle",
         name: "Your car's value",
         adds: "A market value from the VIN, refreshed monthly.",
-        how: "VIN-based valuation (VinAudit).",
+        how: "VIN-based valuation (VinAudit). Until then, add your car on Net worth and update its value whenever you like.",
         status: "planned",
       },
     ],
