@@ -24,7 +24,7 @@ import { CATEGORIES, categoryColor, SPEND_CATEGORIES } from "@/lib/finance/categ
 import { addDays, daysBetween } from "@/lib/finance/dates";
 import { stillOwed, tagTotals } from "@/lib/finance/details";
 import { money, money0, monthLong, monthShort, monthYear, signedMoney0, signedPercent } from "@/lib/finance/format";
-import { againstLabel, ledgerHash, monthWindow, periodLabel, rangeView } from "@/lib/finance/view";
+import { againstLabel, ledgerHash, monthHref, monthWindow, periodLabel, rangeView } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Spending" };
@@ -115,6 +115,8 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
               axisLabels={w.trend.map((m) => monthShort(`${m}-01`))}
               series={SPEND_CATEGORIES.map((c) => ({ id: c, label: CATEGORIES[c].label, color: categoryColor(c), values: byMonth.map((r) => Math.max(0, r[c])) }))}
               partial={[labels.length - 1]}
+              hrefs={w.trend.map((m) => monthHref("/spending", m, data.today))}
+              hrefNote="Tap or click to see this month"
               maxBar={40}
               height={280}
               ariaLabel="Monthly spending stacked by category"
@@ -127,28 +129,32 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
         <Card className="p-5 sm:p-6 lg:col-span-6">
           <CardHeader title="Categories" subtitle={`Against ${range === 1 ? againstLabel(w.prevFrom, w.prevTo) : periodLabel(w.prevFrom, w.prevTo)}`} />
           {rows.length ? (
-            <ul className="mt-4 space-y-3.5">
+            <ul className="mt-3 space-y-1">
               {rows.map((r) => (
-                <li key={r.category} className="flex items-center gap-3">
-                  <CategoryIcon category={r.category} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-ink-1">{CATEGORIES[r.category].label}</span>
-                      <span className="num text-sm font-bold text-ink-1">{money0(r.amount)}</span>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-3">
-                      <div className="h-2 flex-1 rounded-pill bg-surface-2">
-                        <div className="h-full rounded-pill" style={{ width: `${(r.amount / maxRow) * 100}%`, background: categoryColor(r.category) }} />
+                <li key={r.category}>
+                  {/* The whole row narrows the transactions below to this category. */}
+                  <a href={ledgerHash({ category: r.category })} className="-mx-2 flex items-center gap-3 rounded-ctl px-2 py-1.5 transition-colors duration-150 hover:bg-surface-3">
+                    <CategoryIcon category={r.category} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-ink-1">{CATEGORIES[r.category].label}</span>
+                        <span className="num text-sm font-bold text-ink-1">{money0(r.amount)}</span>
                       </div>
-                      <span className="w-20 text-right">
-                        {r.change === null ? (
-                          <span className="text-xs text-ink-3">new</span>
-                        ) : (
-                          <Change text={signedPercent(r.change)} up={Math.abs(r.change) < 0.005 ? null : r.change > 0} goodWhenUp={false} />
-                        )}
-                      </span>
+                      <div className="mt-1.5 flex items-center gap-3">
+                        <div className="h-2 flex-1 rounded-pill bg-surface-2">
+                          <div className="h-full rounded-pill" style={{ width: `${(r.amount / maxRow) * 100}%`, background: categoryColor(r.category) }} />
+                        </div>
+                        <span className="w-20 text-right">
+                          {r.change === null ? (
+                            <span className="text-xs text-ink-3">new</span>
+                          ) : (
+                            <Change text={signedPercent(r.change)} up={Math.abs(r.change) < 0.005 ? null : r.change > 0} goodWhenUp={false} />
+                          )}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                    <span className="sr-only">: see these transactions</span>
+                  </a>
                 </li>
               ))}
             </ul>
@@ -159,21 +165,25 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
 
         <Card className="p-5 sm:p-6 lg:col-span-6">
           <CardHeader title="Where you spend most" subtitle="Top merchants in this period" />
-          <ul className="mt-4 space-y-3">
+          <ul className="mt-3 space-y-1">
             {merchants.map((m) => (
               <li key={m.merchant}>
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="truncate font-semibold text-ink-1">{m.merchant}</span>
-                  <span className="num shrink-0 font-bold text-ink-1">{money0(m.amount)}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-3">
-                  <div className="h-2 flex-1 rounded-pill bg-surface-2">
-                    <div className="h-full rounded-pill" style={{ width: `${(m.amount / maxMerchant) * 100}%`, background: categoryColor(m.category) }} />
+                {/* The whole row narrows the transactions below to this shop. */}
+                <a href={ledgerHash({ find: m.merchant })} className="-mx-2 block rounded-ctl px-2 py-1.5 transition-colors duration-150 hover:bg-surface-3">
+                  <div className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="truncate font-semibold text-ink-1">{m.merchant}</span>
+                    <span className="num shrink-0 font-bold text-ink-1">{money0(m.amount)}</span>
                   </div>
-                  <span className="num w-20 text-right text-xs text-ink-3">
-                    {m.count} {m.count === 1 ? "visit" : "visits"}
-                  </span>
-                </div>
+                  <div className="mt-1 flex items-center gap-3">
+                    <div className="h-2 flex-1 rounded-pill bg-surface-2">
+                      <div className="h-full rounded-pill" style={{ width: `${(m.amount / maxMerchant) * 100}%`, background: categoryColor(m.category) }} />
+                    </div>
+                    <span className="num w-20 text-right text-xs text-ink-3">
+                      {m.count} {m.count === 1 ? "visit" : "visits"}
+                    </span>
+                  </div>
+                  <span className="sr-only">: see these transactions</span>
+                </a>
               </li>
             ))}
           </ul>

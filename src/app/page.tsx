@@ -21,7 +21,8 @@ import { CATEGORIES, categoryColor } from "@/lib/finance/categories";
 import { addDays } from "@/lib/finance/dates";
 import { dayDate, money0, monthLong, monthShort, signedMoney0, signedPercent } from "@/lib/finance/format";
 import { analyze } from "@/lib/finance/model";
-import { foldSlices, greeting } from "@/lib/finance/view";
+import { foldSlices, greeting, ledgerHash } from "@/lib/finance/view";
+import type { CategoryId } from "@/lib/finance/types";
 import { ADD_CARD_LINK } from "@/lib/finance/manual";
 import { getFinance } from "@/lib/server/finance";
 
@@ -45,6 +46,9 @@ export default async function OverviewPage() {
 
   const rows = categoryBreakdown(data.transactions, { from: a.mtd.from, to: a.today }, { from: a.mtd.prevFrom, to: a.mtd.prevTo });
   const slices = foldSlices(rows);
+  // Every category opens this month's transactions in it; "Everything else", all of them.
+  const thisMonthIn = (category: CategoryId) => `/spending?range=1${ledgerHash({ category })}`;
+  const sliceHrefs = Object.fromEntries(slices.map((s) => [s.id, s.id === "rest" ? "/spending?range=1#transactions" : thisMonthIn(s.id as CategoryId)]));
 
   const flex = a.budgets.filter((b) => ["food", "transport", "shopping", "fun"].includes(b.category));
   const recent = [...data.transactions].reverse().slice(0, 7);
@@ -196,7 +200,7 @@ export default async function OverviewPage() {
           }}
         >
           {slices.length ? (
-            <SpendingDonut slices={slices} total={a.spentMTD} label="Spent" size={188} />
+            <SpendingDonut slices={slices} total={a.spentMTD} label="Spent" size={188} hrefs={sliceHrefs} />
           ) : (
             <EmptyState icon={Sparkles} title="Nothing spent yet this month" body="As purchases land, each category gets its own slice here." />
           )}
@@ -209,33 +213,40 @@ export default async function OverviewPage() {
           <Card className="p-5 sm:p-6">
             <CardHeader title={household ? "Household budgets" : "Everyday budgets"} subtitle={household ? "Each ring fills as the household spends" : "Each ring fills as you spend"} action={<SeeAll href="/budgets">All budgets</SeeAll>} />
             {flex.length ? (
-              <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row">
-                <ActivityRings
-                  size={176}
-                  stroke={15}
-                  rings={flex.map((b) => ({ id: b.category, label: CATEGORIES[b.category].label, ratio: b.used, color: categoryColor(b.category) }))}
-                  ariaLabel={flex.map((b) => `${CATEGORIES[b.category].label} ${Math.round(b.used * 100)}% used`).join(", ")}
-                />
-                <ul className="w-full flex-1 space-y-2.5">
-                  {flex.map((b) => (
-                    <li key={b.category} className="flex items-center gap-2.5">
-                      <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: categoryColor(b.category) }} />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold text-ink-1">{CATEGORIES[b.category].label}</div>
-                        <div className="num text-xs text-ink-3">
-                          {money0(b.spent)} of {money0(b.limit)}
-                        </div>
-                      </div>
-                      {b.state === "over" ? (
-                        <StatusPill status="crit">Over</StatusPill>
-                      ) : b.state === "at_risk" ? (
-                        <StatusPill status="warn">Watch</StatusPill>
-                      ) : (
-                        <StatusPill status="good">{Math.round(b.used * 100)}%</StatusPill>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+              // Side by side only when the card is wide enough for every name and amount on one line.
+              <div className="@container mt-4">
+                <div className="flex flex-col items-center gap-5 @md:flex-row">
+                  <ActivityRings
+                    size={176}
+                    stroke={15}
+                    rings={flex.map((b) => ({ id: b.category, label: CATEGORIES[b.category].label, ratio: b.used, color: categoryColor(b.category) }))}
+                    ariaLabel={flex.map((b) => `${CATEGORIES[b.category].label} ${Math.round(b.used * 100)}% used`).join(", ")}
+                  />
+                  <ul className="w-full flex-1 space-y-0.5">
+                    {flex.map((b) => (
+                      <li key={b.category}>
+                        {/* The whole row opens this month's transactions in the category. */}
+                        <Link href={thisMonthIn(b.category)} className="-mx-2 flex items-center gap-2.5 rounded-ctl px-2 py-1.5 transition-colors duration-150 hover:bg-surface-3">
+                          <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: categoryColor(b.category) }} />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold text-ink-1">{CATEGORIES[b.category].label}</div>
+                            <div className="num text-xs text-ink-3">
+                              {money0(b.spent)} of {money0(b.limit)}
+                            </div>
+                          </div>
+                          {b.state === "over" ? (
+                            <StatusPill status="crit">Over</StatusPill>
+                          ) : b.state === "at_risk" ? (
+                            <StatusPill status="warn">Watch</StatusPill>
+                          ) : (
+                            <StatusPill status="good">{Math.round(b.used * 100)}%</StatusPill>
+                          )}
+                          <span className="sr-only">: see these transactions</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             ) : household ? (
               <EmptyState icon={Sparkles} title="No household budgets yet" body="They're drafted once shared accounts have a month of spending, or set them on Budgets. Each appears here as a ring that fills as the household spends." />

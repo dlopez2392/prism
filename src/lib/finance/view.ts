@@ -110,6 +110,11 @@ export function rangeView(params: Record<string, string | string[] | undefined>,
   return { range, month, w, step };
 }
 
+/** The one-month view of `month` ("2026-09") on a screen: this month's has no month in its address. */
+export function monthHref(path: string, month: string, today: ISODate): string {
+  return month === monthKey(today) ? `${path}?range=1` : `${path}?range=1&month=${month}`;
+}
+
 /** A window as a screen's eyebrow names it: "Aug 2026 – Oct 2026", or "Oct 2026" when it's one month. */
 export function periodLabel(from: ISODate, to: ISODate): string {
   return monthKey(from) === monthKey(to) ? monthYear(to) : `${monthYear(from)} – ${monthYear(to)}`;

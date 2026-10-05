@@ -2,8 +2,9 @@
 // purchase on Future and see the bills that don't come monthly, plan paying
 // off the loans on Net worth, read the tax summary year by year, and search
 // the ledger, including from a link that names what to look for; find the
-// link for an investment account beside the bank's on Connections; and look
-// at one month on Spending and Cash flow, this one or any before it.
+// link for an investment account beside the bank's on Connections; look at
+// one month on Spending and Cash flow, this one or any before it; and open
+// the transactions, or the month, behind what a chart or a list shows.
 
 import { expect, test } from "@playwright/test";
 import { expectNoSidewaysScroll, watchErrors } from "./helpers";
@@ -157,5 +158,60 @@ test("one month steps back through past months, each set against the whole month
   // A month named beside a longer range is ignored, so no stepper shows.
   await page.goto(`/cash-flow?range=3&month=${shown}`);
   await expect(page.getByRole("navigation", { name: "Month" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("what Overview and Spending show opens the transactions behind it", async ({ page }) => {
+  const errors = watchErrors(page);
+  const category = page.getByRole("combobox", { name: "Category" });
+  // Overview's donut legend: this month's transactions in that category.
+  await page.goto("/");
+  await page.getByRole("link", { name: /^Housing\b.*see these transactions$/ }).first().click();
+  await expect(page).toHaveURL(/\/spending\?range=1#category=housing$/);
+  await expect(category).toHaveValue("housing");
+  // An Everyday budget, the same way.
+  await page.goto("/");
+  await page.getByRole("link", { name: /^Food & dining\b.*of \$.*see these transactions$/ }).click();
+  await expect(page).toHaveURL(/\/spending\?range=1#category=food$/);
+  await expect(category).toHaveValue("food");
+  // On Spending, a category's row and a shop's row narrow the list on the page.
+  await page.goto("/spending?range=3");
+  await page.getByRole("link", { name: /^Transport\b.*see these transactions$/ }).click();
+  await expect(page).toHaveURL(/#category=transport$/);
+  await expect(category).toHaveValue("transport");
+  const shop = page.getByRole("link", { name: /\d+ visits?\b.*see these transactions$/ }).first();
+  const name = (await shop.locator("span").first().innerText()).trim();
+  await shop.click();
+  await expect(page.getByPlaceholder(/Search a merchant/)).toHaveValue(name);
+  expect(errors).toEqual([]);
+});
+
+test("a month's bars open that month on its own", async ({ page }, info) => {
+  const errors = watchErrors(page);
+  await page.goto("/cash-flow");
+  const chart = page.getByRole("img", { name: "Monthly money in and money out" });
+  const last = new Date();
+  last.setUTCDate(1);
+  last.setUTCMonth(last.getUTCMonth() - 1);
+  const month = last.toISOString().slice(0, 7);
+  if (info.project.name === "phone") {
+    // A touch shows the month's numbers first; a second tap on it opens the month.
+    const box = (await chart.boundingBox())!;
+    const slot = (box.width - 60) / 6;
+    const at = { x: 52 + slot * 4.5, y: box.height / 2 };
+    await chart.tap({ position: at });
+    await expect(page.getByText("Tap or click to see this month")).toBeVisible();
+    await expect(page).toHaveURL(/\/cash-flow$/);
+    await chart.tap({ position: at });
+  } else {
+    // From the keyboard: the arrows move between months, Enter opens one.
+    await chart.focus();
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByText("Tap or click to see this month")).toBeVisible();
+    await page.keyboard.press("Enter");
+  }
+  await expect(page).toHaveURL(new RegExp(`/cash-flow\\?range=1&month=${month}$`));
+  await expect(page.getByText(/of everything that came in during [A-Z][a-z]+\.$/)).toBeVisible();
   expect(errors).toEqual([]);
 });

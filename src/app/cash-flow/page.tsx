@@ -19,7 +19,7 @@ import { money0, monthLong, monthShort, monthYear, percent, signedMoney0 } from 
 import { incomeSummary } from "@/lib/finance/income";
 import { detectRecurring } from "@/lib/finance/recurring";
 import { buildCashFlowSankey } from "@/lib/finance/sankey";
-import { againstLabel, periodLabel, rangeView } from "@/lib/finance/view";
+import { againstLabel, monthHref, periodLabel, rangeView } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 
 export const metadata: Metadata = { title: "Cash flow" };
@@ -43,6 +43,8 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
   // The last month is still in progress unless a past month is being looked at.
   const inProgress = w.to === data.today;
   const partial = inProgress ? [flows.length - 1] : [];
+  // Each month's bars open that month on its own.
+  const months = flows.map((f) => monthHref("/cash-flow", f.month, data.today));
   const period = periodLabel(w.from, w.to);
   // One month is set against the same days of the last one; longer windows against the stretch before.
   const against = range === 1 ? `vs ${againstLabel(w.prevFrom, w.prevTo)}` : `vs previous ${range} mo`;
@@ -125,6 +127,8 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
               { id: "out", label: "Money out", color: "var(--flow-out)", values: flows.map((f) => f.spending) },
             ]}
             partial={partial}
+            hrefs={months}
+            hrefNote="Tap or click to see this month"
             height={260}
             ariaLabel="Monthly money in and money out"
           />
@@ -145,6 +149,8 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
             axisLabels={axis}
             series={[{ id: "net", label: "Kept", color: "var(--flow-in)", negativeColor: "var(--flow-out)", values: flows.map((f) => f.net) }]}
             partial={partial}
+            hrefs={months}
+            hrefNote="Tap or click to see this month"
             height={260}
             ariaLabel="Net amount kept each month"
           />
