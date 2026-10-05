@@ -5,10 +5,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }), headers: async () => new Headers() }));
+
 async function policy(): Promise<string> {
   vi.resetModules();
   const { default: PrivacyPage } = await import("@/app/privacy/page");
-  return renderToStaticMarkup(PrivacyPage()).replace(/&#x27;|&apos;/g, "'");
+  return renderToStaticMarkup(await PrivacyPage()).replace(/&#x27;|&apos;/g, "'");
 }
 
 describe("the privacy policy on loan details", () => {

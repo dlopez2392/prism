@@ -62,6 +62,9 @@ export const STORED_ON_DEVICE: StoredOnDevice[] = [
   { name: "prism-theme", kind: "Browser storage", what: "Whether you picked light or dark.", lasts: "Until you clear it" },
 ];
 
+/** What the operator has switched on that the policy's words follow (app/privacy/page.tsx). */
+export type PrivacySwitches = { liabilities: boolean; homeValues: boolean; alchemy: boolean; alerts: boolean };
+
 export type Provider = { name: string; does: string; policy: string };
 
 /** The companies that handle personal information to run Prism, and nothing else. */

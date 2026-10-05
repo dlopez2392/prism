@@ -1,7 +1,8 @@
 // src/components/legal.tsx — the building blocks of Prism's legal pages
 // (/privacy, /terms): a "short version" card, sections with anchor ids,
 // and plain bullets. Both pages read the same way, so someone who
-// has read one knows how to read the other.
+// has read one knows how to read the other, and their Spanish translations
+// are built from the same blocks, with the same anchors.
 
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -10,10 +11,10 @@ import { Card } from "@/components/ui";
 /** The link style legal pages use in running text. */
 export const legalLink = "font-semibold text-accent-ink hover:underline";
 
-export function ShortVersion({ items }: { items: { icon: LucideIcon; text: string }[] }) {
+export function ShortVersion({ items, title = "The short version" }: { items: { icon: LucideIcon; text: string }[]; title?: string }) {
   return (
     <Card className="p-5 sm:p-6">
-      <h2 className="text-[15px] font-bold tracking-tight text-ink-1">The short version</h2>
+      <h2 className="text-[15px] font-bold tracking-tight text-ink-1">{title}</h2>
       <ul className="mt-3 space-y-2.5">
         {items.map(({ icon: Icon, text }) => (
           <li key={text} className="flex items-start gap-3 text-sm text-ink-1">
