@@ -40,7 +40,7 @@ test.describe("a browser that asks for Spanish first", () => {
     { path: "/cash-flow", title: /^Flujo de efectivo$/, says: /Ahorraste/ },
     { path: "/budgets", title: /^Presupuestos$/, says: /Te queda para gastar en/ },
     { path: "/goals", title: /^Metas$/, says: /./ },
-    { path: "/net-worth", title: /^Patrimonio neto$/, says: /Activos/ },
+    { path: "/net-worth", title: /^Patrimonio neto$/, says: /^Patrimonio neto hoy$/ },
     { path: "/future", title: /^Futuro$/, says: /Disponible para gastar/ },
     { path: "/year", title: /^Tu \d{4}$/, says: /./ },
     { path: "/taxes", title: /^Tus impuestos de \d{4}$/, says: /./ },
