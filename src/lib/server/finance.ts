@@ -45,6 +45,7 @@ import {
   liveCoinbaseToken,
   loadAccount,
   saveAccountPlaidSync,
+  saveAccountLanguage,
   saveAccountTimeZone,
   saveAlertSnapshot,
   saveCoinbaseValue,
@@ -58,7 +59,9 @@ import { analyze } from "@/lib/finance/model";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { loadHouseholdPlan, loadShares, loadSharedMoney, type HouseholdPlan, type SharedMoneyRow } from "./household-store";
 import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
-import { msg } from "@/lib/i18n/t";
+import type { Locale } from "@/lib/i18n/locale";
+import { getT } from "@/lib/i18n/server";
+import { msg, type T } from "@/lib/i18n/t";
 
 export type Loaded = FinanceData & {
   /** A problem worth a banner — the data shown is still real, just incomplete. */
@@ -178,6 +181,8 @@ export type Sources = {
   feedUpdatedAt: string | null;
   /** The zone the account last saw the person in. */
   timeZone: string | null;
+  /** The language the account last saw the person read Prism in. Null on a device-only visit. */
+  language: Locale | null;
   /** Each bank's stored sync, and whether a new one may be saved (never for a connected app). Null on a device-only visit. */
   plaidSync: PlaidSync | null;
   /** Their alert email choices and snapshot's age. Null on a device-only visit. */
@@ -282,6 +287,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
       timeZone: a.timeZone,
+      language: a.language,
       alerts: a.alerts,
       plaidSync: {
         stored: a.plaidSync,
@@ -328,6 +334,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
     feedUpdatedAt: null,
     timeZone: null,
+    language: null,
     // A device keeps no sync: its banks are read in full each time, as before accounts.
     plaidSync: null,
     alerts: null,
@@ -499,6 +506,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
   const zone = jar.get("prism-tz")?.value;
   const today = todayIn(zone);
   const localHour = hourIn(zone);
+  const t = await getT();
   const src = await getSources();
   const planEdited = { budgets: src.plan.budgets !== null, goals: src.plan.goals !== null };
 
@@ -508,6 +516,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
     if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
     base = greeted(base, src.firstName, isLive(src));
     rememberZone(src.account, src.timeZone, zone);
+    rememberLanguage(src.account, src.language, t.locale);
     if (src.coinbaseShared) rememberCoinbase(src.account, src.coinbaseShared, base);
   }
   // The person's own edits win over seeded or drafted budgets and goals; then the accounts they left out of their totals step aside.
@@ -535,7 +544,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
     householdPlan: null,
     splitRules: Object.entries(src.details?.rules ?? {}).map(([key, rule]) => ({ key, ...rule })),
   };
-  if (src.account) rememberAlerts(src.account, src.alerts, isLive(src) ? personal : null);
+  if (src.account) rememberAlerts(src.account, src.alerts, isLive(src) ? personal : null, t, src.language !== t.locale);
   // What the household is shown of my own money: my lines without my splits, tags or who owes me.
   const shared: Live = own.undetailed ? { ...base, transactions: own.undetailed } : base;
   return { loaded: personal, base, shared, src, today };
@@ -596,10 +605,6 @@ function openMember(row: SharedMoneyRow, key: VaultKey, today: ISODate): MemberM
 }
 
 /**
- * Keep the account's time zone current, so a connected app's "this month" is
- * the person's month. After the response, and only when it moved.
- */
-/**
  * The household sees a shared Coinbase as the value copied on its owner's
  * own visits (never anyone else's, and never a connected app's). Refreshed
  * after the response, at most every ten minutes, and only from a live load:
@@ -618,10 +623,11 @@ const COINBASE_COPY_EVERY = 10 * 60_000;
  * What this visit found worth an alert, left for the email job (which can't
  * read anyone's money itself): after the response, only for someone who
  * turned emails on, from their own money (never the household's or the
- * demo's), and at most every quarter hour unless the last one was sealed
- * under an older vault key. Once nothing of theirs is live, the last one goes.
+ * demo's), in the language of the page, and at most every quarter hour unless
+ * the last one was sealed under an older vault key or written in the language
+ * they've just left. Once nothing of theirs is live, the last one goes.
  */
-function rememberAlerts(account: Account, alerts: Sources["alerts"], money: FinanceData | null): void {
+function rememberAlerts(account: Account, alerts: Sources["alerts"], money: FinanceData | null, t: T, newLanguage: boolean): void {
   if (!alerts?.on) return;
   const key = safeVaultKey();
   if (!key) return;
@@ -629,9 +635,9 @@ function rememberAlerts(account: Account, alerts: Sources["alerts"], money: Fina
     if (alerts.takenAt) after(() => forgetAlertSnapshot(account).catch(() => undefined));
     return;
   }
-  if (alerts.takenAt && !alerts.stale && Date.now() - Date.parse(alerts.takenAt) < ALERT_SNAPSHOT_EVERY) return;
+  if (alerts.takenAt && !alerts.stale && !newLanguage && Date.now() - Date.parse(alerts.takenAt) < ALERT_SNAPSHOT_EVERY) return;
   after(() =>
-    saveAlertSnapshot(account, alertSnapshot(analyze(money), new Date().toISOString()), key).catch((e: unknown) =>
+    saveAlertSnapshot(account, alertSnapshot(analyze(money, t), new Date().toISOString(), "visit", t), key).catch((e: unknown) =>
       // No figure in the message: only that the job will use the last one.
       console.error("Prism: a visit's alert snapshot wasn't kept:", e instanceof Error ? e.name : "unknown error"),
     ),
@@ -639,10 +645,24 @@ function rememberAlerts(account: Account, alerts: Sources["alerts"], money: Fina
 }
 const ALERT_SNAPSHOT_EVERY = 15 * 60_000;
 
+/**
+ * Keep the account's time zone current, so a connected app's "this month" is
+ * the person's month. After the response, and only when it moved.
+ */
 function rememberZone(account: Account, stored: string | null, seen: string | undefined): void {
   const zone = validZone(seen);
   if (!zone || zone === stored) return;
   after(() => saveAccountTimeZone(account, zone).catch(() => undefined));
+}
+
+/**
+ * Keep the language Prism writes to them in (alert emails, phone alerts) the
+ * one they read it in: their pick on the toggle, else their browser's. After
+ * the response, and only when it moved.
+ */
+function rememberLanguage(account: Account, stored: Locale | null, seen: Locale): void {
+  if (seen === stored) return;
+  after(() => saveAccountLanguage(account, seen).catch(() => undefined));
 }
 
 

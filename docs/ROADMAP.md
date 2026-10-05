@@ -337,7 +337,7 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     `profiles.sealed_order_notes`, never shown to a household. No partner,
     no new cost. Next, if people ask: Walmart and Target, whose order
     histories have no download today.
-29. **Prism in Spanish.** **Built, all but email and legal (2026-10-05):** EN | ES in the top bar,
+29. **Prism in Spanish.** **Built, all but legal (2026-10-05):** EN | ES in the top bar,
     as bis-rgv.com has it, switches the page's words at the same address and
     keeps the choice for a year; a browser that asks for Spanish first gets
     it before anyone picks. Dates read in Spanish ("lun, 5 oct"); amounts stay
@@ -347,8 +347,9 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     worth (with the debt planner and what you own or owe), Future (with "Can
     I afford it?"), Your year and Taxes; then Connections and its imports,
     Account (with a Language · Idioma setting), the household, app consent
-    and unsubscribe. Next: alert and recap emails and push in the person's
-    language (the morning job has no browser to ask, so the choice is kept
-    with the account: one new column), and the privacy policy and terms (with
-    a note that the English text governs, once a lawyer has read the
-    Spanish).
+    and unsubscribe; then alert and recap emails and push, in the language
+    the person last used Prism in (the morning job has no browser to ask, so
+    their visits keep it with the account: `profiles.language`). Next: the
+    privacy policy and terms (with a note that the English text governs,
+    once a lawyer has read the Spanish), and the calendar feed's event
+    titles, which can read the same column.

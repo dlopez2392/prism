@@ -1,10 +1,12 @@
 // src/lib/alerts/job.ts
 //
 // One run of the alert email job: ask the database who is due (alerts_due,
-// which answers only to the job's secret), open each snapshot with the vault
-// key, check their banks again first where they allowed it and the snapshot
-// is old (refresh.ts), work out what's new (plan.ts), send it (send.ts), and
-// record what went (alerts_sent), so it goes once. The same news then goes to
+// which answers only to the job's secret) and the language each reads Prism
+// in (alerts_languages), open each snapshot with the vault key, check their
+// banks again first where they allowed it and the snapshot is old or in
+// another language (refresh.ts), work out what's new (plan.ts), send it in
+// their language (send.ts), and record what went (alerts_sent), so it goes
+// once. The same news then goes to
 // each device the person lets Prism notify (push_due, webpush.ts), encrypted
 // for that device; one its push service says is gone is forgotten
 // (push_forget). People are taken one at a time and the run stops at its
@@ -16,6 +18,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { validSnapshot } from "@/lib/finance/alert-snapshot";
+import { isLocale, type Locale } from "@/lib/i18n/locale";
+import { translator } from "@/lib/i18n/translator";
 import { openJson, openPacked, type VaultKey } from "@/lib/server/vault";
 import { renderEmail } from "./email";
 import { emailFor, isAlertChoice, phoneAlertFor, type BankFlag, type PhoneAlert, type Recipient } from "./plan";
@@ -84,6 +88,24 @@ function banksOf(x: unknown): BankFlag[] {
       ? [{ id: b.id, name: b.name.slice(0, 120), attention: b.attention as BankFlag["attention"], since: time(b.since), disconnectAt: time(b.disconnect_at) }]
       : [],
   );
+}
+
+/**
+ * The language each person reads Prism in, listed once a run. Anyone the
+ * database doesn't name, or every one when it won't say, is written to in
+ * English: an alert in the wrong language still beats no alert.
+ */
+async function languagesOf(db: JobDb, config: AlertsConfig): Promise<Map<string, Locale>> {
+  const byPerson = new Map<string, Locale>();
+  const { data, error } = await db.rpc("alerts_languages", { p_secret: config.secret });
+  if (error || !Array.isArray(data)) {
+    if (error) console.error("Prism: the alert job couldn't read which language each person reads Prism in; emails go in English.");
+    return byPerson;
+  }
+  for (const row of data as { user_id?: unknown; language?: unknown }[]) {
+    if (typeof row?.user_id === "string" && isLocale(row.language)) byPerson.set(row.user_id, row.language);
+  }
+  return byPerson;
 }
 
 /** Everyone's devices, listed once a run, on its first sent email; none when the database won't say. */
@@ -165,6 +187,7 @@ export async function runAlertJob(
     later: 0,
     stopped: false,
   };
+  const languages = await languagesOf(db, config);
   // Asked for only once there's news to send, so a quiet morning makes no extra call.
   let devices: Map<string, DeviceRow[]> | null = null;
   let vapid: VapidKeys | null = null;
@@ -176,12 +199,16 @@ export async function runAlertJob(
     }
     const { r, unopened } = recipient(row, key);
     if (unopened) report.unopened++;
+    const t = translator(languages.get(r.userId) ?? "en");
     const old = !row.snapshot_at || now.getTime() - Date.parse(row.snapshot_at) > REFRESH_AFTER_MS;
+    // A snapshot whose bills and prices are worded in a language they've since left: a check words them again.
+    // Without one, they go as worded, since a warning in the other language beats none.
+    const reworded = r.snapshot !== null && r.snapshot.lang !== t.locale;
     // Only with time to finish it and still send: a check that can't fit waits for tomorrow. Whether
     // their banks may be read at all is the database's call: alerts_sources hands over nothing otherwise.
-    if ((old || unopened) && Date.now() + REFRESH_LIMIT_MS < deadline) {
+    if ((old || unopened || reworded) && Date.now() + REFRESH_LIMIT_MS < deadline) {
       try {
-        const fresh = await withinLimit(morningCheck(db, config, key, r.userId, now), REFRESH_LIMIT_MS);
+        const fresh = await withinLimit(morningCheck(db, config, key, r.userId, now, t), REFRESH_LIMIT_MS);
         if (fresh === LATE) report.unrefreshed++;
         else if (fresh) {
           r.snapshot = fresh;
@@ -191,13 +218,13 @@ export async function runAlertJob(
         report.unrefreshed++;
       }
     }
-    const email = emailFor(r, now);
+    const email = emailFor(r, now, t);
     if (!email) {
       report.quiet++;
       continue;
     }
     const links = unsubscribeLinks(config, r.userId);
-    const message = renderEmail(email, { site: config.site, settings: `${config.site}/account#alerts`, unsubscribe: links.page });
+    const message = renderEmail(email, { site: config.site, settings: `${config.site}/account#alerts`, unsubscribe: links.page }, t);
     // The same news to the same person is the same request, so a retried run within a day sends nothing twice.
     const idempotency = `prism-alerts-${createHash("sha256").update(`${r.userId}\0${email.fingerprints.join(",")}`).digest("hex")}`;
     const result = await sendAlertEmail(config, r.email, message, links.oneClick, idempotency, fetchImpl);
@@ -218,7 +245,7 @@ export async function runAlertJob(
     const theirs = devices.get(r.userId);
     if (theirs?.length) {
       vapid ??= vapidKeys(config.secret);
-      await notify(db, config, key, vapid, theirs, phoneAlertFor(email), report, fetchImpl);
+      await notify(db, config, key, vapid, theirs, phoneAlertFor(email, t), report, fetchImpl);
     }
   }
   return report;

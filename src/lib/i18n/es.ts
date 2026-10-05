@@ -7,6 +7,7 @@
 // none is missing, that no {name} is lost, and that nothing is left over.
 
 import { ACCOUNT } from "./es/account";
+import { ALERTS } from "./es/alerts";
 import { CONNECTIONS } from "./es/connections";
 import { CORE } from "./es/core";
 import { FUTURE } from "./es/future";
@@ -27,6 +28,7 @@ export const ES_PARTS: Record<string, Record<string, string>> = {
   imports: IMPORTS,
   account: ACCOUNT,
   household: HOUSEHOLD,
+  alerts: ALERTS,
 };
 
 export const ES: Record<string, string> = Object.assign({}, ...Object.values(ES_PARTS));

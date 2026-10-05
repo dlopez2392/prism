@@ -6,7 +6,8 @@
 // (language-toggle.tsx), spelled out. Each choice is named in its own
 // language, so someone who reads only that one can still find it. The pick is
 // kept for this browser (lib/server/language-actions.ts) and the page renders
-// again in it, at the same address. A radio pair, not buttons: it's a setting
+// again in it, at the same address; the visit also keeps it with the account,
+// for the alert emails and phone alerts (profiles.language). A radio pair, not buttons: it's a setting
 // that is always one of two, and no primary action (DESIGN.md).
 
 import { useOptimistic, useTransition } from "react";
@@ -46,7 +47,8 @@ export function LanguageSetting() {
         ))}
       </div>
       <p id="language-note" className="mt-3 text-xs text-ink-3">
-        {t("{product} shows its words in this language on this device. Dates follow it too; amounts stay in U.S. dollars as your bank writes them.", { product: BRAND.product })}
+        {t("{product} shows its words in this language on this device. Dates follow it too; amounts stay in U.S. dollars as your bank writes them.", { product: BRAND.product })}{" "}
+        {t("Your alert emails and phone alerts come in the language you last used {product} in.", { product: BRAND.product })}
       </p>
     </Card>
   );

@@ -1062,6 +1062,21 @@ describe("alert emails", () => {
     expect(due[0]!.banks).toEqual([expect.objectContaining({ id: "item-p", name: "First Bank", attention: "sign-in", disconnect_at: null })]);
   });
 
+  it("writes to each person in the language they read Prism in, which they alone set, and the job gets only that", async () => {
+    // English until a visit in Spanish says otherwise, and only a language Prism speaks.
+    expect(await rows(`select language from public.profiles where user_id in ($1, $2)`, [P, Q])).toEqual([{ language: "en" }, { language: "en" }]);
+    expect(await as("authenticated", P, () => refused(`update public.profiles set language = 'fr' where user_id = $1`, [P]))).toBe(true);
+    await as("authenticated", P, () => rows(`update public.profiles set language = 'es' where user_id = $1`, [P]));
+    await as("authenticated", Q, () => rows(`update public.profiles set language = 'es' where user_id = $1`, [Q]));
+    // Never someone else's, and never a connected app's change.
+    expect(await as("authenticated", Q, () => rows(`update public.profiles set language = 'en' where user_id = $1 returning user_id`, [P]))).toEqual([]);
+    expect(await as("authenticated", P, () => rows(`update public.profiles set language = 'en' where user_id = $1 returning user_id`, [P]), CONNECTED_APP)).toEqual([]);
+    // The job's secret, and nothing short of it, gets the language of each person with emails on, and nothing else of theirs.
+    for (const secret of ["wrong".repeat(10), "", SECRET.slice(1)]) expect(await as("anon", null, () => refused(`select * from public.alerts_languages($1)`, [secret]))).toBe(true);
+    expect(await as("authenticated", P, () => refused(`select * from public.alerts_languages($1)`, [SECRET]))).toBe(true);
+    expect(await job(`select * from public.alerts_languages($1)`, [SECRET])).toEqual([{ user_id: P, language: "es" }]);
+  });
+
   it("records what was sent once, only for someone with emails on, at most fifty at a time, and keeps it 120 days", async () => {
     await job(`select public.alerts_sent($1, $2, $3)`, [SECRET, P, [print(1), print(1), "not-a-fingerprint"]]);
     await job(`select public.alerts_sent($1, $2, $3)`, [SECRET, P, [print(1), print(2)]]);

@@ -14,6 +14,11 @@ export const LANG_COOKIE = "prism-lang";
 
 export const LOCALE_NAMES: Record<Locale, string> = { en: "English", es: "Español" };
 
+/** One of the languages Prism speaks: never free text from a cookie, a form or a database row. */
+export function isLocale(x: unknown): x is Locale {
+  return (LOCALES as readonly unknown[]).includes(x);
+}
+
 /**
  * The screens whose words are still only in English (docs/ROADMAP.md, item
  * 29). In Spanish, their content is marked English (components/locale.tsx),
@@ -29,7 +34,7 @@ export function englishOnly(pathname: string): boolean {
 
 /** The person's pick when there is one, else what their browser asks for first, else English. */
 export function pickLocale(saved: string | undefined | null, acceptLanguage: string | undefined | null): Locale {
-  if (saved === "en" || saved === "es") return saved;
+  if (isLocale(saved)) return saved;
   const first = (acceptLanguage ?? "")
     .split(",")
     .map((part) => {

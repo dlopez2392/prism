@@ -191,6 +191,8 @@ export const ACCOUNT: Record<string, string> = {
   "What to email about": "Sobre qué enviarte correos",
   "Windows computer": "Computadora con Windows",
   "your account": "tu cuenta",
+  "Your alert emails and phone alerts come in the language you last used {product} in.":
+    "Tus alertas por correo y en el teléfono llegan en el idioma en que usaste {product} por última vez.",
   "Your browser will ask to allow notifications.": "Tu navegador te pedirá permitir las notificaciones.",
   "Your code worked, but we couldn't switch two-step sign-in on. Start set-up again.":
     "Tu código funcionó, pero no pudimos activar el inicio de sesión en dos pasos. Vuelve a empezar la configuración.",

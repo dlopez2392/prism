@@ -57,6 +57,7 @@ export default function PrivacyPage() {
             <li>Your email address, to sign you in with a one-time code. There is no password.</li>
             <li>Your first name, if you give it, so Prism can greet you.</li>
             <li>Your time zone, so &ldquo;today&rdquo; and &ldquo;this month&rdquo; match yours.</li>
+            <li>The language you last used {BRAND.product} in (English or Spanish), so its emails and phone alerts come in it too.</li>
             <li>If you turn on two-step sign-in, the secret your authenticator app shares with us. Our sign-in provider keeps it, to check your codes.</li>
           </Bullets>
           <p className="font-semibold text-ink-1">Money you choose to connect</p>
