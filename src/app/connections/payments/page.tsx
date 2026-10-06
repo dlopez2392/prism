@@ -8,9 +8,12 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { HandCoins } from "lucide-react";
 import { PaymentNotes } from "@/components/payment-notes";
+import { PlusCard } from "@/components/plus";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
 import { appOf, type BankLine } from "@/lib/finance/p2p";
+import { plusFor } from "@/lib/billing/plus";
 import { getPersonalFinance } from "@/lib/server/finance";
+import { currentAccount } from "@/lib/supabase/server";
 import { getT } from "@/lib/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -59,10 +62,13 @@ export default async function PaymentsPage() {
     );
   }
 
+  // Matching is part of Prism Plus. Without it the notes already kept stay, and can still be removed.
+  const plus = await plusFor(await currentAccount());
   return (
     <div className="space-y-5">
       {header}
-      <PaymentNotes lines={lines} noted={noted} />
+      {plus.plus ? null : <PlusCard feature="matching" trial={plus.trial} t={t} />}
+      {plus.plus || noted > 0 ? <PaymentNotes lines={lines} noted={noted} /> : null}
     </div>
   );
 }

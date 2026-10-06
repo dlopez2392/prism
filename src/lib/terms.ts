@@ -8,7 +8,7 @@
 import { BRAND } from "@/lib/brand";
 
 /** Shown on the page. Change it whenever the Terms' substance changes. */
-export const TERMS_UPDATED = "September 30, 2026";
+export const TERMS_UPDATED = "October 6, 2026";
 
 /** Where questions about the Terms go. The same mailbox as privacy requests: one address people can remember. */
 export const TERMS_CONTACT = BRAND.privacyEmail;
@@ -18,6 +18,12 @@ export const MINIMUM_AGE = 18;
 
 /** What Plaid products the Terms (and the privacy policy) describe. Every one only reads. */
 export const READ_ONLY_PLAID_PRODUCTS = ["transactions", "investments", "liabilities"] as const;
+
+/** What the operator has switched on that the Terms' words follow (app/terms/switches.ts). */
+export type TermsSwitches = { billing: boolean };
+
+/** At least this much notice before a price change applies to someone already subscribed. */
+export const PRICE_NOTICE_DAYS = 30;
 
 /** At least this much notice before Prism is ever shut down, where we can give it. */
 export const SHUTDOWN_NOTICE_DAYS = 30;

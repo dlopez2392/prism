@@ -13,6 +13,8 @@ import Link from "next/link";
 import { CalendarPlus, Check, Copy, Download, ExternalLink, RotateCcw } from "lucide-react";
 import { buttonPrimary, buttonSmall, Dialog } from "@/components/dialog";
 import { useLocale, useT } from "@/components/locale";
+import { plusNeeds, pricingFor } from "@/lib/billing/plans";
+import { BRAND } from "@/lib/brand";
 import { REMINDERS, type Reminder } from "@/lib/finance/calendar";
 import { calendarFeed, type FeedState } from "@/lib/server/calendar-actions";
 import { msg } from "@/lib/i18n/t";
@@ -32,9 +34,11 @@ type Props = {
   personal?: { path: string | null };
   /** Accounts exist here but nobody is signed in: where to go for a live link. */
   signIn?: boolean;
+  /** A link that keeps itself up to date needs Prism Plus they don't have: the pricing page instead of creating one. The file is free. */
+  plusFirst?: boolean;
 };
 
-export function AddToCalendar({ demo, count, personal, signIn }: Props) {
+export function AddToCalendar({ demo, count, personal, signIn, plusFirst = false }: Props) {
   const t = useT();
   const locale = useLocale();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -113,6 +117,14 @@ export function AddToCalendar({ demo, count, personal, signIn }: Props) {
                     {t("Turn off")}
                   </button>
                 </form>
+              </>
+            ) : plusFirst ? (
+              <>
+                <p className="mt-0.5 text-xs text-ink-3">{plusNeeds("calendar", t)}</p>
+                <Link href={pricingFor("calendar")} className={`${buttonPrimary} mt-3 w-full`}>
+                  <CalendarPlus aria-hidden className="size-4" />
+                  {t("See {plus}", { plus: BRAND.plus })}
+                </Link>
               </>
             ) : (
               <form action={feedAction}>

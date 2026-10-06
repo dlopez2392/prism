@@ -10,6 +10,8 @@
 // is sealed in their account, never on a device and never shown to a
 // household. Next checks the action's Origin against the host (CSRF).
 
+import { plusNeeds } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { refresh } from "next/cache";
 import { mergeP2pNotes, NO_P2P_NOTES, P2P_LIMITS, validP2pMatch, type P2pNote } from "@/lib/finance/p2p";
 import { getT } from "@/lib/i18n/server";
@@ -38,6 +40,7 @@ export async function saveP2pMatches(matches: unknown): Promise<P2pSaveState> {
   if (!account) return failed(t("Sign in to keep these. They're kept in your account."));
   const key = safeKey();
   if (!key) return failed(t("Prism can't save that right now. Try again later."));
+  if (!(await plusFor(account)).plus) return failed(plusNeeds("matching", t));
   if (!Array.isArray(matches) || matches.length === 0) return failed(t("There's nothing to keep yet. Choose a file first."));
   if (matches.length > P2P_LIMITS.notes) return failed(t("That's more than {n} payments at once. Choose a shorter stretch of time.", { n: num(P2P_LIMITS.notes) }));
 

@@ -9,8 +9,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Ban, CalendarClock, CircleAlert, CloudOff, KeyRound, Landmark, Mail, PencilOff, Search, type LucideIcon } from "lucide-react";
 import { ConsentButtons } from "@/components/consent-buttons";
+import { PlusNeeded } from "@/components/plus";
 import { PrismMark } from "@/components/shell";
 import { Card, EmptyState } from "@/components/ui";
+import { plusFor } from "@/lib/billing/plus";
 import { BRAND } from "@/lib/brand";
 import { getT } from "@/lib/i18n/server";
 import { decideConnection } from "@/lib/server/connected-apps-actions";
@@ -78,6 +80,7 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
   }
   // Already allowed earlier: straight back to the app.
   if (!("authorization_id" in data)) redirect(data.redirect_url);
+  const plus = await plusFor(account);
 
   // An app names itself, so its name is kept short and never outranks the checkable part: where you'll be sent back to.
   const given = data.client.name?.replace(/\s+/g, " ").trim() || t("An app");
@@ -151,10 +154,16 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
           </p>
         ) : null}
 
+        {/* Connecting an app is part of Prism Plus: without it, the offer stands where "Allow" would. */}
+        {plus.plus ? null : (
+          <div className="mt-5 rounded-ctl bg-surface-2">
+            <PlusNeeded feature="apps" trial={plus.trial} t={t} />
+          </div>
+        )}
         <form action={decideConnection}>
           <input type="hidden" name="authorization_id" value={data.authorization_id} />
           {/* A long name doesn't fit a button: there it's "Allow it". */}
-          <ConsentButtons appName={name.length > 20 ? null : name} />
+          <ConsentButtons appName={name.length > 20 ? null : name} denyOnly={!plus.plus} />
         </form>
         <p className="mt-4 text-center text-xs text-ink-3">{t("You can disconnect it any time from your Account page.")}</p>
       </Card>

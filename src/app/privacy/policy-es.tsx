@@ -27,7 +27,7 @@ const EN_RESUMEN: { icon: LucideIcon; text: string }[] = [
 ];
 
 /** The Spanish privacy policy, as the operator's switches have it: the same switches as the English. */
-export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts }: PrivacySwitches) {
+export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts, billing }: PrivacySwitches) {
   const p = BRAND.product;
   const mail = <a href={`mailto:${PRIVACY_CONTACT}`} className={link}>{PRIVACY_CONTACT}</a>;
   return (
@@ -159,6 +159,13 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts 
               </li>
             ) : null}
             <li>Qué apps de IA has permitido que lean tu dinero, si hay alguna.</li>
+            {billing ? (
+              <li>
+                Si te suscribes a {BRAND.plus}: qué plan tienes, si está en sus días gratis, pagado o terminado, las fechas en que se renueva o termina, y los
+                números de referencia de Stripe para ti y para tu suscripción. Tu tarjeta y tu dirección de facturación van a Stripe, en su propia página,
+                nunca a {p}.
+              </li>
+            ) : null}
           </Bullets>
           <p className="font-semibold text-ink-1">Detalles técnicos</p>
           <p>
@@ -173,6 +180,7 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts 
             <li>Para mantener tus conexiones al día y avisarte cuando una necesita atención.</li>
             <li>Para iniciar tu sesión y enviarte tus códigos para iniciar sesión.</li>
             {alerts ? <li>Para enviarte alertas y resúmenes por correo, y las mismas alertas a tus dispositivos, si los activas.</li> : null}
+            {billing ? <li>Para darte lo que incluye tu plan, y para cancelar {BRAND.plus} cuando borras tu cuenta.</li> : null}
             <li>Para responder las preguntas de las apps de IA que aprobaste, solo para lectura.</li>
             <li>Para mantener {p} seguro, evitar abusos y arreglar problemas.</li>
           </Bullets>
@@ -182,7 +190,7 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts 
         <Section id="share" title="Quién más lo ve">
           <p>Solo las empresas que operan {p} por nosotros, y solo lo que cada una necesita:</p>
           <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-ctl border border-line">
-            {providers(homeValues, alchemy, alerts).map((c) => (
+            {providers(homeValues, alchemy, alerts, billing).map((c) => (
               <li key={c.name} className="flex flex-col gap-1 bg-surface-2 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
                 <span className="w-24 shrink-0 font-semibold text-ink-1">{c.name}</span>
                 <span className="min-w-0 flex-1">
@@ -273,6 +281,12 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts 
                 alertas ya enviadas se borran a los 120 días.
               </li>
             ) : null}
+            {billing ? (
+              <li>
+                Lo que guardamos de una suscripción a {BRAND.plus} se queda mientras tengas una cuenta, para poder mostrarte lo que pagaste. Stripe guarda su
+                propio registro de tus pagos, como lo exigen las leyes fiscales y de pagos, bajo su propia política de privacidad.
+              </li>
+            ) : null}
             <li>
               Cuando borras tu cuenta, primero desconectamos cada banco y cada vínculo con Coinbase, y luego borramos tu cuenta y todo lo que contiene. Las copias
               de seguridad cifradas de la base de datos desaparecen poco después.
@@ -299,6 +313,7 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts 
               .
             </li>
             <li>Cambia tu nombre, y desactiva el enlace de calendario, cuando quieras.</li>
+            {billing ? <li>Cambia tu tarjeta, consulta tus recibos, cambia de plan o cancela {BRAND.plus} en la página de Cuenta.</li> : null}
             {alerts ? (
               <li>
                 Activa o desactiva las alertas por correo, y elige qué cubren, en la página de Cuenta, o detenlas con el enlace que trae cualquiera de ellas. Ahí

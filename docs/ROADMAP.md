@@ -356,3 +356,19 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     (`src/lib/legal-languages.ts`): each goes live when a lawyer approves its
     Spanish against the English in force, opening with a note that the
     English governs. Next: that review.
+30. **Prism Plus, the paid plan.** **Built, off until the owner switches it on
+    (2026-10-06):** free keeps the demo, spending, budgets and goals, things
+    added by hand, imports, wallets, Spanish and one bank; Plus ($5.99 a month
+    or $49 a year; $8.99 or $79 for a household of up to four) adds every
+    other account, investments and Coinbase, alerts and the morning check, the
+    household, Claude and ChatGPT, taxes, the calendar link, home values and
+    Amazon and payment matching. Stripe Checkout and the customer portal, with
+    Stripe Tax and a 14-day trial; founding-member prices stay with each
+    subscription. A webhook that reads every subscription back from Stripe,
+    a `billing` table only the server's job secret can write, and server-side
+    gates. When Plus ends nothing is deleted: the first connection keeps
+    updating and the rest pause. Terms and privacy policy updated behind the
+    same switch, in both languages. Next: the owner's Stripe setup (README),
+    the lawyer's review of the paid Terms, notice to existing accounts, live
+    keys. After that: a credit union and employer channel (white-label, per
+    member per month), which needs per-tenant branding.

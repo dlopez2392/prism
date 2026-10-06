@@ -7,6 +7,8 @@
 // act AS the signed-in person, through Supabase's OAuth server; Next checks
 // each action's Origin, so another site can't press these buttons.
 
+import { pricingFor } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { getT } from "@/lib/i18n/server";
@@ -21,6 +23,8 @@ export async function decideConnection(form: FormData): Promise<void> {
   const account = await currentAccount();
   if (!account) redirect(`/sign-in?next=${encodeURIComponent(`/oauth/consent?authorization_id=${id}`)}`);
   const oauth = account.supabase.auth.oauth;
+  // Connecting Claude or ChatGPT is part of Prism Plus: the consent page offers it, and this holds it.
+  if (form.get("decision") === "allow" && !(await plusFor(account)).plus) redirect(pricingFor("apps"));
   const { data, error } =
     form.get("decision") === "allow" ? await oauth.approveAuthorization(id, { skipBrowserRedirect: true }) : await oauth.denyAuthorization(id, { skipBrowserRedirect: true });
   if (error || !data?.redirect_url) redirect(`/oauth/consent?authorization_id=${encodeURIComponent(id)}&problem=1`);

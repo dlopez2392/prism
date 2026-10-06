@@ -8,7 +8,7 @@
 import { BRAND } from "@/lib/brand";
 
 /** Shown on the page. Change it whenever the policy's substance changes. */
-export const POLICY_UPDATED = "October 5, 2026";
+export const POLICY_UPDATED = "October 6, 2026";
 
 /** Where privacy questions and requests go. Must be a mailbox someone reads. */
 export const PRIVACY_CONTACT = BRAND.privacyEmail;
@@ -63,7 +63,7 @@ export const STORED_ON_DEVICE: StoredOnDevice[] = [
 ];
 
 /** What the operator has switched on that the policy's words follow (app/privacy/page.tsx). */
-export type PrivacySwitches = { liabilities: boolean; homeValues: boolean; alchemy: boolean; alerts: boolean };
+export type PrivacySwitches = { liabilities: boolean; homeValues: boolean; alchemy: boolean; alerts: boolean; billing: boolean };
 
 export type Provider = { name: string; does: string; policy: string };
 
@@ -108,9 +108,16 @@ export const RESEND_WITH_ALERTS: Provider = {
   policy: "https://resend.com/legal/privacy-policy",
 };
 
-export function providers(homeValues: boolean, alchemy = false, alerts = false): Provider[] {
+/** Listed only while Prism Plus can be bought (billing/plus.ts, `billingConfig`), in the same deploy. */
+export const STRIPE: Provider = {
+  name: "Stripe",
+  does: "Takes payment for Prism Plus if you subscribe. You give your card to Stripe on its own page, and Prism never sees it. Stripe receives your email address, and your billing address to work out sales tax.",
+  policy: "https://stripe.com/privacy",
+};
+
+export function providers(homeValues: boolean, alchemy = false, alerts = false, billing = false): Provider[] {
   const base = alerts ? PROVIDERS.map((p) => (p.name === RESEND_WITH_ALERTS.name ? RESEND_WITH_ALERTS : p)) : PROVIDERS;
-  return [...base, MEMPOOL, ...(alchemy ? [ALCHEMY] : []), ...(homeValues ? [RENTCAST] : [])];
+  return [...base, ...(billing ? [STRIPE] : []), MEMPOOL, ...(alchemy ? [ALCHEMY] : []), ...(homeValues ? [RENTCAST] : [])];
 }
 
 /**

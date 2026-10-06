@@ -11,6 +11,8 @@
 // sha256. The link carries it after "#", so it never reaches a server log.
 // Next checks each action's Origin against the host (CSRF).
 
+import { plusNeeds } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { refresh } from "next/cache";
 import { cookies } from "next/headers";
 import { COINBASE_ID } from "@/lib/coinbase/map";
@@ -48,6 +50,8 @@ export async function inviteToHousehold(_prev: InviteState, form: FormData): Pro
   const t = await getT();
   const account = await currentAccount();
   if (!account) return { status: "error", message: t("Sign in to invite someone.") };
+  // A household is part of Prism Plus: someone in it has to have it (whoever joins needs nothing).
+  if (!(await plusFor(account)).householdView) return { status: "error", message: plusNeeds("household", t) };
   const raw = form.get("email");
   const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
   if (!EMAIL.test(email) || email.length > 320) return { status: "error", message: t("Enter their email address, like dana@example.com.") };

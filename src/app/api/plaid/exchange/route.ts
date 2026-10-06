@@ -9,6 +9,8 @@ import { NextResponse } from "next/server";
 import { exchangePublicToken, getAccounts, getInstitutionName, plaidConfig, plaidFailure } from "@/lib/plaid/client";
 import { clearedReturnCookie, RETURN_COOKIE } from "@/lib/plaid/return";
 import { addAccountPlaidItem, loadAccount } from "@/lib/server/account-store";
+import { connectionNeedsPlus } from "@/lib/billing/plus";
+import { plusNeeds } from "@/lib/billing/plans";
 import { linkingRefusal } from "@/lib/linking";
 import { sameOriginJson } from "@/lib/server/request-guard";
 import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "@/lib/server/vault";
@@ -46,6 +48,9 @@ export async function POST(req: Request) {
   const jar = await cookies();
   const vault = account ? null : (open(jar.get(VAULT_COOKIE)?.value, key) ?? emptyVault());
   const linked = account ? (await loadAccount(account, key)).items.length : vault!.items.length;
+  // Checked again here too (billing/plus.ts): Link opening was no promise the bank could be kept.
+  const need = account ? await connectionNeedsPlus(account, "bank") : null;
+  if (need) return NextResponse.json({ error: "plus_required", need, message: plusNeeds(need, await getT()) }, { status: 402 });
   if (linked >= MAX_ITEMS) {
     const t = await getT();
     return NextResponse.json({ error: "too_many", message: t("Prism links up to {n} institutions.", { n: MAX_ITEMS }) }, { status: 409 });

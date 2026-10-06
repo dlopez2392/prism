@@ -27,7 +27,7 @@ const SHORT_VERSION: { icon: LucideIcon; text: string }[] = [
 ];
 
 /** The English privacy policy, the one that governs, as the operator's switches have it. */
-export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts }: PrivacySwitches) {
+export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billing }: PrivacySwitches) {
   const mail = <a href={`mailto:${PRIVACY_CONTACT}`} className={link}>{PRIVACY_CONTACT}</a>;
   return (
     <div className="mx-auto max-w-3xl">
@@ -145,6 +145,13 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts }: Priv
               </li>
             ) : null}
             <li>Which AI apps you&apos;ve allowed to read your money, if any.</li>
+            {billing ? (
+              <li>
+                If you subscribe to {BRAND.plus}: which plan you have, whether it&apos;s in its free days, paid or ended, the dates it renews or ends, and
+                Stripe&apos;s reference numbers for you and your subscription. Your card and billing address go to Stripe, on its own page, never to{" "}
+                {BRAND.product}.
+              </li>
+            ) : null}
           </Bullets>
           <p className="font-semibold text-ink-1">Technical details</p>
           <p>
@@ -159,6 +166,7 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts }: Priv
             <li>To keep your connections up to date, and to tell you when one needs attention.</li>
             <li>To sign you in and send your sign-in codes.</li>
             {alerts ? <li>To email you alerts and summaries, and send the same alerts to your devices, if you turn them on.</li> : null}
+            {billing ? <li>To give you what your plan includes, and to cancel {BRAND.plus} when you delete your account.</li> : null}
             <li>To answer questions from AI apps you&apos;ve approved, read-only.</li>
             <li>To keep {BRAND.product} secure, prevent abuse, and fix problems.</li>
           </Bullets>
@@ -168,7 +176,7 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts }: Priv
         <Section id="share" title="Who else sees it">
           <p>Only the companies that run {BRAND.product} for us, and only what each one needs:</p>
           <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-ctl border border-line">
-            {providers(homeValues, alchemy, alerts).map((p) => (
+            {providers(homeValues, alchemy, alerts, billing).map((p) => (
               <li key={p.name} className="flex flex-col gap-1 bg-surface-2 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
                 <span className="w-24 shrink-0 font-semibold text-ink-1">{p.name}</span>
                 <span className="min-w-0 flex-1">
@@ -256,6 +264,12 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts }: Priv
                 after 120 days.
               </li>
             ) : null}
+            {billing ? (
+              <li>
+                What we keep about a {BRAND.plus} subscription stays while you have an account, so we can show what you paid for. Stripe keeps its own record
+                of your payments, as tax and payment laws require, under its own privacy policy.
+              </li>
+            ) : null}
             <li>
               When you delete your account, we disconnect every bank and Coinbase link first, then erase your account and everything in it. Encrypted database
               backups roll off shortly after.
@@ -282,6 +296,7 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts }: Priv
               .
             </li>
             <li>Change your name, and turn the calendar feed off, whenever you like.</li>
+            {billing ? <li>Change your card, see your receipts, switch plans or cancel {BRAND.plus} on the Account page.</li> : null}
             {alerts ? (
               <li>
                 Turn alert emails on or off, and choose what they cover, on the Account page, or stop them with the link in any of them. Turn alerts on or

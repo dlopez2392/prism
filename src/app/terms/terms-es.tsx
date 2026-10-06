@@ -14,7 +14,8 @@ import { Bullets, legalLink as link, Section, ShortVersion } from "@/components/
 import { Card, PageHeader } from "@/components/ui";
 import { BRAND } from "@/lib/brand";
 import { governingNote, longDateEs } from "@/lib/legal-es";
-import { LIABILITY_FLOOR_USD, MINIMUM_AGE, SECURITY_POLICY_URL, SHUTDOWN_NOTICE_DAYS, TERMS_CONTACT, TERMS_UPDATED } from "@/lib/terms";
+import { TRIAL_DAYS } from "@/lib/billing/plans";
+import { LIABILITY_FLOOR_USD, MINIMUM_AGE, PRICE_NOTICE_DAYS, SECURITY_POLICY_URL, SHUTDOWN_NOTICE_DAYS, TERMS_CONTACT, TERMS_UPDATED, type TermsSwitches } from "@/lib/terms";
 
 const EN_RESUMEN: { icon: LucideIcon; text: string }[] = [
   { icon: Lock, text: "Prism te muestra tu dinero. Puede leer tus cuentas, pero nunca puede mover dinero." },
@@ -24,8 +25,8 @@ const EN_RESUMEN: { icon: LucideIcon; text: string }[] = [
   { icon: Trash2, text: "Puedes irte cuando quieras. Borrar tu cuenta desconecta todo y luego borra tus datos." },
 ];
 
-/** The Spanish Terms of Service. */
-export function TerminosDelServicio() {
+/** The Spanish Terms of Service, as the operator's switches have them: the same switches as the English. */
+export function TerminosDelServicio({ billing }: TermsSwitches) {
   const p = BRAND.product;
   const mail = (
     <a href={`mailto:${TERMS_CONTACT}`} className={link}>
@@ -42,6 +43,12 @@ export function TerminosDelServicio() {
       Cuenta
     </Link>
   );
+  const pricing = (
+    <Link href="/pricing" className={link}>
+      planes
+    </Link>
+  );
+  const term = (words: string) => <span className="font-semibold text-ink-1">{words}</span>;
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
@@ -188,9 +195,48 @@ export function TerminosDelServicio() {
         </Section>
 
         <Section id="cost" title="Cuánto cuesta">
-          <p>
-            {p} no te cobra nada hoy. Si algún día ofrecemos funciones de pago, primero te mostraremos el precio, y solo pagarás si así lo decides.
-          </p>
+          {billing ? (
+            <>
+              <p>
+                {p} tiene un plan gratis y uno de pago, {BRAND.plus}, para una persona o para todas las personas de un hogar. Lo que incluye y cuesta cada uno
+                está en la página de {pricing}, y el precio se te muestra otra vez antes de pagar. Los precios están en dólares estadounidenses, más el impuesto
+                sobre las ventas donde aplique.
+              </p>
+              <Bullets>
+                <li>
+                  {term("El pago.")} Stripe cobra tu pago en su propia página; {p} nunca ve tu tarjeta. Una primera suscripción empieza con {TRIAL_DAYS} días
+                  gratis, y si cancelas antes de que terminen, no se te cobra.
+                </li>
+                <li>
+                  {term("La renovación.")} {BRAND.plus} se renueva solo cada mes o cada año, como lo elegiste, y se cobra a tu tarjeta al inicio de cada periodo,
+                  hasta que lo canceles. Puedes cancelar cuando quieras, en línea, en la página de {account}: conservas {BRAND.plus} hasta el final del tiempo que
+                  pagaste, y no se te vuelve a cobrar.
+                </li>
+                <li>
+                  {term("Reembolsos.")} Salvo que la ley diga otra cosa, los pagos no se reembolsan, tampoco por parte de un periodo. Si algo salió mal, escribe a{" "}
+                  {mail} y lo revisaremos.
+                </li>
+                <li>
+                  {term("Cambios de precio.")} Si cambiamos un precio, te avisaremos al menos {PRICE_NOTICE_DAYS} días antes de que se te aplique, y puedes
+                  cancelar antes. Un precio de fundador se queda contigo mientras tu suscripción siga sin interrupción.
+                </li>
+                <li>
+                  {term("Un pago que falla.")} Stripe lo intenta de nuevo durante un tiempo. Si el pago sigue sin procesarse, {BRAND.plus} termina y tu cuenta
+                  vuelve al plan gratis.
+                </li>
+                <li>
+                  {term(`Cuando ${BRAND.plus} termina.`)} No se borra nada de lo que agregaste. El plan gratis mantiene al día tu primera conexión; las demás, y
+                  Coinbase, quedan en pausa y muestran lo último que dijeron hasta que vuelvas a suscribirte o las desconectes, y se detienen los correos de
+                  alertas, tu enlace de calendario y las apps de IA conectadas. Un plan para el hogar cubre a las personas del hogar de quien lo paga, mientras
+                  estén en él.
+                </li>
+              </Bullets>
+            </>
+          ) : (
+            <p>
+              {p} no te cobra nada hoy. Si algún día ofrecemos funciones de pago, primero te mostraremos el precio, y solo pagarás si así lo decides.
+            </p>
+          )}
         </Section>
 
         <Section id="ours" title="Prism en sí">
@@ -220,8 +266,10 @@ export function TerminosDelServicio() {
 
         <Section id="ending" title="Cerrar tu cuenta">
           <p>
-            Puedes borrar tu cuenta cuando quieras en la página de {account}. Primero desconectamos cada banco y cada vínculo con Coinbase, y luego borramos tu
-            cuenta y todo lo que contiene.
+            Puedes borrar tu cuenta cuando quieras en la página de {account}.{" "}
+            {billing
+              ? `Primero cancelamos ${BRAND.plus}, para que no se te vuelva a cobrar, y luego desconectamos cada banco y cada vínculo con Coinbase y borramos tu cuenta y todo lo que contiene.`
+              : "Primero desconectamos cada banco y cada vínculo con Coinbase, y luego borramos tu cuenta y todo lo que contiene."}
           </p>
           <p>
             Podemos suspender o cerrar una cuenta que incumpla estos términos, que ponga en riesgo a otras personas o a {p}, o cuando la ley lo exija. Te diremos

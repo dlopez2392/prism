@@ -11,6 +11,8 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { isAlertChoice } from "@/lib/alerts/choices";
 import { alertsConfig } from "@/lib/alerts/send";
+import { plusNeeds } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { BRAND } from "@/lib/brand";
 import type { PlanFormState } from "@/lib/finance/plan";
 import { getT } from "@/lib/i18n/server";
@@ -26,6 +28,8 @@ export async function saveAlertEmails(_prev: PlanFormState, form: FormData): Pro
   const kinds = [...new Set(form.getAll("kinds").filter(isAlertChoice))];
   const amounts = form.get("amounts") === "on";
   const morning = form.get("refresh") === "on";
+  // Turning them on is part of Prism Plus; turning them off never needs anything.
+  if (on && !(await plusFor(account)).plus) return { status: "error", message: plusNeeds("alerts", t) };
   if (on && kinds.length === 0) {
     const message = t("Choose at least one kind of alert, or turn the emails off.");
     return { status: "error", message, fields: { kinds: message } };

@@ -331,6 +331,120 @@ document `taxes:<year>`.
   finished (`job_runs`, written only by the job through `job_ran`). A
   morning without the job (26 hours) fails the check.
 
+## Prism Plus (the paid plan)
+
+Prism is free to start and stays useful for good; **Prism Plus** is the paid
+plan. Prices live in `src/lib/billing/plans.ts`, and the pricing page
+(`/pricing`) shows them by the month or by the year:
+
+| Plan | Monthly | Yearly |
+|---|---|---|
+| Prism Plus (one person) | $5.99 | $49 |
+| Prism Plus for your household (up to four people) | $8.99 | $79 |
+
+A first subscription starts with 14 days free. Launch prices are
+founding-member prices: Stripe keeps a subscription on the price it started
+at, and nothing here ever moves one.
+
+- **Free keeps:** the demo, spending, cash flow, budgets and goals, things
+  added by hand, imported history, wallets, Spanish, and **one** bank
+  connection.
+- **Plus adds:** every other bank; investment accounts and Coinbase; alert
+  emails, phone alerts and the morning check; a household; Claude and ChatGPT;
+  Your taxes; the self-updating calendar link (the file stays free); home
+  values; Amazon and Venmo, PayPal and Cash App matching.
+- **A household:** someone in it must have Plus for its shared view;
+  whoever joins needs nothing. A Household plan gives everyone in its
+  subscriber's household all of Plus, for as long as they're in it.
+- **When Plus ends,** nothing is deleted: the first connection made keeps
+  updating, the rest (and Coinbase) pause on what they last said, and alerts,
+  the calendar link and connected apps stop until Plus is back.
+- **What Prism will never do to make money:** ads, selling data, affiliate
+  or card offers. Anything else (a CPA hand-off, credit building) comes later,
+  opt-in and disclosed.
+
+How it's built:
+
+- **Stripe is the record; Prism keeps a copy.** Checkout and the customer
+  portal are Stripe's own pages, so Prism never sees a card. The `billing`
+  table (migration `billing`) holds a person's plan, status and dates, one row
+  per Stripe mode (test or live), and **nobody can write it over the API**:
+  only `billing_record`, which answers to the job secret (`CRON_SECRET`,
+  production only), and only with what the server just read from Stripe.
+- **The webhook believes nothing it's told** (`/api/stripe/webhook`): it
+  checks Stripe's signature over the exact bytes, then reads the subscription
+  the event names back from Stripe and keeps that, so late or out-of-order
+  events can't leave the wrong state. Coming back from Checkout
+  (`/api/stripe/return`) records the subscription at once, for the person it
+  was made for only.
+- **One rule decides who has Plus,** in the database (`billing_counts`,
+  `billing_plus`): trialing, paid or being retried, until a week past the end
+  of the time paid for. The server asks it through `my_plan` (the person),
+  `alerts_plus` (the alert job) and `calendar_feed_plus` (a calendar app), and
+  every gate reads `plusFor` (`src/lib/billing/plus.ts`). If the database
+  can't be asked, the gates open: nobody who pays meets a paywall because of
+  an outage of ours.
+- **The price shown is the price charged:** Checkout uses the prices whose
+  lookup keys are in `plans.ts`, and refuses to start if Stripe's amount,
+  currency or interval differs from the page's.
+- **Deleting an account cancels first:** Prism deletes the person's Stripe
+  customer (which cancels the subscription and forgets the card) before
+  anything else, and deletes nothing if that fails.
+- **Billing is off** until Stripe's keys are in Vercel: everything is open to
+  everyone, the Terms say Prism is free, and Stripe isn't named in the privacy
+  policy. The pricing page still shows the plans, unlisted.
+
+**Switching it on** (owner, in this order):
+
+1. **Stripe account.** Sign up at stripe.com as Bespoke Intelligence
+   Solutions, and turn on two-step sign-in for it.
+2. **Public details** (Settings → Business → Public details): Terms of service
+   `https://prism.bis-rgv.com/terms` and Privacy policy
+   `https://prism.bis-rgv.com/privacy`. Checkout's "I agree to the Terms" box
+   needs the first.
+3. **Stripe Tax** (Tax → Get started): add a Texas registration, prices
+   *exclusive* of tax, and the product tax code for software as a service for
+   personal use. Ask a CPA which other states to register in as sales grow.
+4. **Products** (Product catalog → Add product), each price recurring, in USD,
+   with its **lookup key** (under the price's advanced options) exactly:
+   - "Prism Plus": $5.99 monthly `prism_plus_monthly`; $49 yearly
+     `prism_plus_yearly`.
+   - "Prism Plus for your household": $8.99 monthly
+     `prism_household_monthly`; $79 yearly `prism_household_yearly`.
+5. **Customer portal** (Settings → Billing → Customer portal): let customers
+   update their card, see invoices and cancel at the end of the period; let
+   them switch between the four prices.
+6. **Emails** (Settings → Billing → Subscriptions and emails): turn on the
+   reminders for upcoming renewals, a trial ending, failed payments and
+   expiring cards; Smart Retries on, and cancel the subscription when retries
+   run out.
+7. **Webhook** (Developers → Webhooks → Add endpoint):
+   `https://prism.bis-rgv.com/api/stripe/webhook`, with the events
+   `checkout.session.completed`, `customer.subscription.created`,
+   `customer.subscription.updated` and `customer.subscription.deleted`.
+8. **Keys into Vercel** (prism → Settings → Environment Variables, Production
+   only, **Sensitive**): `STRIPE_SECRET_KEY` (Developers → API keys; a
+   restricted key with Checkout Sessions, Customer portal and Customers set to
+   write and Subscriptions and Prices to read works too) and
+   `STRIPE_WEBHOOK_SECRET` (the endpoint's signing secret). Never paste
+   either into a chat or a document. `CRON_SECRET` is already there.
+9. **Redeploy.** The production check then reports "Payments webhook locked
+   to its signature" as refusing unsigned events.
+
+Do steps 4–9 in Stripe's **test mode** first (test keys, a test webhook) and
+buy Plus with the card `4242 4242 4242 4242`: the Account page should say
+Prism Plus, and cancelling in the portal should say when it ends. Test
+subscriptions never count once the live keys go in. Then, before the **live**
+keys: the lawyer approves the paid Terms and the privacy policy's Stripe
+lines, and everyone with an account is told about the change before it takes
+effect, as the Terms promise. Live mode needs its own products, portal and
+webhook (Stripe can copy products from test mode).
+
+Ending the founding offer later: new prices under **new** lookup keys (for
+example `prism_plus_monthly_2027`) and the new amounts in `plans.ts`. Never
+move an existing lookup key to another price: a subscription's plan is read
+from its price's key.
+
 ## Link Coinbase (read-only)
 
 **Waiting on Coinbase (October 2026):** Coinbase has paused new OAuth

@@ -6,9 +6,12 @@
 // only THIS browser can finish what it started.
 //
 // Coinbase is always real money, so it connects only to a signed-in account;
-// anyone else is sent to sign in first (src/lib/linking.ts).
+// anyone else is sent to sign in first (src/lib/linking.ts). With billing on
+// it comes with Prism Plus: anyone without it is sent to the pricing page.
 
 import { NextResponse, type NextRequest } from "next/server";
+import { pricingFor } from "@/lib/billing/plans";
+import { connectionNeedsPlus } from "@/lib/billing/plus";
 import { authorizeUrl, coinbaseConfig } from "@/lib/coinbase/client";
 import { linkingRefusal, signInToConnect } from "@/lib/linking";
 import { COINBASE_OAUTH_COOKIE, pendingCookieOptions, redirectUriFor, startSignIn } from "@/lib/server/coinbase-store";
@@ -25,9 +28,12 @@ export async function GET(req: NextRequest) {
     key = null;
   }
   if (!config || !key) return NextResponse.redirect(new URL("/connections?coinbase=not_configured", req.url), 303);
-  const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: (await currentAccount()) !== null, realMoney: true, kind: "coinbase" });
+  const account = await currentAccount();
+  const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: true, kind: "coinbase" });
   if (refusal?.error === "sign_in_required") return NextResponse.redirect(new URL(signInToConnect("coinbase", "/connections"), req.url), 303);
   if (refusal) return NextResponse.redirect(new URL("/connections?coinbase=accounts_required", req.url), 303);
+  // Coinbase comes with Prism Plus (billing/plus.ts).
+  if (account && (await connectionNeedsPlus(account, "coinbase"))) return NextResponse.redirect(new URL(pricingFor("coinbase"), req.url), 303);
 
   const redirectUri = redirectUriFor(config, req.nextUrl.origin);
   const { cookie, state, challenge } = startSignIn(redirectUri, key);

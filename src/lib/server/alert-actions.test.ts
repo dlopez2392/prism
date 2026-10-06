@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
 const signedIn = { current: { userId: "u1", email: "a@x.test", supabase: {} } as unknown };
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn.current }));
 vi.mock("next/cache", () => ({ refresh: vi.fn() }));

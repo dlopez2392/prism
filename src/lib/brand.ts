@@ -5,6 +5,8 @@
 
 export const BRAND = {
   product: "Prism",
+  /** The paid plan (src/lib/billing/plans.ts). */
+  plus: "Prism Plus",
   tagline: "Your money, in full colour.",
   company: "Bespoke Intelligence Solutions",
   companyShort: "BIS",

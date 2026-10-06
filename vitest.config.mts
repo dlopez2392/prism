@@ -36,6 +36,8 @@ export default defineConfig({
       CRON_SECRET: "",
       ALERTS_FROM: "",
       ALERTS_SITE_URL: "",
+      STRIPE_SECRET_KEY: "",
+      STRIPE_WEBHOOK_SECRET: "",
       // Vercel's preview builds run this suite with VERCEL_ENV=preview.
       VERCEL_ENV: "",
       VERCEL_GIT_COMMIT_SHA: "",

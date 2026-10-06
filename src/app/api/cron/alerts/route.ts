@@ -5,11 +5,13 @@
 // database or the vault key (every preview) a 404. Prism holds no privileged
 // key, so the job reads nobody's data as itself: the database answers it
 // only for people who turned alert emails on, and only to the secret
-// (src/lib/alerts/job.ts). The response and the log are counts, never names,
+// (src/lib/alerts/job.ts), and with billing on only for people with Prism
+// Plus. The response and the log are counts, never names,
 // and so is the run's record (job_ran), which /api/health reports on.
 
 import { createClient } from "@supabase/supabase-js";
 import { runAlertJob } from "@/lib/alerts/job";
+import { billingConfig } from "@/lib/billing/plus";
 import { alertsConfig, cronAllowed } from "@/lib/alerts/send";
 import { vaultKey, type Keyring } from "@/lib/server/vault";
 import { supabaseEnv } from "@/lib/supabase/config";
@@ -39,7 +41,8 @@ export async function GET(req: Request): Promise<Response> {
     if (error) console.error("Prism: the alert job's run wasn't recorded.");
   };
   try {
-    const report = await runAlertJob(anon, config, key, { deadline: Date.now() + RUN_FOR_MS });
+    const billing = billingConfig();
+    const report = await runAlertJob(anon, config, key, { deadline: Date.now() + RUN_FOR_MS, billing: billing ? { livemode: billing.livemode } : null });
     console.log("Prism: alert emails", JSON.stringify(report));
     // Finished, unless Resend refused the key itself and the run stopped.
     await ran(!report.stopped, report);

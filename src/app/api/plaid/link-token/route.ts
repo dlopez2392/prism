@@ -12,12 +12,16 @@
 // anything else is a bank.
 //
 // With accounts on, only a signed-in account may connect a bank: 401
-// `sign_in_required` otherwise (src/lib/linking.ts says why).
+// `sign_in_required` otherwise (src/lib/linking.ts says why). With billing
+// on, a second bank or an investment account needs Prism Plus: 402
+// `plus_required`, naming which, and the button goes to the pricing page.
 
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createLinkToken, plaidConfig, PlaidError, plaidFailure, redirectUriFor, type LinkKind } from "@/lib/plaid/client";
 import { clearedReturnCookie, packReturn, RETURN_COOKIE, returnCookieOptions, returnPath } from "@/lib/plaid/return";
+import { connectionNeedsPlus } from "@/lib/billing/plus";
+import { plusNeeds } from "@/lib/billing/plans";
 import { linkingRefusal } from "@/lib/linking";
 import { requestOrigin } from "@/lib/server/origin";
 import { sameOriginJson } from "@/lib/server/request-guard";
@@ -46,6 +50,11 @@ export async function POST(req: Request) {
   const account = await currentAccount();
   const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: config.env !== "sandbox" }, await getT());
   if (refusal) return NextResponse.json({ error: refusal.error, message: refusal.message }, { status: refusal.status });
+  // A second bank, or an investment account, comes with Prism Plus (billing/plus.ts). Signing in again to one already linked never needs it.
+  if (account && body?.itemId === undefined) {
+    const need = await connectionNeedsPlus(account, kind);
+    if (need) return NextResponse.json({ error: "plus_required", need, message: plusNeeds(need, await getT()) }, { status: 402 });
+  }
   const jar = await cookies();
   const vault = account ? null : (open(jar.get(VAULT_COOKIE)?.value, key) ?? emptyVault());
   // Signing in to one of this person's own banks again: the only way to its access token is their own list.

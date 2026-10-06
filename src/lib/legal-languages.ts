@@ -22,7 +22,7 @@ export type LegalPage = "privacy" | "terms";
 
 export const LEGAL_PATHS: Record<LegalPage, string> = { privacy: "/privacy", terms: "/terms" };
 
-export const SPANISH_TRANSLATED_FROM: Record<LegalPage, string> = { privacy: "October 5, 2026", terms: "September 30, 2026" };
+export const SPANISH_TRANSLATED_FROM: Record<LegalPage, string> = { privacy: "October 6, 2026", terms: "October 6, 2026" };
 
 export const SPANISH_APPROVED: Record<LegalPage, string | null> = { privacy: null, terms: null };
 

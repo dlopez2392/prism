@@ -21,6 +21,9 @@ import { coinbaseConfig } from "@/lib/coinbase/client";
 import { INTEGRATIONS, type IntegrationStatus } from "@/lib/finance/integrations";
 import { addLink, MANUAL_INSTITUTION_ID, MANUAL_INSTITUTION_NAME } from "@/lib/finance/manual";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
+import { FREE_CONNECTIONS, pricingFor } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
+import { BRAND } from "@/lib/brand";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
 import { signInToConnect } from "@/lib/linking";
 import type { Institution } from "@/lib/finance/types";
@@ -50,7 +53,9 @@ const HEALTH: Record<Institution["health"], { status: Status; label: string }> =
  * (Plaid's warning that the bank's consent ends then).
  */
 const health = (inst: Institution, t: T) =>
-  inst.signInAgain
+  inst.paused
+    ? { status: "neutral" as const, label: t("Paused") }
+    : inst.signInAgain
     ? { status: "warn" as const, label: t("Needs you to sign in") }
     : inst.disconnectsAt
       ? { status: "warn" as const, label: t("Sign in by {date}", { date: shortDate(inst.disconnectsAt.slice(0, 10), t.locale) }) }
@@ -123,7 +128,7 @@ function synced(inst: Institution, today: string, t: T): string {
 }
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const [data, t] = await Promise.all([getPersonalFinance(), getT()]);
+  const [data, t, plus] = await Promise.all([getPersonalFinance(), getT(), currentAccount().then(plusFor)]);
   const joined = (await searchParams).joined === "1";
   const shares = data.inHousehold ? await myShares() : [];
   // A bank's name is its own; what Prism calls the rest is Prism's, in the person's language.
@@ -168,6 +173,11 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     return { inst, accounts, total: accounts.reduce((s, a) => s + a.balance, 0) };
   });
   const attention = data.institutions.filter((i) => i.health === "needs_attention").length;
+  // The free plan keeps one bank up to date; a second, an investment account and Coinbase come with Prism Plus.
+  const banksLinked = data.source === "demo" ? 0 : data.institutions.filter((i) => i.source === "plaid").length;
+  const bankNeedsPlus = !plus.plus && banksLinked >= FREE_CONNECTIONS ? ("banks" as const) : undefined;
+  const otherNeedsPlus = plus.plus ? undefined : ("investments" as const);
+  const paused = data.institutions.filter((i) => i.paused).length;
   // Ethereum and Solana need the operator's Alchemy key; Bitcoin needs nothing.
   const walletChains = { bitcoin: chainEnabled("bitcoin"), ethereum: chainEnabled("ethereum"), solana: chainEnabled("solana") };
 
@@ -193,14 +203,20 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           </p>
           {/* Two links, because Plaid's bank link can't show a brokerage account (LinkKind in src/lib/plaid/client.ts). */}
           <div className="mt-5 flex flex-wrap items-start gap-3">
-            <ConnectBank variant="hero" label={signInFirst ? t("Sign in to connect a bank") : t("Connect a bank")} signInFirst={signInFirst} />
+            <ConnectBank variant="hero" label={signInFirst ? t("Sign in to connect a bank") : t("Connect a bank")} signInFirst={signInFirst} plusFirst={bankNeedsPlus} />
             <ConnectBank
               variant="hero-ghost"
               kind="investments"
               label={signInFirst ? t("Sign in to connect investments") : t("Connect an investment account")}
               signInFirst={signInFirst}
+              plusFirst={otherNeedsPlus}
             />
           </div>
+          {plus.billing && !plus.plus && data.account ? (
+            <p className="mt-3 text-xs font-semibold text-[var(--on-hero-soft)]">
+              {t("The free plan keeps one bank up to date. {plus} connects every other account.", { plus: BRAND.plus })}
+            </p>
+          ) : null}
         </Card>
 
         <Card className="p-5 sm:p-6 lg:col-span-5">
@@ -217,7 +233,17 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       <Card className="p-5 sm:p-6">
         <CardHeader
           title={t("Linked institutions")}
-          subtitle={attention === 0 ? t("Every connection is healthy") : attention === 1 ? t("1 needs your attention") : t("{n} need your attention", { n: attention })}
+          subtitle={
+            paused
+              ? paused === 1
+                ? t("1 is paused: {plus} keeps it up to date. Until then it shows what it last said.", { plus: BRAND.plus })
+                : t("{n} are paused: {plus} keeps them up to date. Until then they show what they last said.", { n: paused, plus: BRAND.plus })
+              : attention === 0
+                ? t("Every connection is healthy")
+                : attention === 1
+                  ? t("1 needs your attention")
+                  : t("{n} need your attention", { n: attention })
+          }
           action={data.source === "demo" ? <Pill>{t("Demo")}</Pill> : undefined}
         />
         <ul className="mt-3 divide-y divide-[var(--line)]">
@@ -243,9 +269,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                     {health(inst, t).label}
                   </StatusPill>
                 )}
+                {inst.paused ? (
+                  <Link href={pricingFor(inst.source === "coinbase" ? "coinbase" : "banks")} className="text-xs font-semibold text-accent-ink hover:underline">
+                    {t("Keep it up to date")}
+                  </Link>
+                ) : null}
                 {/* Signing in again keeps the same connection: its accounts, goals and household shares carry on. */}
-                {inst.source === "plaid" && (inst.signInAgain || inst.disconnectsAt) ? <ConnectBank label={t("Sign in again")} reconnect={inst.id} size="sm" /> : null}
-                {inst.source === "coinbase" && inst.signInAgain && cbReady ? (
+                {inst.source === "plaid" && !inst.paused && (inst.signInAgain || inst.disconnectsAt) ? <ConnectBank label={t("Sign in again")} reconnect={inst.id} size="sm" /> : null}
+                {inst.source === "coinbase" && !inst.paused && inst.signInAgain && cbReady ? (
                   <a
                     href="/api/coinbase/connect"
                     className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-ctl border border-line-strong px-2.5 text-xs font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
@@ -500,7 +531,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                           ) : (
                             // A plain link: the trip to Coinbase is a full-page navigation.
                             <a
-                              href={signInFirst ? signInToConnect("coinbase", "/connections") : "/api/coinbase/connect"}
+                              href={signInFirst ? signInToConnect("coinbase", "/connections") : plus.plus ? "/api/coinbase/connect" : pricingFor("coinbase")}
                               className="mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-ctl border border-line-strong px-3.5 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
                             >
                               <Plus aria-hidden className="size-4" />

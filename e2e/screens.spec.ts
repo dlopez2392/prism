@@ -16,6 +16,7 @@ const SCREENS: { path: string; title: RegExp; hero: boolean }[] = [
   { path: "/goals", title: /Goals/, hero: true },
   { path: "/net-worth", title: /Net worth/, hero: true },
   { path: "/connections", title: /Connections/, hero: true },
+  { path: "/pricing", title: /Prism Plus/, hero: true },
   { path: "/privacy", title: /Privacy/, hero: false },
   { path: "/terms", title: /Terms/, hero: false },
 ];

@@ -85,7 +85,7 @@ export async function runChecks(base: string, opts: Options = {}): Promise<Check
     home?.status === 200,
   );
 
-  for (const path of ["/privacy", "/terms", "/sign-in", "/year", "/taxes"]) {
+  for (const path of ["/privacy", "/terms", "/sign-in", "/year", "/taxes", "/pricing"]) {
     const r = await get(path);
     add(`Page ${path}`, r?.status === 200, r?.status === 200 ? "200" : status(r), "Open the page; Vercel → prism → Logs shows the error for that path.");
   }
@@ -110,6 +110,16 @@ export async function runChecks(base: string, opts: Options = {}): Promise<Check
       ? "The job isn't configured: CRON_SECRET or RESEND_API_KEY is missing in Vercel's Production settings (README, Alert emails)."
       : "A job route that doesn't refuse a stranger is serious: roll back the latest deploy in Vercel, then look at src/app/api/cron/alerts.",
     cron !== null && cron.status !== 404,
+  );
+
+  // Prism Plus: off (404) until the owner adds Stripe's keys; on, an event without Stripe's signature is refused (401).
+  const stripe = await get("/api/stripe/webhook", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  add(
+    "Payments webhook locked to its signature",
+    stripe?.status === 401 || stripe?.status === 404,
+    stripe?.status === 401 ? "refuses an event Stripe didn't sign" : stripe?.status === 404 ? "billing is off" : status(stripe),
+    "A payments webhook that doesn't refuse an unsigned event is serious: roll back the latest deploy in Vercel, then look at src/app/api/stripe/webhook.",
+    stripe !== null && stripe.status !== 401 && stripe.status !== 404,
   );
 
   const exportZip = await get("/account/export/everything.zip");

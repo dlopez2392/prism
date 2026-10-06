@@ -9,6 +9,7 @@
 
 import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
+import { PlusRequired } from "@/lib/billing/plans";
 import { BRAND } from "@/lib/brand";
 import { RESEARCH_RESULTS_MAX, researchFetch, researchSearch } from "./research";
 import {
@@ -63,7 +64,18 @@ function reply(result: Record<string, unknown>): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
 }
 
-function failed(): CallToolResult {
+function failed(e?: unknown): CallToolResult {
+  if (e instanceof PlusRequired) {
+    return {
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: `Answering questions in an AI app is part of ${BRAND.plus}, which this ${BRAND.product} account doesn't have right now. The user can start it, or start it again, at ${BRAND.site}/pricing; nothing else needs to change here.`,
+        },
+      ],
+    };
+  }
   return {
     isError: true,
     content: [{ type: "text", text: `${BRAND.product} couldn't load the user's accounts just now. Try again in a minute; if it keeps happening, the user can open ${BRAND.product} to check their connections.` }],
@@ -80,8 +92,8 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
   const run = (fn: (d: AgentData) => Record<string, unknown>) => async (): Promise<CallToolResult> => {
     try {
       return reply(fn(await data()));
-    } catch {
-      return failed();
+    } catch (e) {
+      return failed(e);
     }
   };
   const runWith =
@@ -89,8 +101,8 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
     async (args: A): Promise<CallToolResult> => {
       try {
         return reply(fn(await data(), args));
-      } catch {
-        return failed();
+      } catch (e) {
+        return failed(e);
       }
     };
 
@@ -320,8 +332,8 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       try {
         const doc = researchFetch(await data(), BRAND.site, id);
         return doc ? reply(doc) : { isError: true, content: [{ type: "text", text: `No document "${id.slice(0, 200)}". Use an id that search returned.` }] };
-      } catch {
-        return failed();
+      } catch (e) {
+        return failed(e);
       }
     },
   );

@@ -93,6 +93,8 @@ export const PRIVACY_LISTS_ES: Record<string, string> = {
     "Estima el valor de una vivienda cuyo valor le pides a Prism mantener al día. Recibe la dirección de la vivienda, y nada más sobre ti, más o menos una vez al mes, y se le pide no guardarla en sus registros.",
   "Reads the balance of a Bitcoin wallet you add. It receives the wallet's public address, and nothing else about you, about every 15 minutes while you use Prism. For a whole wallet it receives each of the wallet's addresses, which Prism works out itself, never the extended public key, about every 30 minutes.":
     "Lee el saldo de una billetera de Bitcoin que agregues. Recibe la dirección pública de la billetera, y nada más sobre ti, más o menos cada 15 minutos mientras usas Prism. Para una billetera completa recibe cada una de sus direcciones, que Prism calcula por su cuenta, nunca la clave pública extendida, más o menos cada 30 minutos.",
+  "Takes payment for Prism Plus if you subscribe. You give your card to Stripe on its own page, and Prism never sees it. Stripe receives your email address, and your billing address to work out sales tax.":
+    "Cobra el pago de Prism Plus si te suscribes. Le das tu tarjeta a Stripe en su propia página, y Prism nunca la ve. Stripe recibe tu dirección de correo, y tu dirección de facturación para calcular el impuesto sobre las ventas.",
   "Reads the balance of an Ethereum or Solana wallet you add. It receives the wallet's public address, and nothing else about you, about every 15 minutes while you use Prism.":
     "Lee el saldo de una billetera de Ethereum o Solana que agregues. Recibe la dirección pública de la billetera, y nada más sobre ti, más o menos cada 15 minutos mientras usas Prism.",
 

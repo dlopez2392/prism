@@ -14,10 +14,14 @@ import { HouseholdCard } from "@/components/household";
 import { LanguageSetting } from "@/components/language-setting";
 import { NameForm } from "@/components/name-form";
 import { PhoneAlerts } from "@/components/phone-alerts";
+import { PlusNeeded } from "@/components/plus";
 import { SignOutButton } from "@/components/sign-in-form";
 import { TwoStepSettings } from "@/components/two-step";
+import { YourPlan } from "@/components/your-plan";
 import { Card, CardHeader, PageHeader, StatusPill } from "@/components/ui";
 import { alertsConfig } from "@/lib/alerts/send";
+import { plusFor } from "@/lib/billing/plus";
+import { BRAND } from "@/lib/brand";
 import { getT } from "@/lib/i18n/server";
 import { vapidKeys } from "@/lib/alerts/webpush";
 import { signOut } from "@/lib/server/auth-actions";
@@ -44,7 +48,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   // Offered only where the job can run: Resend and the job's secret are set (never on a preview).
   const config = alertsConfig();
   const alerts = config ? data.account.alerts : null;
-  const [endpoint, enabled, apps, twoStepFactor, household, devices] = await Promise.all([
+  const [plus, endpoint, enabled, apps, twoStepFactor, household, devices] = await Promise.all([
+    currentAccount().then(plusFor),
     requestOrigin().then((o) => `${o}${MCP_PATH}`),
     connectingEnabled(supabaseEnv()!),
     connectedApps(),
@@ -84,6 +89,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       : []),
   ];
 
+  const back = (await searchParams).plus;
+
   // One whole sentence, so a language can put the link where its words need it.
   const [beforeLink, afterLink] = t("Once you link a bank or import your history on {connections}, you can download all of it here.").split("{connections}");
 
@@ -104,6 +111,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       </Card>
 
       <LanguageSetting />
+
+      {plus.billing ? (
+        <section id="plan" className="scroll-mt-6">
+          <Card className="p-5 sm:p-6">
+            <YourPlan plus={plus} back={typeof back === "string" ? back : null} t={t} />
+          </Card>
+        </section>
+      ) : null}
 
       <Card className="p-5 sm:p-6">
         <CardHeader title={t("Saved to your account")} subtitle={t("Everything here follows you to any device you sign in on.")} />
@@ -129,12 +144,12 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 "A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and short summaries: on Mondays, and early each month for the month before. Bills and figures are as of your last visit, or this morning's check of your banks if you allow it, and each email says which. No tracking, and one click stops them.",
               )}
             />
-            <AlertEmails settings={alerts} email={email} />
+            {plus.plus ? <AlertEmails settings={alerts} email={email} /> : <PlusNeeded feature="alerts" trial={plus.trial} t={t} quiet />}
           </Card>
         </section>
       ) : null}
 
-      {alerts && config ? (
+      {alerts && config && plus.plus ? (
         <section id="phone" className="scroll-mt-6">
           <Card className="p-5 sm:p-6">
             <CardHeader
@@ -172,7 +187,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                   : t("Share chosen accounts with a partner or family, up to four adults. Each of you keeps your own login, and nothing is shared until you choose it.")
             }
           />
-          {household === undefined ? null : <HouseholdCard household={household} />}
+          {household === undefined ? null : <HouseholdCard household={household} needsPlus={!plus.householdView} />}
         </Card>
       </section>
 
@@ -182,7 +197,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             title={t("Ask AI about your money")}
             subtitle={t("Connect Claude or ChatGPT, then ask things like “What did I spend on eating out last month?” Connected apps can read — never move money or change anything.")}
           />
-          <ConnectedApps endpoint={endpoint} enabled={enabled} apps={apps} />
+          {plus.plus ? null : <PlusNeeded feature="apps" trial={plus.trial} t={t} quiet />}
+          {/* Without Plus, an app already connected is still listed, so it can be disconnected. */}
+          {plus.plus || apps?.length ? <ConnectedApps endpoint={endpoint} enabled={enabled} apps={apps} /> : null}
         </Card>
       </section>
 
@@ -225,9 +242,16 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <Card className="p-5 sm:p-6">
         <CardHeader
           title={t("Delete your account")}
-          subtitle={t(
-            "Every bank link is removed at the bank, Coinbase access is revoked, and your budgets, goals and calendar link are erased. This can't be undone, so download your data first if you want a copy.",
-          )}
+          subtitle={
+            plus.own?.counts
+              ? t(
+                  "Your {plus} is cancelled first, so you won't be charged again. Then every bank link is removed at the bank, Coinbase access is revoked, and your budgets, goals and calendar link are erased. This can't be undone, so download your data first if you want a copy.",
+                  { plus: BRAND.plus },
+                )
+              : t(
+                  "Every bank link is removed at the bank, Coinbase access is revoked, and your budgets, goals and calendar link are erased. This can't be undone, so download your data first if you want a copy.",
+                )
+          }
         />
         <DeleteAccount email={email} />
       </Card>
