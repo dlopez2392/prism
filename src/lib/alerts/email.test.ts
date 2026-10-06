@@ -4,6 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { translator } from "@/lib/i18n/translator";
 import { EMAIL_COLORS, renderEmail } from "./email";
 import type { Email } from "./plan";
 
@@ -44,6 +45,24 @@ describe("an alert email, written out", () => {
   it("claims no 'as of' when nothing in it came from a visit", () => {
     const fresh = renderEmail({ ...email, asOf: null, summary: null }, links);
     expect(fresh.text).not.toMatch(/as of your visit/);
+  });
+
+  it("is written in the person's language, and says which, so a mail app reads it in the right voice", () => {
+    expect(out.html).toMatch(/^<!doctype html><html lang="en">/);
+    // The email's own words come already in Spanish (plan.ts); the frame around them is written here.
+    const es = renderEmail({ ...email, summary: { ...email.summary!, title: "Tu semana" }, asOf: { day: "2026-10-04", by: "morning" } }, links, translator("es"));
+    expect(es.html).toMatch(/^<!doctype html><html lang="es">/);
+    for (const part of [
+      "TU SEMANA",
+      "de la revisión de tus bancos que hizo Prism el dom, 4 oct",
+      "Pediste estos correos a Prism.",
+      `Tu página de Cuenta: ${links.settings}`,
+      `Dejar de recibir estos correos: ${links.unsubscribe}`,
+    ]) {
+      expect(es.text).toContain(part);
+    }
+    for (const label of [">Abrir Prism<", ">Página de Cuenta<", ">Dejar de recibir estos correos<"]) expect(es.html).toContain(label);
+    expect(es.text + es.html).not.toMatch(/Stop these emails|Account page|Open Prism|You asked/);
   });
 
   it("paints with the light theme's own tokens, since email clients can't read them", () => {

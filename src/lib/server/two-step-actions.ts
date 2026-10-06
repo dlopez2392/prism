@@ -20,6 +20,8 @@
 // the session's own signed record of when a code was last entered.
 
 import { refresh } from "next/cache";
+import { BRAND } from "@/lib/brand";
+import { getT } from "@/lib/i18n/server";
 import { currentAccount } from "@/lib/supabase/server";
 
 /** How recently a code must have been entered to turn two-step sign-in off. (Not exported: a "use server" file exports only actions.) */
@@ -34,8 +36,9 @@ export type SetupResult = { ok: true } | { ok: false; error: string };
  * it never counted for anything.
  */
 export async function startSetup(): Promise<SetupStart> {
+  const t = await getT();
   const account = await currentAccount();
-  if (!account) return { ok: false, error: "Sign in again to set up two-step sign-in." };
+  if (!account) return { ok: false, error: t("Sign in again to set up two-step sign-in.") };
   const mfa = account.supabase.auth.mfa;
   const { data: factors } = await mfa.listFactors();
   for (const f of factors?.all ?? []) {
@@ -45,7 +48,7 @@ export async function startSetup(): Promise<SetupStart> {
   if (error || !data) {
     // Supabase refuses a new authenticator while one it already verified exists. Here that
     // can only be one Prism never registered, which support clears.
-    return { ok: false, error: "We couldn't start set-up for this account. Email privacy@bis-rgv.com and we'll sort it out." };
+    return { ok: false, error: t("We couldn't start set-up for this account. Email {email} and we'll sort it out.", { email: BRAND.privacyEmail }) };
   }
   return { ok: true, factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret };
 }
@@ -57,11 +60,12 @@ export async function startSetup(): Promise<SetupStart> {
  * sent here without the code is refused.
  */
 export async function registerFactor(factorId: string): Promise<SetupResult> {
+  const t = await getT();
   const account = await currentAccount();
-  if (!account) return { ok: false, error: "Sign in again to set up two-step sign-in." };
-  if (typeof factorId !== "string" || !/^[0-9a-f-]{36}$/.test(factorId)) return { ok: false, error: "Start set-up again." };
+  if (!account) return { ok: false, error: t("Sign in again to set up two-step sign-in.") };
+  if (typeof factorId !== "string" || !/^[0-9a-f-]{36}$/.test(factorId)) return { ok: false, error: t("Start set-up again.") };
   const { error } = await account.supabase.from("profiles").update({ totp_factor_id: factorId }).eq("user_id", account.userId);
-  if (error) return { ok: false, error: "Your code worked, but we couldn't switch two-step sign-in on. Start set-up again." };
+  if (error) return { ok: false, error: t("Your code worked, but we couldn't switch two-step sign-in on. Start set-up again.") };
   refresh();
   return { ok: true };
 }
@@ -75,17 +79,18 @@ export async function registerFactor(factorId: string): Promise<SetupResult> {
  * person owing a code from an authenticator that no longer exists.
  */
 export async function turnOff(): Promise<SetupResult> {
+  const t = await getT();
   const account = await currentAccount();
-  if (!account) return { ok: false, error: "Sign in again to change two-step sign-in." };
+  if (!account) return { ok: false, error: t("Sign in again to change two-step sign-in.") };
   const { data: factorId } = await account.supabase.rpc("my_second_step_factor");
   if (typeof factorId !== "string") {
     refresh();
     return { ok: true };
   }
   const { data } = await account.supabase.auth.getClaims();
-  if (!codeEnteredWithin(data?.claims?.amr, FRESH_CODE_S)) return { ok: false, error: "Enter a current code from your authenticator app first." };
+  if (!codeEnteredWithin(data?.claims?.amr, FRESH_CODE_S)) return { ok: false, error: t("Enter a current code from your authenticator app first.") };
   const { error: cleared } = await account.supabase.from("profiles").update({ totp_factor_id: null }).eq("user_id", account.userId);
-  if (cleared) return { ok: false, error: "We couldn't turn two-step sign-in off just now. Try again." };
+  if (cleared) return { ok: false, error: t("We couldn't turn two-step sign-in off just now. Try again.") };
   await account.supabase.auth.mfa.unenroll({ factorId });
   refresh();
   return { ok: true };

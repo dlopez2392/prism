@@ -2,10 +2,11 @@
 // tiles, then two chart cards (DESIGN.md rule 5; src/components/skeletons.tsx).
 
 import { Block, Header, Loading } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function OverviewLoading() {
   return (
-    <Loading label="Loading your money">
+    <Loading label={msg("Loading your money")}>
       <Header eyebrow />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Block className="h-64 lg:col-span-7" />

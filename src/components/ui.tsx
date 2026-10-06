@@ -15,21 +15,26 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import clsx from "clsx";
+import { EN, type T } from "@/lib/i18n/t";
 
 export function Card({
   children,
   className,
   as: As = "section",
   hero = false,
+  id,
 }: {
   children: ReactNode;
   className?: string;
+  /** For a link that lands on this card ("/net-worth#add"). */
+  id?: string;
   as?: "section" | "div" | "article" | "li";
   /** The one hero-gradient card on a screen (DESIGN.md rule 6). */
   hero?: boolean;
 }) {
   return (
     <As
+      id={id}
       data-hero={hero ? "" : undefined}
       className={clsx(
         "fade-up rounded-card",
@@ -54,8 +59,10 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={clsx("flex items-start justify-between gap-3", className)}>
-      <div className="min-w-0">
+    // The action sits beside the title while the title keeps about 10rem; past that it drops below, so a
+    // long button (longer still in Spanish) never squeezes the subtitle into a column of single words.
+    <div className={clsx("flex flex-wrap items-start justify-between gap-x-3 gap-y-2", className)}>
+      <div className="min-w-0 grow basis-40">
         <h2 className="text-[15px] font-bold tracking-tight text-ink-1">{title}</h2>
         {subtitle ? <p className="mt-0.5 text-[13px] text-ink-3">{subtitle}</p> : null}
       </div>
@@ -88,12 +95,15 @@ export function Change({
   goodWhenUp = true,
   suffix,
   onHero = false,
+  t = EN,
 }: {
   text: string;
   up: boolean | null;
   goodWhenUp?: boolean;
   suffix?: string;
   onHero?: boolean;
+  /** The language the direction is said in, for a screen reader. */
+  t?: T;
 }) {
   const good = up === null ? null : up === goodWhenUp;
   const Icon = up === null ? null : up ? ArrowUpRight : ArrowDownRight;
@@ -106,7 +116,7 @@ export function Change({
     >
       {Icon ? <Icon aria-hidden className="size-3.5" strokeWidth={2.5} /> : null}
       {/* The arrow is drawn; the direction is also said, so it never rests on an icon or a colour alone. */}
-      {up === null ? null : <span className="sr-only">{up ? "up " : "down "}</span>}
+      {up === null ? null : <span className="sr-only">{up ? t("up") : t("down")} </span>}
       <span className="num">{text}</span>
       {suffix ? <span className={clsx("ml-1 font-medium", onHero ? "text-[var(--on-hero-soft)]" : "text-ink-3")}>{suffix}</span> : null}
     </span>

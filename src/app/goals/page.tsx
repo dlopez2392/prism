@@ -15,23 +15,28 @@ import { GoalWhatIf } from "@/components/goal-what-if";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
 import { slotColor } from "@/lib/finance/categories";
 import { addMonths, lastMonths } from "@/lib/finance/dates";
-import { lastChanged, money0, monthShort, monthYear, percent } from "@/lib/finance/format";
+import { capitalized, lastChanged, money0, monthShort, monthYear, percent } from "@/lib/finance/format";
 import { projectGoal } from "@/lib/finance/networth";
 import { goalSettings, isTrackable, MAX_GOALS } from "@/lib/finance/plan";
 import { getFinance } from "@/lib/server/finance";
+import { getT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Goals" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Goals") };
+}
 
 const AHEAD = 24;
 
 export default async function GoalsPage() {
   // The Me / Household switch decides: the person's own goals, or the ones their household saves toward together.
-  const data = await getFinance();
+  const [data, t] = await Promise.all([getFinance(), getT()]);
+  const { locale } = t;
   const { goals, today } = data;
   const household = data.view === "household";
   const settings = goals.map(goalSettings);
   const restore = data.source === "demo" && data.planEdited.goals && !household ? <RestoreGoals /> : null;
-  const changed = household ? lastChanged(data.householdPlan?.goalsChanged) : null;
+  const changed = household ? lastChanged(data.householdPlan?.goalsChanged, t) : null;
   // What a goal can follow: the money in view (in the Household view, what everyone shared).
   const institution = new Map(data.institutions.map((i) => [i.id, i.name]));
   const accounts: FollowableAccount[] = data.accounts
@@ -46,23 +51,27 @@ export default async function GoalsPage() {
     return (
       <div>
         <PageHeader
-          title="Goals"
-          subtitle={household ? `What your household is saving for together.${changed ? ` ${changed}` : ""}` : "What you're saving for, and when you'll get there."}
+          title={t("Goals")}
+          subtitle={
+            household ? [t("What your household is saving for together."), changed].filter(Boolean).join(" ") : t("What you're saving for, and when you'll get there.")
+          }
           action={restore}
         />
         <Card>
           {household ? (
             <EmptyState
               icon={PiggyBank}
-              title="Your household's goals will live here"
-              body="Save toward something together — a trip, a home, a rainy-day fund. Each goal gets a ring, a finish date and a what-if slider, and everyone in the household can update it."
+              title={t("Your household's goals will live here")}
+              body={t(
+                "Save toward something together — a trip, a home, a rainy-day fund. Each goal gets a ring, a finish date and a what-if slider, and everyone in the household can update it.",
+              )}
               action={editor("empty")}
             />
           ) : (
             <EmptyState
               icon={PiggyBank}
-              title="Your goals will live here"
-              body="Name something you're saving for and a monthly amount — each goal gets a ring, a finish date, and a what-if slider."
+              title={t("Your goals will live here")}
+              body={t("Name something you're saving for and a monthly amount — each goal gets a ring, a finish date, and a what-if slider.")}
               action={editor("empty")}
             />
           )}
@@ -76,7 +85,7 @@ export default async function GoalsPage() {
   const monthly = goals.reduce((s, g) => s + g.monthlyContribution, 0);
   const past = lastMonths(today, 13);
   const months = [...past.map((m) => `${m}-01`), ...Array.from({ length: AHEAD }, (_, i) => addMonths(`${past.at(-1)}-01`, i + 1))];
-  const labels = months.map((m) => monthYear(m));
+  const labels = months.map((m) => capitalized(monthYear(m, locale)));
   const series = goals.map((g) => {
     // A goal started on this device has less history than the window: its
     // line begins where Prism first heard of it, not at an invented zero.
@@ -89,13 +98,15 @@ export default async function GoalsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Goals"
+        title={t("Goals")}
         subtitle={
           household
-            ? `What your household is saving for together, and when you'll get there.${changed ? ` ${changed}` : ""}`
+            ? [t("What your household is saving for together, and when you'll get there."), changed].filter(Boolean).join(" ")
             : data.planEdited.goals
-              ? `What you're saving for, saved ${data.account ? "to your account" : "on this device"}, and when you'll get there.`
-              : "What you're saving for, and when you'll get there."
+              ? data.account
+                ? t("What you're saving for, saved to your account, and when you'll get there.")
+                : t("What you're saving for, saved on this device, and when you'll get there.")
+              : t("What you're saving for, and when you'll get there.")
         }
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -103,7 +114,7 @@ export default async function GoalsPage() {
             {goals.length < MAX_GOALS ? (
               editor("new")
             ) : (
-              <span className="text-xs text-ink-3">{MAX_GOALS} goals is the most Prism tracks at once.</span>
+              <span className="text-xs text-ink-3">{t("{n} goals is the most Prism tracks at once.", { n: MAX_GOALS })}</span>
             )}
           </div>
         }
@@ -111,10 +122,12 @@ export default async function GoalsPage() {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card hero className="p-5 sm:p-6 lg:col-span-4">
-          <div className="text-sm font-semibold text-[var(--on-hero-soft)]">Saved toward {goals.length} goals</div>
+          <div className="text-sm font-semibold text-[var(--on-hero-soft)]">
+            {goals.length === 1 ? t("Saved toward 1 goal") : t("Saved toward {n} goals", { n: goals.length })}
+          </div>
           <div className="mt-1 text-[48px] font-extrabold leading-none tracking-tight">{money0(saved)}</div>
           <p className="mt-2 text-sm text-[var(--on-hero-soft)]">
-            {percent(saved / target)} of {money0(target)}, growing {money0(monthly)} a month.
+            {t("{percent} of {total}, growing {amount} a month.", { percent: percent(saved / target), total: money0(target), amount: money0(monthly) })}
           </p>
           <div className="mt-6 h-3 w-full overflow-hidden rounded-pill bg-[var(--on-hero-faint)]">
             <div className="h-full rounded-pill bg-[var(--on-hero)]" style={{ width: `${Math.min(100, (saved / target) * 100)}%` }} />
@@ -129,7 +142,7 @@ export default async function GoalsPage() {
                       <span aria-hidden>{g.emoji}</span> {g.name}
                     </span>
                     <span className="num shrink-0 text-xs font-semibold text-[var(--on-hero-soft)]">
-                      {p.projectedDate ? monthYear(p.projectedDate) : "—"}
+                      {p.projectedDate ? capitalized(monthYear(p.projectedDate, locale)) : "—"}
                     </span>
                   </div>
                   <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-pill bg-[var(--on-hero-faint)]">
@@ -142,7 +155,7 @@ export default async function GoalsPage() {
         </Card>
 
         <Card className="p-5 sm:p-6 lg:col-span-8">
-          <CardHeader title="What if…" subtitle="Drag to see how a different monthly amount moves the finish line" />
+          <CardHeader title={t("What if…")} subtitle={t("Drag to see how a different monthly amount moves the finish line")} />
           <div className="mt-4">
             <GoalWhatIf goals={goals} today={today} household={household} />
           </div>
@@ -158,7 +171,7 @@ export default async function GoalsPage() {
               <div className="absolute top-3 right-3">
                 <GoalEditor mode="edit" goal={goalSettings(g)} others={settings} today={today} signedIn={data.account !== null} household={household} accounts={accounts} />
               </div>
-              <ProgressRing ratio={p.progress} color={color} size={128} stroke={13} label={`${g.name}: ${percent(p.progress)} saved`}>
+              <ProgressRing ratio={p.progress} color={color} size={128} stroke={13} label={t("{name}: {percent} saved", { name: g.name, percent: percent(p.progress) })}>
                 <span aria-hidden className="text-3xl">
                   {g.emoji}
                 </span>
@@ -166,28 +179,32 @@ export default async function GoalsPage() {
               </ProgressRing>
               <div className="mt-3 text-[15px] font-bold text-ink-1">{g.name}</div>
               <div className="num mt-1 text-sm text-ink-2">
-                <span className="font-bold text-ink-1">{money0(g.saved)}</span> of {money0(g.target)}
+                <span className="font-bold text-ink-1">{money0(g.saved)}</span> {t("of {limit}", { limit: money0(g.target) })}
               </div>
               <div className="mt-3">
                 {p.onTrack ? (
-                  <StatusPill status="good">On track for {monthShort(g.targetDate)} {g.targetDate.slice(0, 4)}</StatusPill>
+                  <StatusPill status="good">{t("On track for {month}", { month: monthYear(g.targetDate, locale) })}</StatusPill>
                 ) : (
-                  <StatusPill status="warn">{p.projectedDate ? `Lands ${monthYear(p.projectedDate)}` : "Needs a monthly amount"}</StatusPill>
+                  <StatusPill status="warn">
+                    {p.projectedDate ? t("Lands {month}", { month: monthYear(p.projectedDate, locale) }) : t("Needs a monthly amount")}
+                  </StatusPill>
                 )}
               </div>
               <div className="mt-3 text-xs text-ink-3">
-                {money0(g.monthlyContribution)}/mo · {p.onTrack ? "keep it up" : `${money0(p.neededMonthly)}/mo gets you there on time`}
+                {p.onTrack
+                  ? t("{amount}/mo · keep it up", { amount: money0(g.monthlyContribution) })
+                  : t("{amount}/mo · {needed}/mo gets you there on time", { amount: money0(g.monthlyContribution), needed: money0(p.neededMonthly) })}
               </div>
               {g.accountId ? (
                 accountName.has(g.accountId) ? (
                   <div className="mt-2 inline-flex max-w-full items-center gap-1 text-xs text-ink-2">
                     <Landmark aria-hidden className="size-3.5 shrink-0" />
-                    <span className="[overflow-wrap:anywhere]">Follows {accountName.get(g.accountId)}</span>
+                    <span className="[overflow-wrap:anywhere]">{t("Follows {account}", { account: accountName.get(g.accountId) ?? "" })}</span>
                   </div>
                 ) : (
                   <div className="mt-2 flex flex-col items-center gap-1">
-                    <StatusPill status="warn">Account not available</StatusPill>
-                    <span className="text-xs text-ink-3">Showing {money0(g.saved)}, the last amount known.</span>
+                    <StatusPill status="warn">{t("Account not available")}</StatusPill>
+                    <span className="text-xs text-ink-3">{t("Showing {amount}, the last amount known.", { amount: money0(g.saved) })}</span>
                   </div>
                 )
               ) : null}
@@ -197,18 +214,18 @@ export default async function GoalsPage() {
       </ul>
 
       <ChartCard
-        title="Progress toward each goal"
-        subtitle="Share of each target — the last 12 months, then the next two years at today's pace (dashed)"
+        title={t("Progress toward each goal")}
+        subtitle={t("Share of each target — the last 12 months, then the next two years at today's pace (dashed)")}
         legend={<Legend items={series.map((s) => ({ label: s.label, color: s.color, kind: "line" }))} />}
         table={{
-          caption: "Goal progress by month, as a share of target",
-          columns: ["Month", ...goals.map((g) => g.name)],
-          rows: labels.map((l, i) => [i > 12 ? `${l} (projected)` : l, ...series.map((s) => (s.values[i] == null ? "—" : percent(s.values[i]!)))]),
+          caption: t("Goal progress by month, as a share of target"),
+          columns: [t("Month"), ...goals.map((g) => g.name)],
+          rows: labels.map((l, i) => [i > 12 ? t("{month} (projected)", { month: l }) : l, ...series.map((s) => (s.values[i] == null ? "—" : percent(s.values[i]!)))]),
         }}
       >
         <TimeSeriesChart
           labels={labels}
-          axisLabels={months.map((m) => `${monthShort(m)} ’${m.slice(2, 4)}`)}
+          axisLabels={months.map((m) => `${capitalized(monthShort(m, locale))} ’${m.slice(2, 4)}`)}
           series={series}
           todayIndex={12}
           format="percent"
@@ -216,7 +233,7 @@ export default async function GoalsPage() {
           include={0}
           height={280}
           maxAxisLabels={8}
-          ariaLabel="Goal progress over time as a share of each target, with projections"
+          ariaLabel={t("Goal progress over time as a share of each target, with projections")}
         />
       </ChartCard>
     </div>

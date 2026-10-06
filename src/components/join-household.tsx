@@ -12,23 +12,26 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CircleAlert, House, LogIn } from "lucide-react";
 import { buttonGhost, buttonPrimary } from "@/components/dialog";
+import { useT } from "@/components/locale";
 import { Card, EmptyState } from "@/components/ui";
+import { msg } from "@/lib/i18n/t";
 import { checkHouseholdInvite, declineHousehold, joinHousehold, setHouseholdView } from "@/lib/server/household-actions";
 
 const INVITE_KEY = "prism-household-invite";
 
 type Status = Awaited<ReturnType<typeof checkHouseholdInvite>>["status"] | "loading" | "missing" | "declined";
 
+/** What the page says for each answer, translated where it's shown. */
 const SAYS: Partial<Record<Status, { title: string; body: string }>> = {
-  missing: { title: "No invitation here", body: "Open the link you were sent. It ends with a long code after a # sign." },
-  not_found: { title: "This link doesn't work any more", body: "It may have been used already, or cancelled. Ask for a new one." },
-  wrong_email: { title: "This invitation is for someone else", body: "Sign in with the email address it was sent to, then open the link again." },
-  expired: { title: "This link has expired", body: "Invitations last seven days. Ask for a new one." },
-  already_member: { title: "You're already in this household", body: "Choose what you share on Connections." },
-  in_another: { title: "You're already in a household", body: "Leave it from your Account page first, then open this link again." },
-  full: { title: "This household is full", body: "A household has room for four people." },
-  error: { title: "We couldn't check this link just now", body: "Try again in a minute." },
-  declined: { title: "Invitation declined", body: "Nothing was shared, and the link won't work again." },
+  missing: { title: msg("No invitation here"), body: msg("Open the link you were sent. It ends with a long code after a # sign.") },
+  not_found: { title: msg("This link doesn't work any more"), body: msg("It may have been used already, or cancelled. Ask for a new one.") },
+  wrong_email: { title: msg("This invitation is for someone else"), body: msg("Sign in with the email address it was sent to, then open the link again.") },
+  expired: { title: msg("This link has expired"), body: msg("Invitations last seven days. Ask for a new one.") },
+  already_member: { title: msg("You're already in this household"), body: msg("Choose what you share on Connections.") },
+  in_another: { title: msg("You're already in a household"), body: msg("Leave it from your Account page first, then open this link again.") },
+  full: { title: msg("This household is full"), body: msg("A household has room for four people.") },
+  error: { title: msg("We couldn't check this link just now"), body: msg("Try again in a minute.") },
+  declined: { title: msg("Invitation declined"), body: msg("Nothing was shared, and the link won't work again.") },
 };
 
 function readToken(): string | null {
@@ -54,6 +57,7 @@ function forget() {
 }
 
 export function JoinHousehold() {
+  const t = useT();
   const router = useRouter();
   // A ref, not state: it's read by the buttons, never drawn.
   const tokenRef = useRef<string | null>(null);
@@ -63,9 +67,9 @@ export function JoinHousehold() {
   const [pending, start] = useTransition();
 
   useEffect(() => {
-    const t = readToken();
-    tokenRef.current = t;
-    (t ? checkHouseholdInvite(t) : Promise.resolve({ status: "missing" as const, invitedBy: null })).then((r) => {
+    const token = readToken();
+    tokenRef.current = token;
+    (token ? checkHouseholdInvite(token) : Promise.resolve({ status: "missing" as const, invitedBy: null })).then((r) => {
       setStatus(r.status);
       setInvitedBy(r.invitedBy);
     });
@@ -74,7 +78,7 @@ export function JoinHousehold() {
   if (status === "loading") {
     return (
       <Card className="p-5 sm:p-6" as="div">
-        <div aria-busy="true" aria-label="Checking the invitation" className="space-y-3">
+        <div aria-busy="true" aria-label={t("Checking the invitation")} className="space-y-3">
           <div className="skeleton h-6 w-2/3" />
           <div className="skeleton h-4 w-full" />
           <div className="skeleton h-10 w-40" />
@@ -88,11 +92,11 @@ export function JoinHousehold() {
       <Card className="p-5 sm:p-6" as="div">
         <EmptyState
           icon={LogIn}
-          title="Sign in to see your invitation"
-          body="Use the email address the invitation was sent to. New to Prism? The same code creates your account."
+          title={t("Sign in to see your invitation")}
+          body={t("Use the email address the invitation was sent to. New to Prism? The same code creates your account.")}
           action={
             <Link href="/sign-in?next=%2Fhousehold%2Fjoin" className={buttonPrimary}>
-              Sign in
+              {t("Sign in")}
             </Link>
           }
         />
@@ -108,11 +112,11 @@ export function JoinHousehold() {
             <House aria-hidden className="size-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-ink-1">{invitedBy ? `${invitedBy} invited you to share a household` : "You're invited to share a household"}</h2>
+            <h2 className="text-lg font-bold text-ink-1">{invitedBy ? t("{name} invited you to share a household", { name: invitedBy }) : t("You're invited to share a household")}</h2>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-2">
-              <li>You keep your own login. Nothing of yours is shared when you join.</li>
-              <li>You choose, account by account, what the household sees. They see balances and transactions, never a way into your bank.</li>
-              <li>You&apos;ll see what they share, and you can leave any time.</li>
+              <li>{t("You keep your own login. Nothing of yours is shared when you join.")}</li>
+              <li>{t("You choose, account by account, what the household sees. They see balances and transactions, never a way into your bank.")}</li>
+              <li>{t("You'll see what they share, and you can leave any time.")}</li>
             </ul>
           </div>
         </div>
@@ -129,7 +133,7 @@ export function JoinHousehold() {
               start(async () => {
                 const res = tokenRef.current ? await declineHousehold(tokenRef.current) : { ok: false };
                 if (!res.ok) {
-                  setProblem("That didn't go through, so the invitation still stands. Try again in a moment.");
+                  setProblem(t("That didn't go through, so the invitation still stands. Try again in a moment."));
                   return;
                 }
                 forget();
@@ -138,16 +142,16 @@ export function JoinHousehold() {
             }
             className={buttonGhost}
           >
-            No thanks
+            {t("No thanks")}
           </button>
           <button
             type="button"
             disabled={pending}
             onClick={() =>
               start(async () => {
-                const res = tokenRef.current ? await joinHousehold(tokenRef.current) : { ok: false, message: "No invitation here." };
+                const res = tokenRef.current ? await joinHousehold(tokenRef.current) : { ok: false, message: t("No invitation here.") };
                 if (!res.ok) {
-                  setProblem(res.message ?? "That didn't work. Try again in a moment.");
+                  setProblem(res.message ?? t("That didn't work. Try again in a moment."));
                   return;
                 }
                 forget();
@@ -157,7 +161,7 @@ export function JoinHousehold() {
             }
             className={buttonPrimary}
           >
-            {pending ? "Joining…" : "Join the household"}
+            {pending ? t("Joining…") : t("Join the household")}
           </button>
         </div>
       </Card>
@@ -169,16 +173,16 @@ export function JoinHousehold() {
     <Card className="p-5 sm:p-6" as="div">
       <EmptyState
         icon={status === "declined" ? House : CircleAlert}
-        title={says.title}
-        body={says.body}
+        title={t(says.title)}
+        body={t(says.body)}
         action={
           status === "already_member" ? (
             <Link href="/connections#share" className={buttonPrimary}>
-              Choose what to share
+              {t("Choose what to share")}
             </Link>
           ) : status === "in_another" ? (
             <Link href="/account#household" className={buttonGhost}>
-              Go to Account
+              {t("Go to Account")}
             </Link>
           ) : undefined
         }

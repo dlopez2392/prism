@@ -21,6 +21,7 @@ import { assembleImports } from "@/lib/finance/import";
 import { validManualItems } from "@/lib/finance/manual";
 import { analyze } from "@/lib/finance/model";
 import { validBudgets, validGoals } from "@/lib/finance/plan";
+import { EN, type T } from "@/lib/i18n/t";
 import { plaidConfig } from "@/lib/plaid/client";
 import { validState, type StoredSync } from "@/lib/plaid/sync";
 import { bankAttention, SEALED_SYNC_MAX } from "@/lib/server/account-store";
@@ -59,12 +60,12 @@ type Sources = {
 const rows = <T>(x: unknown): T[] => (Array.isArray(x) ? (x as T[]) : []);
 
 /**
- * This morning's snapshot of the person's own money, kept for the job and
- * returned; null when the database won't hand over their sources (they turned
- * the check off, or linked Coinbase) or nothing of theirs is live. Throws when
- * the database can't be asked, so the run counts it.
+ * This morning's snapshot of the person's own money, in the language of `t`,
+ * kept for the job and returned; null when the database won't hand over their
+ * sources (they turned the check off, or linked Coinbase) or nothing of theirs
+ * is live. Throws when the database can't be asked, so the run counts it.
  */
-export async function morningCheck(db: JobDb, config: AlertsConfig, key: VaultKey, userId: string, now = new Date()): Promise<AlertSnapshot | null> {
+export async function morningCheck(db: JobDb, config: AlertsConfig, key: VaultKey, userId: string, now = new Date(), t: T = EN): Promise<AlertSnapshot | null> {
   const { data, error } = await db.rpc("alerts_sources", { p_secret: config.secret, p_user_id: userId });
   if (error) throw new Error("The database didn't hand over this person's sources.");
   if (!data || typeof data !== "object") return null;
@@ -116,7 +117,8 @@ export async function morningCheck(db: JobDb, config: AlertsConfig, key: VaultKe
   await Promise.allSettled(saves);
   if (!finance) return null;
 
-  const snapshot = alertSnapshot(analyze(finance), now.toISOString(), "morning");
+  // In the language their email goes in, so a bill or a price reads the same as the rest of it.
+  const snapshot = alertSnapshot(analyze(finance, t), now.toISOString(), "morning", t);
   const kept = await db.rpc("alerts_save_snapshot", { p_secret: config.secret, p_user_id: userId, p_sealed: sealPacked(snapshot, key) });
   // Not kept, still used: this email is right either way, and the next visit or morning keeps one.
   if (kept.error) console.error("Prism: a morning check's snapshot wasn't kept.");

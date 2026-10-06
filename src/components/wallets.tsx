@@ -17,31 +17,39 @@ import { secretKind, secretWarning } from "@/lib/crypto/secrets";
 import { CHAINS, WALLET_NAME_MAX, type Chain } from "@/lib/crypto/wallets";
 import { IDLE, type PlanFormState } from "@/lib/finance/plan";
 import { addWallet, removeWallet } from "@/lib/server/wallet-actions";
+import { useT } from "@/components/locale";
+import { msg } from "@/lib/i18n/t";
 
 const ORDER: Chain[] = ["bitcoin", "ethereum", "solana"];
 
-/** What the address field asks for, per network: Bitcoin also takes a whole wallet. */
+/**
+ * What the address field asks for, per network: Bitcoin also takes a whole
+ * wallet. In English, shown with t(); each hint's example is CHAINS'
+ * placeholder, written out so the sentence is whole in every language.
+ */
 const FIELD: Record<Chain, { label: string; hint: string; readBy: string }> = {
   bitcoin: {
-    label: "Bitcoin address or extended public key",
-    hint: "An address (bc1q…, 1… or 3…) shows that one address. Your wallet's extended public key (xpub, ypub or zpub) shows everything in it.",
-    readBy:
+    label: msg("Bitcoin address or extended public key"),
+    hint: msg("An address (bc1q…, 1… or 3…) shows that one address. Your wallet's extended public key (xpub, ypub or zpub) shows everything in it."),
+    readBy: msg(
       "Prism sends the address, and nothing else about you, to mempool.space to read its balance while you use Prism. For an extended public key, Prism works out the wallet's addresses itself and sends mempool.space only those, never the key.",
+    ),
   },
   ethereum: {
-    label: "Ethereum address",
-    hint: `Copy it from your wallet app: ${CHAINS.ethereum.placeholder}`,
-    readBy: "Prism sends the address, and nothing else about you, to Alchemy to read its balance, about every 15 minutes while you use Prism.",
+    label: msg("Ethereum address"),
+    hint: msg("Copy it from your wallet app: 0x…"),
+    readBy: msg("Prism sends the address, and nothing else about you, to Alchemy to read its balance, about every 15 minutes while you use Prism."),
   },
   solana: {
-    label: "Solana address",
-    hint: `Copy it from your wallet app: ${CHAINS.solana.placeholder}`,
-    readBy: "Prism sends the address, and nothing else about you, to Alchemy to read its balance, about every 15 minutes while you use Prism.",
+    label: msg("Solana address"),
+    hint: msg("Copy it from your wallet app: A Solana address"),
+    readBy: msg("Prism sends the address, and nothing else about you, to Alchemy to read its balance, about every 15 minutes while you use Prism."),
   },
 };
 
 /** The "Add a wallet" button, its dialog, and the line that says what was added. */
 export function AddWallet({ enabled, full }: { enabled: Record<Chain, boolean>; full: boolean }) {
+  const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
@@ -66,13 +74,13 @@ export function AddWallet({ enabled, full }: { enabled: Record<Chain, boolean>; 
         className={clsx(buttonSmall, "disabled:opacity-60")}
       >
         <Plus aria-hidden className="size-4" />
-        Add a wallet
+        {t("Add a wallet")}
       </button>
       <Dialog
         dialogRef={dialog}
-        title="Add a wallet"
+        title={t("Add a wallet")}
         icon={WalletIcon}
-        description="By its public address: the one you'd give someone to pay you. Prism can see what it holds and can never move it."
+        description={t("By its public address: the one you'd give someone to pay you. Prism can see what it holds and can never move it.")}
       >
         <WalletForm
           key={session}
@@ -89,6 +97,7 @@ export function AddWallet({ enabled, full }: { enabled: Record<Chain, boolean>; 
 }
 
 function WalletForm({ enabled, onDone, onCancel }: { enabled: Record<Chain, boolean>; onDone: (message: string) => void; onCancel: () => void }) {
+  const t = useT();
   const [state, action, pending] = useActionState(async (prev: PlanFormState, form: FormData) => {
     const next = await addWallet(prev, form);
     if (next.status === "saved") onDone(next.message);
@@ -108,7 +117,7 @@ function WalletForm({ enabled, onDone, onCancel }: { enabled: Record<Chain, bool
       // Never sent, and not left sitting in the field either.
       const field = e.currentTarget.elements.namedItem("address");
       if (field instanceof HTMLInputElement) field.value = "";
-      setStopped(secretWarning(secret, false));
+      setStopped(secretWarning(secret, false, t));
       return;
     }
     setStopped(null);
@@ -119,25 +128,32 @@ function WalletForm({ enabled, onDone, onCancel }: { enabled: Record<Chain, bool
     <form onSubmit={submit} noValidate>
       <div className="grid gap-4">
         <fieldset>
-          <legend className="mb-2 text-[13px] font-semibold text-ink-2">Network</legend>
+          <legend className="mb-2 text-[13px] font-semibold text-ink-2">{t("Network")}</legend>
           <div className="grid gap-2 sm:grid-cols-3">
             {ORDER.map((c) => (
               <label key={c} className={clsx("relative", !enabled[c] && "opacity-60")}>
                 <input type="radio" name="chain" value={c} checked={chain === c} disabled={!enabled[c]} onChange={() => setChain(c)} className="peer sr-only" />
                 <span className="flex min-h-12 cursor-pointer flex-col justify-center rounded-ctl border border-line bg-surface-2 px-3 py-2 text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3 peer-checked:border-accent peer-checked:bg-accent-soft peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--focus)] peer-disabled:cursor-not-allowed">
                   {CHAINS[c].label}
-                  {!enabled[c] ? <span className="text-xs font-normal text-ink-3">Coming soon</span> : null}
+                  {!enabled[c] ? <span className="text-xs font-normal text-ink-3">{t("Coming soon")}</span> : null}
                 </span>
               </label>
             ))}
           </div>
           {errors.chain ? <p className="mt-1 text-xs font-medium text-crit-ink">{errors.chain}</p> : null}
         </fieldset>
-        <TextInput key={chain} name="address" label={FIELD[chain].label} defaultValue="" maxLength={400} error={errors.address} hint={FIELD[chain].hint} />
-        <TextInput name="name" label="Name (optional)" defaultValue="" maxLength={WALLET_NAME_MAX} error={errors.name} hint={`For example, “Cold storage”. Blank is “${CHAINS[chain].label} wallet”.`} />
+        <TextInput key={chain} name="address" label={t(FIELD[chain].label)} defaultValue="" maxLength={400} error={errors.address} hint={t(FIELD[chain].hint)} />
+        <TextInput
+          name="name"
+          label={t("Name (optional)")}
+          defaultValue=""
+          maxLength={WALLET_NAME_MAX}
+          error={errors.name}
+          hint={t("For example, “Cold storage”. Blank is “{name}”.", { name: t("{network} wallet", { network: CHAINS[chain].label }) })}
+        />
         <p className="rounded-ctl border border-line bg-surface-2 p-3 text-xs text-ink-2">
-          {FIELD[chain].readBy} It&apos;s kept encrypted in your account and never shared with your household. Never enter a recovery phrase or private key: Prism will
-          never ask for one.
+          {t(FIELD[chain].readBy)}{" "}
+          {t("It's kept encrypted in your account and never shared with your household. Never enter a recovery phrase or private key: Prism will never ask for one.")}
         </p>
       </div>
 
@@ -145,10 +161,10 @@ function WalletForm({ enabled, onDone, onCancel }: { enabled: Record<Chain, bool
 
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className={buttonGhost}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button type="submit" disabled={pending} className={clsx(buttonPrimary, "min-w-24")}>
-          {pending ? "Reading…" : "Add"}
+          {pending ? t("Reading…") : t("Add")}
         </button>
       </div>
     </form>
@@ -157,6 +173,7 @@ function WalletForm({ enabled, onDone, onCancel }: { enabled: Record<Chain, bool
 
 /** Remove a wallet: asks once, then its address (or a whole wallet's key) is gone from the account. */
 export function RemoveWallet({ id, name, whole = false }: { id: string; name: string; whole?: boolean }) {
+  const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   return (
@@ -167,10 +184,19 @@ export function RemoveWallet({ id, name, whole = false }: { id: string; name: st
         className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-ctl border border-line px-2.5 text-xs font-semibold text-ink-2 hover:bg-surface-3"
       >
         <Trash2 aria-hidden className="size-3.5" />
-        Remove
+        {t("Remove")}
       </button>
-      <Dialog dialogRef={dialog} title={`Remove ${name}?`} icon={Trash2} description={`It leaves every screen in Prism, and its ${whole ? "extended public key" : "address"} is deleted from your account.`}>
-        <p className="text-sm text-ink-2">The wallet itself isn&apos;t touched. You can add it again any time.</p>
+      <Dialog
+        dialogRef={dialog}
+        title={t("Remove {name}?", { name })}
+        icon={Trash2}
+        description={
+          whole
+            ? t("It leaves every screen in Prism, and its extended public key is deleted from your account.")
+            : t("It leaves every screen in Prism, and its address is deleted from your account.")
+        }
+      >
+        <p className="text-sm text-ink-2">{t("The wallet itself isn't touched. You can add it again any time.")}</p>
         {state.error ? (
           <p role="alert" className="mt-3 text-sm font-medium text-crit-ink">
             {state.error}
@@ -190,10 +216,10 @@ export function RemoveWallet({ id, name, whole = false }: { id: string; name: st
               setState({ busy: false, error: r.status === "error" ? r.message : null });
             }}
           >
-            {state.busy ? "Removing…" : "Remove it"}
+            {state.busy ? t("Removing…") : t("Remove it")}
           </button>
           <button type="button" className={buttonGhost} onClick={() => dialog.current?.close()}>
-            Keep it
+            {t("Keep it")}
           </button>
         </div>
       </Dialog>

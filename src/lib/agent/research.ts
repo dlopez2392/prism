@@ -366,7 +366,9 @@ const newestFirst = (a: Transaction, b: Transaction) => (a.date < b.date ? 1 : a
 function line(t: Transaction, accounts: Map<string, Account>): string {
   // A payment's name and note were written by other people: quoted, as what they said, never as instructions.
   const paid = t.p2p ? ` | ${p2pLabel(t.p2p)}${t.p2p.note ? `, note "${t.p2p.note.replace(/"/g, "'")}"` : ""}` : "";
-  return `- ${t.date} | ${t.merchant}${paid} | ${money(t.amount)} | ${CATEGORIES[t.category]?.label ?? t.category} | ${accountLabel(accounts.get(t.accountId))}${t.pending ? " | pending" : ""} | id ${t.id}`;
+  // What an Amazon charge paid for: sellers' words, quoted the same way.
+  const bought = t.order ? ` | bought ${t.order.items.map((i) => `"${i.name.replace(/"/g, "'")}"`).join(", ")}` : "";
+  return `- ${t.date} | ${t.merchant}${paid}${bought} | ${money(t.amount)} | ${CATEGORIES[t.category]?.label ?? t.category} | ${accountLabel(accounts.get(t.accountId))}${t.pending ? " | pending" : ""} | id ${t.id}`;
 }
 
 function ledger(title: string, txns: Transaction[], accounts: Map<string, Account>): string[] {
@@ -460,7 +462,7 @@ function yearBody(d: AgentData, y: number, accounts: Map<string, Account>) {
 
 function categoryBody(d: AgentData, c: SpendCategoryId, accounts: Map<string, Account>) {
   const w = recent(d);
-  const txns = seen(d).filter((t) => inRange(t, w.from, w.to) && t.category === c);
+  const txns = seen(d).filter((t) => inRange(t, w.from, w.to) && t.category === c && !t.excluded);
   const flows = w.months.map((m) => ({ month: m, spent: -txns.filter((t) => monthKey(t.date) === m).reduce((s, t) => s + t.amount, 0) }));
   const total = flows.reduce((s, f) => s + f.spent, 0);
   return {

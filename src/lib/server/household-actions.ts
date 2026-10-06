@@ -14,6 +14,8 @@
 import { refresh } from "next/cache";
 import { cookies } from "next/headers";
 import { COINBASE_ID } from "@/lib/coinbase/map";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/t";
 import { currentAccount } from "@/lib/supabase/server";
 import { VIEW_COOKIE } from "./finance";
 import {
@@ -35,25 +37,26 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-function reason(e: unknown): string {
-  if (e instanceof HouseholdError && e.reason === "full") return "A household has room for four people. Cancel an invitation, or ask someone to leave, first.";
-  if (e instanceof HouseholdError && e.reason === "self") return "That's your own email. Invite someone else.";
-  if (e instanceof HouseholdError && e.reason === "member") return "They're already in your household.";
-  return "That didn't work. Try again in a moment.";
+function reason(e: unknown, t: T): string {
+  if (e instanceof HouseholdError && e.reason === "full") return t("A household has room for four people. Cancel an invitation, or ask someone to leave, first.");
+  if (e instanceof HouseholdError && e.reason === "self") return t("That's your own email. Invite someone else.");
+  if (e instanceof HouseholdError && e.reason === "member") return t("They're already in your household.");
+  return t("That didn't work. Try again in a moment.");
 }
 
 export async function inviteToHousehold(_prev: InviteState, form: FormData): Promise<InviteState> {
+  const t = await getT();
   const account = await currentAccount();
-  if (!account) return { status: "error", message: "Sign in to invite someone." };
+  if (!account) return { status: "error", message: t("Sign in to invite someone.") };
   const raw = form.get("email");
   const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  if (!EMAIL.test(email) || email.length > 320) return { status: "error", message: "Enter their email address, like dana@example.com." };
+  if (!EMAIL.test(email) || email.length > 320) return { status: "error", message: t("Enter their email address, like dana@example.com.") };
   try {
     const token = await createInvite(account, email);
     refresh();
     return { status: "invited", email, link: `${await requestOrigin()}/household/join#${token}` };
   } catch (e) {
-    return { status: "error", message: reason(e) };
+    return { status: "error", message: reason(e, t) };
   }
 }
 
@@ -82,13 +85,14 @@ export async function checkHouseholdInvite(token: string): Promise<{ status: Inv
 }
 
 export async function joinHousehold(token: string): Promise<{ ok: boolean; message?: string }> {
+  const t = await getT();
   const account = await currentAccount();
-  if (!account) return { ok: false, message: "Sign in to join." };
-  if (!TOKEN.test(token)) return { ok: false, message: "That link isn't a Prism invitation." };
+  if (!account) return { ok: false, message: t("Sign in to join.") };
+  if (!TOKEN.test(token)) return { ok: false, message: t("That link isn't a Prism invitation.") };
   try {
     await acceptInvite(account, token);
   } catch {
-    return { ok: false, message: "That invitation can't be used any more. Ask for a new link." };
+    return { ok: false, message: t("That invitation can't be used any more. Ask for a new link.") };
   }
   return { ok: true };
 }

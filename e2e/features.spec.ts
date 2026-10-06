@@ -1,9 +1,26 @@
 // What a visitor can do on the example household, end to end: try a
 // purchase on Future and see the bills that don't come monthly, plan paying
 // off the loans on Net worth, read the tax summary year by year, and search
-// the ledger, including from a link that names what to look for.
+// the ledger, including from a link that names what to look for; find the
+// link for an investment account beside the bank's on Connections; look at
+// one month on Spending and Cash flow, this one or any before it; and open
+// the transactions, or the month, behind what a chart or a list shows.
 
 import { expect, test } from "@playwright/test";
+import { expectNoSidewaysScroll, watchErrors } from "./helpers";
+
+test("Connections offers an investment account beside a bank, and on the example household says there's nothing to link", async ({ page }) => {
+  await page.goto("/connections");
+  // Beside "Connect a bank" in the card at the top, and again under Investing.
+  const links = page.getByRole("button", { name: "Connect an investment account" });
+  await expect(links).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Connect a bank" }).first()).toBeVisible();
+  // It asks for an investment account, and this deployment has no Plaid keys: the example household explains itself.
+  const asked = page.waitForRequest((r) => r.url().endsWith("/api/plaid/link-token") && r.method() === "POST");
+  await links.first().click();
+  expect((await asked).postDataJSON()).toMatchObject({ kind: "investments", from: "/connections" });
+  await expect(page.getByRole("dialog").getByRole("heading", { name: "You're exploring a demo household" })).toBeVisible();
+});
 
 test("Can I afford it? answers as you type, and says when it doesn't fit", async ({ page }) => {
   await page.goto("/future");
@@ -82,4 +99,119 @@ test("the year page leads to the tax summary for the same year", async ({ page }
   await page.getByRole("link", { name: `See ${year} for your taxes` }).click();
   await expect(page).toHaveURL(new RegExp(`/taxes\\?y=${year}$`));
   await expect(page.locator("h1")).toHaveText(`Your ${year} taxes`);
+});
+
+test("one month sets this month so far against the same days of the last, on Spending and Cash flow", async ({ page }) => {
+  const errors = watchErrors(page);
+  for (const [path, says] of [
+    ["/spending", "Spent this month"],
+    ["/cash-flow", /of everything that came in this month so far\./],
+  ] as const) {
+    await page.goto(path);
+    const range = page.getByRole("navigation", { name: "Date range" });
+    await range.getByRole("link", { name: "1 month" }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}\\?range=1$`));
+    await expect(range.getByRole("link", { name: "1 month" })).toHaveAttribute("aria-current", "true");
+    await expect(page.getByText(says)).toBeVisible();
+    // Against the same days of last month, named: "vs Sep 1 – 5", or "vs Sep 1" on the first.
+    await expect(page.getByText(/^vs [A-Z][a-z]{2} 1( – \d{1,2})?$/).first()).toBeVisible();
+    // The four ranges fit a phone's width.
+    await expectNoSidewaysScroll(page);
+  }
+  // One month so far averages by the day; longer ranges by the month.
+  await page.goto("/spending?range=1");
+  await expect(page.getByText("Per day", { exact: true })).toBeVisible();
+  await page.goto("/spending?range=3");
+  await expect(page.getByText("Per month", { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("one month steps back through past months, each set against the whole month before, and forward to this month again", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/spending?range=1");
+  const month = page.getByRole("navigation", { name: "Month" });
+  // Read day by day: the pace chart stands where the month-by-month bars do for longer ranges.
+  await expect(page.getByRole("heading", { name: "Spending pace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Month by month, by category" })).toHaveCount(0);
+  // This month: there's nothing later to step to.
+  await expect(month.getByRole("link", { name: /^Later month/ })).toHaveCount(0);
+
+  await month.getByRole("link", { name: /^Earlier month, / }).click();
+  await expect(page).toHaveURL(/\/spending\?range=1&month=\d{4}-\d{2}$/);
+  const shown = new URL(page.url()).searchParams.get("month")!;
+  const name = new Date(`${shown}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+  await expect(page.getByText(`Spent in ${name}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`All of ${name} against all of`)).toBeVisible();
+  // A whole month is set against the whole month before it, by name: "vs August".
+  await expect(page.getByText(/^vs [A-Z][a-z]+$/).first()).toBeVisible();
+  await expectNoSidewaysScroll(page);
+
+  await month.getByRole("link", { name: "Later month, this month" }).click();
+  await expect(page).toHaveURL(/\/spending\?range=1$/);
+  await expect(page.getByText("Spent this month", { exact: true })).toBeVisible();
+
+  // Cash flow reads the same address the same way, and a past month isn't "in progress".
+  await page.goto(`/cash-flow?range=1&month=${shown}`);
+  await expect(page.getByText(new RegExp(`of everything that came in during ${name}\\.$`))).toBeVisible();
+  await expect(page.getByText("Both months in full")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Month" }).getByText(new RegExp(`^${name} \\d{4}$`))).toBeVisible();
+  // A month named beside a longer range is ignored, so no stepper shows.
+  await page.goto(`/cash-flow?range=3&month=${shown}`);
+  await expect(page.getByRole("navigation", { name: "Month" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("what Overview and Spending show opens the transactions behind it", async ({ page }) => {
+  const errors = watchErrors(page);
+  const category = page.getByRole("combobox", { name: "Category" });
+  // Overview's donut legend: this month's transactions in that category.
+  await page.goto("/");
+  await page.getByRole("link", { name: /^Housing\b.*see these transactions$/ }).first().click();
+  await expect(page).toHaveURL(/\/spending\?range=1#category=housing$/);
+  await expect(category).toHaveValue("housing");
+  // An Everyday budget, the same way.
+  await page.goto("/");
+  await page.getByRole("link", { name: /^Food & dining\b.*of \$.*see these transactions$/ }).click();
+  await expect(page).toHaveURL(/\/spending\?range=1#category=food$/);
+  await expect(category).toHaveValue("food");
+  // On Spending, a category's row and a shop's row narrow the list on the page.
+  await page.goto("/spending?range=3");
+  await page.getByRole("link", { name: /^Transport\b.*see these transactions$/ }).click();
+  await expect(page).toHaveURL(/#category=transport$/);
+  await expect(category).toHaveValue("transport");
+  const shop = page.getByRole("link", { name: /\d+ visits?\b.*see these transactions$/ }).first();
+  const name = (await shop.locator("span").first().innerText()).trim();
+  await shop.click();
+  await expect(page.getByPlaceholder(/Search a merchant/)).toHaveValue(name);
+  expect(errors).toEqual([]);
+});
+
+test("a month's bars open that month on its own", async ({ page }, info) => {
+  const errors = watchErrors(page);
+  await page.goto("/cash-flow");
+  const chart = page.getByRole("img", { name: "Monthly money in and money out" });
+  const last = new Date();
+  last.setUTCDate(1);
+  last.setUTCMonth(last.getUTCMonth() - 1);
+  const month = last.toISOString().slice(0, 7);
+  if (info.project.name === "phone") {
+    // A touch shows the month's numbers first; a second tap on it opens the month.
+    const box = (await chart.boundingBox())!;
+    const slot = (box.width - 60) / 6;
+    const at = { x: 52 + slot * 4.5, y: box.height / 2 };
+    await chart.tap({ position: at });
+    await expect(page.getByText("Tap or click to see this month")).toBeVisible();
+    await expect(page).toHaveURL(/\/cash-flow$/);
+    await chart.tap({ position: at });
+  } else {
+    // From the keyboard: the arrows move between months, Enter opens one.
+    await chart.focus();
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByText("Tap or click to see this month")).toBeVisible();
+    await page.keyboard.press("Enter");
+  }
+  await expect(page).toHaveURL(new RegExp(`/cash-flow\\?range=1&month=${month}$`));
+  await expect(page.getByText(/of everything that came in during [A-Z][a-z]+\.$/)).toBeVisible();
+  expect(errors).toEqual([]);
 });

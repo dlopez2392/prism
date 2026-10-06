@@ -9,6 +9,7 @@
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
+import { getT } from "@/lib/i18n/server";
 import { currentAccount } from "@/lib/supabase/server";
 
 /** Supabase's authorization ids and client ids: opaque, URL-safe. */
@@ -30,13 +31,14 @@ export async function decideConnection(form: FormData): Promise<void> {
 export type DisconnectState = { status: "idle" } | { status: "done" | "error"; message: string };
 
 export async function disconnectApp(_prev: DisconnectState, form: FormData): Promise<DisconnectState> {
+  const t = await getT();
   const account = await currentAccount();
   if (!account) redirect("/sign-in");
   const clientId = String(form.get("client_id") ?? "");
-  const name = String(form.get("name") ?? "The app").slice(0, 80);
-  if (!OPAQUE_ID.test(clientId)) return { status: "error", message: "We couldn't tell which app to disconnect." };
+  const name = String(form.get("name") ?? t("The app")).slice(0, 80);
+  if (!OPAQUE_ID.test(clientId)) return { status: "error", message: t("We couldn't tell which app to disconnect.") };
   const { error } = await account.supabase.auth.oauth.revokeGrant({ clientId });
-  if (error) return { status: "error", message: `We couldn't disconnect ${name} just now. Try again in a minute.` };
+  if (error) return { status: "error", message: t("We couldn't disconnect {name} just now. Try again in a minute.", { name }) };
   refresh();
-  return { status: "done", message: `${name} is disconnected and can't read anything now.` };
+  return { status: "done", message: t("{name} is disconnected and can't read anything now.", { name }) };
 }

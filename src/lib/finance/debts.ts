@@ -4,6 +4,7 @@
 // (Account.liability, read from Plaid Liabilities). Pure: every screen and
 // the calendar and a connected app read the same answers from here.
 
+import { EN, type T } from "@/lib/i18n/t";
 import { addDays, daysBetween } from "./dates";
 import { money, money0, shortDate } from "./format";
 import type { RecurringStream } from "./recurring";
@@ -32,19 +33,19 @@ export function dueIn(date: ISODate, today: ISODate): string {
 }
 
 /** "24.99% APR", "6.5% interest": a card's APR, a loan's rate. */
-export function rateText(apr: number, kind: Account["kind"]): string {
-  const pct = `${Number(apr.toFixed(2))}%`;
-  return kind === "credit" ? `${pct} APR` : `${pct} interest`;
+export function rateText(apr: number, kind: Account["kind"], t: T = EN): string {
+  const rate = Number(apr.toFixed(2));
+  return kind === "credit" ? t("{rate}% APR", { rate }) : t("{rate}% interest", { rate });
 }
 
 /** The account's terms in one line: "Due Oct 14 · $35 minimum · 24.99% APR". Only what the lender told us. */
-export function termsLine(account: Account): string | null {
+export function termsLine(account: Account, t: T = EN): string | null {
   const l = account.liability;
   if (!l) return null;
   const parts = [
-    l.dueDate ? `Due ${shortDate(l.dueDate)}` : null,
-    l.minimumPayment !== null ? `${money(l.minimumPayment)} minimum` : null,
-    l.apr !== null ? rateText(l.apr, account.kind) : null,
+    l.dueDate ? t("Due {date}", { date: shortDate(l.dueDate, t.locale) }) : null,
+    l.minimumPayment !== null ? t("{amount} minimum", { amount: money(l.minimumPayment) }) : null,
+    l.apr !== null ? rateText(l.apr, account.kind, t) : null,
   ].filter((p): p is string => p !== null);
   return parts.length ? parts.join(" · ") : null;
 }

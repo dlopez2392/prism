@@ -8,6 +8,7 @@ import type { Wallet } from "@/lib/crypto/wallets";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ refresh: vi.fn() }));
+vi.mock("@/lib/i18n/server", async () => ({ getT: async () => (await import("@/lib/i18n/t")).EN }));
 const signedIn = { current: null as unknown };
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn.current }));
 

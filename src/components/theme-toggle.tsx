@@ -7,6 +7,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
+import { useT } from "@/components/locale";
 
 const KEY = "prism-theme";
 
@@ -23,6 +24,7 @@ export function ThemeToggle() {
     () => "light",
   );
   const next = theme === "dark" ? "light" : "dark";
+  const t = useT();
   return (
     <button
       type="button"
@@ -34,7 +36,7 @@ export function ThemeToggle() {
           // Private mode or blocked storage: the toggle still works for this visit.
         }
       }}
-      aria-label={`Switch to ${next} theme`}
+      aria-label={next === "dark" ? t("Switch to dark theme") : t("Switch to light theme")}
       className="grid size-9 place-items-center rounded-ctl border border-line text-ink-2 transition-colors duration-150 hover:bg-surface-3 hover:text-ink-1"
     >
       {theme === "dark" ? <Sun aria-hidden className="size-4" /> : <Moon aria-hidden className="size-4" />}

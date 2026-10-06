@@ -9,22 +9,28 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PlanFormState } from "@/lib/finance/plan";
+import { getT } from "@/lib/i18n/server";
 import { readFirstName } from "@/lib/profile";
 import { currentAccount } from "@/lib/supabase/server";
 import { saveAccountFirstName } from "./account-store";
 
 export async function saveFirstName(_prev: PlanFormState, form: FormData): Promise<PlanFormState> {
+  const t = await getT();
   const account = await currentAccount();
   if (!account) redirect("/sign-in");
-  const read = readFirstName(form.get("firstName"));
+  const read = readFirstName(form.get("firstName"), t);
   if (!read.ok) return { status: "error", message: read.error, fields: { firstName: read.error } };
   try {
     await saveAccountFirstName(account, read.name);
   } catch {
-    return { status: "error", message: "We couldn't save your name just now. Try again in a minute." };
+    return { status: "error", message: t("We couldn't save your name just now. Try again in a minute.") };
   }
   // The welcome step is done once answered: on to the overview, greeting and all.
   if (form.get("next") === "welcome") redirect("/");
   refresh();
-  return { status: "saved", message: read.name ? `Saved. Prism will greet you as ${read.name}.` : "Removed. Prism will greet you without a name.", at: Date.now() };
+  return {
+    status: "saved",
+    message: read.name ? t("Saved. Prism will greet you as {name}.", { name: read.name }) : t("Removed. Prism will greet you without a name."),
+    at: Date.now(),
+  };
 }

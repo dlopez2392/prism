@@ -17,33 +17,40 @@ import { CategoryIcon } from "@/components/category-icon";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
 import { affordBase } from "@/lib/finance/afford";
 import { dueReminders, remindable } from "@/lib/finance/calendar";
-import { dueIn, paymentsDue, rateText, statementText } from "@/lib/finance/debts";
-import { addDays } from "@/lib/finance/dates";
-import { dayDate, money, money0, shortDate } from "@/lib/finance/format";
+import { paymentsDue, rateText } from "@/lib/finance/debts";
+import { addDays, daysBetween } from "@/lib/finance/dates";
+import { capitalized, dayDate, money, money0, shortDate } from "@/lib/finance/format";
 import { scheduleText } from "@/lib/finance/income";
 import { analyze, FORECAST_DAYS } from "@/lib/finance/model";
 import { monthlyCost, setAside } from "@/lib/finance/recurring";
+import type { ISODate } from "@/lib/finance/types";
 import { dailyBalances } from "@/lib/finance/view";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/t";
 import { accountFeedToken } from "@/lib/server/account-store";
 import { getFinance } from "@/lib/server/finance";
 import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { currentAccount } from "@/lib/supabase/server";
 
-export const metadata: Metadata = { title: "Future" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Future") };
+}
 
 const PAST_DAYS = 30;
 
 export default async function FuturePage() {
-  const data = await getFinance();
-  const a = analyze(data);
+  const [data, t] = await Promise.all([getFinance(), getT()]);
+  const { locale } = t;
+  const a = analyze(data, t);
   const { forecast, safe, checking } = a;
 
   if (!forecast || !safe || !checking) {
     return (
       <div>
-        <PageHeader title="Future" subtitle="Where your balance is heading, and what's safe to spend." />
+        <PageHeader title={t("Future")} subtitle={t("Where your balance is heading, and what's safe to spend.")} />
         <Card>
-          <EmptyState icon={Telescope} title="Link a checking account to see ahead" body="We find your paydays and bills, then chart your balance for the next 60 days." />
+          <EmptyState icon={Telescope} title={t("Link a checking account to see ahead")} body={t("We find your paydays and bills, then chart your balance for the next 60 days.")} />
         </Card>
       </div>
     );
@@ -53,7 +60,7 @@ export default async function FuturePage() {
   const points = [...past.slice(0, -1).map((p) => ({ date: p.date, value: p.balance })), ...forecast.points.map((p) => ({ date: p.date, value: p.expected }))];
   const n = points.length;
   const todayIndex = PAST_DAYS;
-  const labels = points.map((p) => dayDate(p.date));
+  const labels = points.map((p) => capitalized(dayDate(p.date, locale)));
   const actual = points.map((p, i) => (i <= todayIndex ? p.value : null));
   const projected = points.map((p, i) => (i >= todayIndex ? p.value : null));
   const low = points.map((p, i) => (i < todayIndex ? p.value : forecast.points[i - todayIndex]!.low));
@@ -80,47 +87,63 @@ export default async function FuturePage() {
   const lowest = forecast.lowest;
   const end = forecast.points.at(-1)!;
   const afford = affordBase(a);
+  const deposits = next30.filter((e) => e.amount > 0).length;
+  const outgoing = next30.filter((e) => e.amount < 0).length;
+  const bills = { bills: money0(safe.committed), cushion: money0(safe.cushion) };
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Future" subtitle={`${checking.name} over the next ${FORECAST_DAYS} days — every payday and bill we can see, plus your usual day-to-day.`} />
+      <PageHeader
+        title={t("Future")}
+        subtitle={t("{account} over the next {n} days — every payday and bill we can see, plus your usual day-to-day.", { account: checking.name, n: FORECAST_DAYS })}
+      />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card hero className="p-5 sm:p-6 lg:col-span-5">
-          <div className="text-sm font-semibold text-[var(--on-hero-soft)]">Safe to spend today</div>
+          <div className="text-sm font-semibold text-[var(--on-hero-soft)]">{t("Safe to spend today")}</div>
           <div className="mt-1 text-[56px] font-extrabold leading-none tracking-tight">{money0(safe.amount)}</div>
           <p className="mt-3 text-sm text-[var(--on-hero-soft)]">
-            {safe.until ? `Until your paycheck on ${dayDate(safe.until)}` : "Over the next two weeks"} — after {money0(safe.committed)} of bills and a{" "}
-            {money0(safe.cushion)} cushion.
+            {safe.until
+              ? t("Until your paycheck on {date} — after {bills} of bills and a {cushion} cushion.", { ...bills, date: dayDate(safe.until, locale) })
+              : t("Over the next two weeks — after {bills} of bills and a {cushion} cushion.", bills)}
           </p>
         </Card>
         <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:col-span-7">
-          <Figure label="Lowest point ahead" value={money0(lowest.balance)} note={lowest.date === a.today ? "Today" : `Around ${shortDate(lowest.date)}`} status={lowest.balance < safe.cushion ? "warn" : "good"} />
-          <Figure label={`Balance in ${FORECAST_DAYS} days`} value={money0(end.expected)} note={`Likely ${money0(end.low)} – ${money0(end.high)}`} />
-          <Figure label="Coming in, next 30 days" value={money0(inflow)} note={`${next30.filter((e) => e.amount > 0).length} deposits`} />
-          <Figure label="Going out, next 30 days" value={money0(outflow)} note={`${next30.filter((e) => e.amount < 0).length} bills and transfers`} />
+          <Figure
+            label={t("Lowest point ahead")}
+            value={money0(lowest.balance)}
+            note={lowest.date === a.today ? t("Today") : t("Around {date}", { date: shortDate(lowest.date, locale) })}
+            status={lowest.balance < safe.cushion ? "warn" : "good"}
+          />
+          <Figure label={t("Balance in {n} days", { n: FORECAST_DAYS })} value={money0(end.expected)} note={t("Likely {low} – {high}", { low: money0(end.low), high: money0(end.high) })} />
+          <Figure label={t("Coming in, next 30 days")} value={money0(inflow)} note={deposits === 1 ? t("1 deposit") : t("{n} deposits", { n: deposits })} />
+          <Figure
+            label={t("Going out, next 30 days")}
+            value={money0(outflow)}
+            note={outgoing === 1 ? t("1 bill or transfer") : t("{n} bills and transfers", { n: outgoing })}
+          />
         </div>
       </div>
 
       <ChartCard
-        title="Where your balance is heading"
-        subtitle="Solid is what happened; dashed is the forecast. The shaded band is where it lands 8 times in 10."
+        title={t("Where your balance is heading")}
+        subtitle={t("Solid is what happened; dashed is the forecast. The shaded band is where it lands 8 times in 10.")}
         legend={
           <Legend
             items={[
-              { label: "Balance", color: "var(--accent)", kind: "line" },
-              { label: "Forecast", color: "var(--accent)", kind: "dash" },
-              { label: "Likely range", color: "var(--accent)", kind: "rect" },
-              { label: "Paycheck", color: "var(--flow-in)", kind: "dot" },
-              { label: "Bill", color: "var(--flow-out)", kind: "dot" },
+              { label: t("Balance"), color: "var(--accent)", kind: "line" },
+              { label: t("Forecast"), color: "var(--accent)", kind: "dash" },
+              { label: t("Likely range"), color: "var(--accent)", kind: "rect" },
+              { label: t("Paycheck"), color: "var(--flow-in)", kind: "dot" },
+              { label: t("Bill"), color: "var(--flow-out)", kind: "dot" },
             ]}
           />
         }
         table={{
-          caption: "Daily checking balance: actual, then forecast with likely range",
-          columns: ["Day", "Balance", "Likely low", "Likely high"],
+          caption: t("Daily checking balance: actual, then forecast with likely range"),
+          columns: [t("Day"), t("Balance"), t("Likely low"), t("Likely high")],
           rows: points.map((p, i) => [
-            `${p.date}${i > todayIndex ? " (forecast)" : ""}`,
+            i > todayIndex ? t("{date} (forecast)", { date: p.date }) : p.date,
             money0(p.value),
             i > todayIndex ? money0(low[i]!) : "—",
             i > todayIndex ? money0(high[i]!) : "—",
@@ -129,26 +152,32 @@ export default async function FuturePage() {
       >
         <TimeSeriesChart
           labels={labels}
-          axisLabels={points.map((p) => shortDate(p.date))}
+          axisLabels={points.map((p) => shortDate(p.date, locale))}
           series={[
-            { id: "actual", label: "Balance", color: "var(--accent)", values: actual, area: true },
-            { id: "projected", label: "Forecast", color: "var(--accent)", values: projected, dashFrom: 0 },
+            { id: "actual", label: t("Balance"), color: "var(--accent)", values: actual, area: true },
+            { id: "projected", label: t("Forecast"), color: "var(--accent)", values: projected, dashFrom: 0 },
           ]}
-          band={{ low, high, label: "Likely range", color: "var(--accent)" }}
+          band={{ low, high, label: t("Likely range"), color: "var(--accent)" }}
           markers={markers.map((m) => ({ ...m }))}
           todayIndex={todayIndex}
           curve="step"
           include={0}
           height={320}
           maxAxisLabels={7}
-          ariaLabel={`Checking balance forecast: ${money0(checking.balance)} today, lowest ${money0(lowest.balance)} around ${shortDate(lowest.date)}, about ${money0(end.expected)} in ${FORECAST_DAYS} days.`}
+          ariaLabel={t("Checking balance forecast: {today} today, lowest {lowest} around {date}, about {end} in {n} days.", {
+            today: money0(checking.balance),
+            lowest: money0(lowest.balance),
+            date: shortDate(lowest.date, locale),
+            end: money0(end.expected),
+            n: FORECAST_DAYS,
+          })}
         />
-        <p className="sr-only">{n} days shown.</p>
+        <p className="sr-only">{t("{n} days shown.", { n })}</p>
       </ChartCard>
 
       {afford ? (
         <Card className="p-5 sm:p-6">
-          <CardHeader title="Can I afford it?" subtitle="Try a purchase, a new monthly bill or a raise against everything above. Nothing you try is saved." />
+          <CardHeader title={t("Can I afford it?")} subtitle={t("Try a purchase, a new monthly bill or a raise against everything above. Nothing you try is saved.")} />
           <div className="mt-4">
             <CanIAfford base={afford} />
           </div>
@@ -158,8 +187,8 @@ export default async function FuturePage() {
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <Card className="p-5 sm:p-6 lg:col-span-7">
           <CardHeader
-            title="The next 30 days"
-            subtitle="Paydays, bills and transfers we found repeating"
+            title={t("The next 30 days")}
+            subtitle={t("Paydays, bills and transfers we found repeating")}
             action={
               reminders > 0 ? (
                 <AddToCalendar demo={data.source === "demo"} count={reminders} personal={personal} signIn={data.accountsEnabled && !data.account} />
@@ -168,9 +197,9 @@ export default async function FuturePage() {
           />
           <div className="mt-2">
             {next30.length ? (
-              <UpcomingList events={next30} limit={14} />
+              <UpcomingList events={next30} limit={14} t={t} />
             ) : (
-              <EmptyState icon={CalendarClock} title="Nothing scheduled" body="Bills and paychecks that repeat show up here once we've seen them twice." />
+              <EmptyState icon={CalendarClock} title={t("Nothing scheduled")} body={t("Bills and paychecks that repeat show up here once we've seen them twice.")} />
             )}
           </div>
         </Card>
@@ -178,7 +207,7 @@ export default async function FuturePage() {
         <div className="space-y-5 lg:col-span-5">
         {withTerms.length ? (
           <Card className="p-5 sm:p-6">
-            <CardHeader title="Card and loan payments" subtitle="Due dates and minimums from your lenders" />
+            <CardHeader title={t("Card and loan payments")} subtitle={t("Due dates and minimums from your lenders")} />
             {due.length ? (
               <ul className="mt-3 divide-y divide-[var(--line)]">
                 {due.map(({ account, liability }) => (
@@ -192,18 +221,18 @@ export default async function FuturePage() {
                         {account.mask ? <span className="shrink-0 font-normal text-ink-3">&nbsp;·· {account.mask}</span> : null}
                       </div>
                       <div className="text-xs text-ink-3">
-                        Due {shortDate(liability.dueDate)}, {dueIn(liability.dueDate, a.today)}
-                        {liability.apr !== null ? ` · ${rateText(liability.apr, account.kind)}` : ""}
+                        {dueText(liability.dueDate, a.today, t)}
+                        {liability.apr !== null ? ` · ${rateText(liability.apr, account.kind, t)}` : ""}
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="num text-sm font-bold text-ink-1">{liability.minimumPayment !== null ? `${money(liability.minimumPayment)} min` : "—"}</div>
+                      <div className="num text-sm font-bold text-ink-1">{liability.minimumPayment !== null ? t("{amount} min", { amount: money(liability.minimumPayment) }) : "—"}</div>
                       {liability.overdue ? (
                         <StatusPill status="warn" className="mt-1">
-                          Overdue
+                          {t("Overdue")}
                         </StatusPill>
-                      ) : statementText(liability) ? (
-                        <div className="num text-xs text-ink-3">{statementText(liability)}</div>
+                      ) : liability.statementBalance !== null ? (
+                        <div className="num text-xs text-ink-3">{t("Statement {amount}", { amount: money0(liability.statementBalance) })}</div>
                       ) : null}
                     </div>
                   </li>
@@ -212,16 +241,16 @@ export default async function FuturePage() {
             ) : (
               <EmptyState
                 icon={CreditCard}
-                title="Nothing due in the next few weeks"
-                body="When a card or loan issues its next statement, its due date and minimum payment show up here."
+                title={t("Nothing due in the next few weeks")}
+                body={t("When a card or loan issues its next statement, its due date and minimum payment show up here.")}
               />
             )}
           </Card>
         ) : null}
         <Card className="p-5 sm:p-6">
           <CardHeader
-            title="Bills that don't come every month"
-            subtitle={lessOften.bills.length ? `Put aside ${money0(lessOften.monthly)} a month and they're paid for when they land` : undefined}
+            title={t("Bills that don't come every month")}
+            subtitle={lessOften.bills.length ? t("Put aside {amount} a month and they're paid for when they land", { amount: money0(lessOften.monthly) }) : undefined}
           />
           {lessOften.bills.length ? (
             <>
@@ -232,34 +261,51 @@ export default async function FuturePage() {
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{s.merchant}</div>
                       <div className="text-xs text-ink-3">
-                        {scheduleText(s.cadence, undefined)} · next{" "}
-                        <span className="num">{s.nextDate.slice(0, 4) === a.today.slice(0, 4) ? shortDate(s.nextDate) : `${shortDate(s.nextDate)}, ${s.nextDate.slice(0, 4)}`}</span>
+                        {t("{when} · next {date}", {
+                          when: scheduleText(s.cadence, undefined, t),
+                          date:
+                            s.nextDate.slice(0, 4) === a.today.slice(0, 4)
+                              ? shortDate(s.nextDate, locale)
+                              : t("{date}, {year}", { date: shortDate(s.nextDate, locale), year: s.nextDate.slice(0, 4) }),
+                        })}
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="num text-sm font-bold text-ink-1">{s.variable ? `about ${money0(Math.abs(s.amount))}` : money(Math.abs(s.amount))}</div>
-                      <div className="num text-xs text-ink-3">{money0(monthlyCost(s))} a month</div>
+                      <div className="num text-sm font-bold text-ink-1">{s.variable ? t("about {amount}", { amount: money0(Math.abs(s.amount)) }) : money(Math.abs(s.amount))}</div>
+                      <div className="num text-xs text-ink-3">{t("{amount} a month", { amount: money0(monthlyCost(s)) })}</div>
                     </div>
                   </li>
                 ))}
               </ul>
               {soon.length ? (
                 <p className="mt-3 text-xs text-ink-3">
-                  {soon.length === 1 ? `${soon[0]!.merchant} comes` : `${soon.length} of these come`} out of {checking.name} in the next {FORECAST_DAYS} days, so{" "}
-                  {soon.length === 1 ? "it's" : "they're"} already in the forecast above.
+                  {soon.length === 1
+                    ? t("{merchant} comes out of {account} in the next {n} days, so it's already in the forecast above.", {
+                        merchant: soon[0]!.merchant,
+                        account: checking.name,
+                        n: FORECAST_DAYS,
+                      })
+                    : t("{count} of these come out of {account} in the next {n} days, so they're already in the forecast above.", {
+                        count: soon.length,
+                        account: checking.name,
+                        n: FORECAST_DAYS,
+                      })}
                 </p>
               ) : null}
             </>
           ) : (
             <EmptyState
               icon={CalendarRange}
-              title="None spotted yet"
-              body="Car insurance, a yearly membership, the water bill every three months: once we've seen one come round, it shows here with what to put aside each month."
+              title={t("None spotted yet")}
+              body={t("Car insurance, a yearly membership, the water bill every three months: once we've seen one come round, it shows here with what to put aside each month.")}
             />
           )}
         </Card>
         <Card className="p-5 sm:p-6">
-          <CardHeader title="Subscriptions" subtitle={subs.length ? `${money0(subsMonthly)} a month · ${money0(subsMonthly * 12)} a year` : undefined} />
+          <CardHeader
+            title={t("Subscriptions")}
+            subtitle={subs.length ? t("{monthly} a month · {yearly} a year", { monthly: money0(subsMonthly), yearly: money0(subsMonthly * 12) }) : undefined}
+          />
           {subs.length ? (
             <ul className="mt-3 divide-y divide-[var(--line)]">
               {subs.map((s) => (
@@ -267,29 +313,36 @@ export default async function FuturePage() {
                   <CategoryIcon category={s.category} />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{s.merchant}</div>
-                    <div className="text-xs text-ink-3">Next {shortDate(s.nextDate)}</div>
+                    <div className="text-xs text-ink-3">{t("Next {date}", { date: shortDate(s.nextDate, locale) })}</div>
                   </div>
                   <div className="text-right">
                     <div className="num text-sm font-bold text-ink-1">{money(Math.abs(s.amount))}</div>
                     {s.priceChange ? (
                       <StatusPill status="warn" className="mt-1">
-                        Up from {money(Math.abs(s.priceChange.from))}
+                        {t("Up from {amount}", { amount: money(Math.abs(s.priceChange.from)) })}
                       </StatusPill>
                     ) : (
-                      <div className="text-xs text-ink-3">monthly</div>
+                      <div className="text-xs text-ink-3">{t("monthly")}</div>
                     )}
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <EmptyState icon={Repeat} title="No subscriptions spotted" body="Anything that charges you the same amount every month shows up here, with price rises flagged." />
+            <EmptyState icon={Repeat} title={t("No subscriptions spotted")} body={t("Anything that charges you the same amount every month shows up here, with price rises flagged.")} />
           )}
         </Card>
         </div>
       </div>
     </div>
   );
+}
+
+/** "Due Oct 14, in 5 days": one sentence for each, so a language can say the day its own way. */
+function dueText(due: ISODate, today: ISODate, t: T): string {
+  const n = daysBetween(today, due);
+  const date = shortDate(due, t.locale);
+  return n <= 0 ? t("Due {date}, today", { date }) : n === 1 ? t("Due {date}, tomorrow", { date }) : t("Due {date}, in {n} days", { date, n });
 }
 
 function Figure({ label, value, note, status }: { label: string; value: string; note: string; status?: "good" | "warn" }) {

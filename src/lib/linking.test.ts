@@ -11,6 +11,7 @@ describe("connecting real money", () => {
       status: 401,
       message: expect.stringMatching(/Coinbase/),
     });
+    expect(linkingRefusal({ accountsEnabled: true, signedIn: false, realMoney: true, kind: "investments" })).toMatchObject({ status: 401, message: "Sign in to connect an investment account. It's kept in your account, where two-step sign-in protects it." });
     expect(linkingRefusal({ accountsEnabled: true, signedIn: true, realMoney: true })).toBeNull();
   });
 
@@ -27,6 +28,7 @@ describe("the way to sign in first", () => {
   it("says why, and comes back to the page the person was on", () => {
     expect(signInToConnect("bank", "/budgets?month=2026-09")).toBe("/sign-in?why=bank&next=%2Fbudgets%3Fmonth%3D2026-09");
     expect(signInToConnect("coinbase", "/connections")).toBe("/sign-in?why=coinbase&next=%2Fconnections");
+    expect(signInToConnect("investments", "/connections")).toBe("/sign-in?why=investments&next=%2Fconnections");
   });
 
   it("never comes back to another site", () => {
@@ -36,6 +38,7 @@ describe("the way to sign in first", () => {
   it("is read back as one of two reasons, or none", () => {
     expect(connectReason("bank")).toBe("bank");
     expect(connectReason("coinbase")).toBe("coinbase");
+    expect(connectReason("investments")).toBe("investments");
     for (const other of ["", "BANK", "<script>", undefined, ["bank"]]) expect(connectReason(other)).toBeNull();
   });
 });

@@ -289,3 +289,70 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     Undo vanished after paying back the last debt owed or removing the last
     split rule. Next, if it's needed: households (two accounts in one test)
     and the connected-app sign-in.
+24. **Investment accounts at a broker.** **Built (2026-10-05):** "Connect an
+    investment account" beside "Connect a bank" on Connections links a
+    brokerage account (Robinhood, Webull, Vanguard, E*TRADE, Schwab and most
+    US brokers) through Plaid, holdings first: a bank link can't show one,
+    because Plaid's Transactions never covers investment accounts. Its
+    balance and holdings join net worth like any bank's; it has no
+    transactions, and Plaid refusing them isn't treated as an outage. No new
+    provider. Next, if people ask for a broker Plaid doesn't reach: SnapTrade
+    ($100 a month plus $1–2 per connected person), and Fidelity once its
+    approval in the Plaid Dashboard is in.
+25. **One month at a time.** **Built (2026-10-05):** Spending and Cash flow
+    gain a 1-month range: this month so far against the same days of last
+    month ("vs Sep 1 – 5"), and, with the stepper beside it, any past month
+    back to the oldest transaction, whole against the whole month before
+    ("vs August"). Spending reads one month day by day, with the same
+    spending-pace chart as Overview. Every range's comparison is aligned by
+    the calendar, not by length, so both sides hold the same paydays and
+    rent. Next, from the same review: leave a purchase out of spending and
+    budgets, hide an account from totals, and charts that open the
+    transactions behind them.
+26. **Leave it out of the totals.** **Built (2026-10-05):** a switch at the
+    top of any transaction leaves it out of every total (spending, income,
+    budgets, insights, the year page, alert emails and connected apps' sums)
+    while it stays listed, marked "Left out of totals"; "Choose what counts"
+    on Net worth does the same for a whole account (a business card, a
+    closed or duplicate account): its balance leaves net worth and every line
+    in it is left out, and it stays connected and in the data download. Kept
+    in the same sealed record as splits and tags, so no new table; the
+    household never sees either. The balance forecast and bill detection still
+    count the money, because it still moved.
+27. **Every number is a door.** **Built (2026-10-05):** on Overview, a slice
+    of "Where it went", its legend row, or an Everyday budget opens this
+    month's transactions in that category; on Spending, a category's row or
+    a shop's row narrows the list below it; and a month's bars on Spending
+    and Cash flow open that month on its own (a click, Enter from the
+    keyboard, or on a phone a first tap for the numbers and a second to
+    open). Overview's two legends lay out by their card's width, not the
+    screen's, so no category name is cut short.
+28. **Amazon orders.** **Built (2026-10-05):** on Connections → Amazon
+    orders, a person adds the order history Amazon sends them
+    (Retail.OrderHistory.1.csv); Prism reads it in the browser, never uploads
+    it, and puts each shipment's items on the Amazon charge it matches, to
+    the cent. The ledger shows what each charge paid for and finds it by an
+    item's name, the downloads and connected apps carry the items, and a
+    charge splits by its items in one tap. Sealed in
+    `profiles.sealed_order_notes`, never shown to a household. No partner,
+    no new cost. Next, if people ask: Walmart and Target, whose order
+    histories have no download today.
+29. **Prism in Spanish.** **Built; legal held for a lawyer (2026-10-05):** EN | ES in the top bar,
+    as bis-rgv.com has it, switches the page's words at the same address and
+    keeps the choice for a year; a browser that asks for Spanish first gets
+    it before anyone picks. Dates read in Spanish ("lun, 5 oct"); amounts stay
+    as a U.S. bank writes them. Done: the shell, sign-in, Overview, Spending
+    (with the transaction dialog), Cash flow and Budgets, every message their
+    saves return, and the insights and alerts they show; then Goals, Net
+    worth (with the debt planner and what you own or owe), Future (with "Can
+    I afford it?"), Your year and Taxes; then Connections and its imports,
+    Account (with a Language · Idioma setting), the household, app consent
+    and unsubscribe; then alert and recap emails and push, in the language
+    the person last used Prism in (the morning job has no browser to ask, so
+    their visits keep it with the account: `profiles.language`); then the
+    calendar file, in the language of the page that downloads it, or for a
+    private calendar link, of the person's visits (its sealed snapshot
+    records it). The privacy policy and terms are translated and held
+    (`src/lib/legal-languages.ts`): each goes live when a lawyer approves its
+    Spanish against the English in force, opening with a note that the
+    English governs. Next: that review.

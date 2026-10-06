@@ -40,6 +40,21 @@ so Prism can be built and tried without a database; anything real refuses.
 For production set `PLAID_ENV=production` and a real `PRISM_VAULT_KEY`
 (`openssl rand -base64 32`); the app refuses to store tokens without one.
 
+**Investment accounts at a broker (Robinhood, Webull and the like) connect
+with "Connect an investment account"**, beside "Connect a bank" on
+Connections. Plaid shows only the institutions and accounts that support every
+product a link requires, and its Transactions covers bank and card accounts,
+never investment accounts, so a bank link can't show a brokerage account at
+all. The investment link asks for Investments first and transactions where a
+cash account sits alongside; the same consent for loan details is asked
+either way. Such a connection has no transactions to give, so Plaid refusing
+them is not an outage (`holdingsOnly` in `src/lib/plaid/sync.ts`): its balance
+and holdings show, while a bank whose transactions fail still says it
+couldn't be reached. Plaid bills Investments per connection from the moment
+it links, as it already does for a bank holding investments. Fidelity needs
+its own approval in the Plaid Dashboard first; Schwab arrives a few days after
+Plaid's production approval.
+
 **Home values from RentCast are off until you set `RENTCAST_API_KEY`**
 (Sensitive, in Vercel). Once set, a home on Net worth offers "Keep its value up
 to date with RentCast": the person gives its address, told first that it goes
@@ -178,9 +193,19 @@ anyone's money as itself:
   the email then says the figures are from that check.
 - **The job answers to a secret.** Vercel Cron calls the route with
   `CRON_SECRET`; the database keeps only its sha256 (`job_keys`, unreadable
-  over the API) and answers `alerts_due`, `alerts_sent` and `alerts_stop`
-  to nothing else. With the secret alone, a caller learns email addresses,
-  choices and which banks need a sign-in: every figure stays sealed.
+  over the API) and answers `alerts_due`, `alerts_languages`, `alerts_sent`
+  and `alerts_stop` to nothing else. With the secret alone, a caller learns
+  email addresses, choices, languages and which banks need a sign-in: every
+  figure stays sealed.
+- **In the person's language.** Each email, and the phone alert that goes
+  with it, is written in the language the person reads Prism in
+  (`profiles.language`, English or Spanish). Their own visits keep it in
+  step with the page (their pick on EN | ES, else their browser's language),
+  writing it only when it moved, so there is no second setting. A snapshot
+  holds its bills and price rises already in words, so it records its
+  language; one in a language the person has since left is worded again by
+  the morning check where they allow it, and otherwise goes as worded, since
+  a warning in the other language beats none.
 - **News goes once.** Each alert's occasion is fingerprinted (sha256 of the
   person and the alert id) and recorded after sending; a Resend idempotency
   key covers a retried run. Bills and price rises come only from a snapshot
@@ -350,6 +375,41 @@ bank transaction's id, who it was to or from, and the note.
   as data, never instructions.
 - Payments that stayed in the app's own balance never reached the bank; the
   review says how many, and Prism doesn't count them yet.
+
+## Amazon orders
+
+A bank shows "AMZN Mktp US −$86.40" and nothing more, and Amazon lets no
+other app read an account. On **Connections → Amazon orders**
+(`/connections/amazon`) a signed-in person adds their own order history:
+Amazon → Account → Request your data → Your Orders sends a zip a day or two
+later, and they choose `Retail.OrderHistory.1.csv` from inside it (one row
+per item). Prism reads it **in the browser and never uploads it**
+(`src/lib/finance/orders.ts`). Amazon charges a card as each shipment
+leaves, so a charge is a shipment's items added up (or the whole order's,
+where it was charged once), matched to an Amazon line for exactly that
+amount, dated a day before the shipment to six days after, closest first; an
+item is never counted in two charges. Only the matches are kept: the bank
+transaction's id, the order number, the day it was placed, and each item's
+name, quantity and cost.
+
+- The server trusts no match: each must name one of the person's OWN Amazon
+  lines (money out, after the order, within 120 days of it), and its items
+  must add up to the bank's amount to the cent (`validOrderMatch`). Matches
+  arrive a batch of 150 at a time (`src/lib/server/orders-actions.ts`), so no
+  request nears the size a server action takes.
+- Kept sealed in `profiles.sealed_order_notes` (the profile's policies govern
+  it; no household function names it, and the morning job never reads it),
+  applied where money is assembled (`moneyFor`), so the ledger shows "Dog
+  food, USB-C cable and 2 more" under the charge, its search finds an item
+  by name, the downloads list the items, and connected apps get
+  `amazon_order`. A charge with two or more items offers "Split by its
+  items" in its own dialog: one part per item (the smallest added up past
+  eight), each named, in the line's category until the person picks.
+- Item names are sellers' words: cleaned, length-capped, written as words in
+  spreadsheets, and the MCP instructions tell connected apps they're data,
+  never instructions. The addresses in the file are never read.
+- Orders paid with a gift card or points, charged to a card that isn't
+  linked, or refunded match nothing; the review says how many.
 
 ## Splits, tags and who owes you
 
@@ -682,6 +742,8 @@ select what, key_id, count(*) from (
   union all
   select 'payment notes', case when sealed_p2p_notes like 'z2.%' then substr(sealed_p2p_notes, 4, 8) else 'unnamed' end from profiles where sealed_p2p_notes is not null
   union all
+  select 'amazon orders', case when sealed_order_notes like 'z2.%' then substr(sealed_order_notes, 4, 8) else 'unnamed' end from profiles where sealed_order_notes is not null
+  union all
   select 'splits and tags', case when sealed_txn_details like 'z2.%' then substr(sealed_txn_details, 4, 8) else 'unnamed' end from profiles where sealed_txn_details is not null
   union all
   select 'imported history', case when sealed like 'z2.%' then substr(sealed, 4, 8) else 'unnamed' end from imported_history
@@ -694,6 +756,45 @@ select what, key_id, count(*) from (
 
 Connections kept on a device from before connecting needed an account open
 with any key in the ring too, so retiring a key ends those as well.
+
+## En español (Spanish)
+
+**EN | ES** in the top bar switches Prism's words between English and Spanish
+at the same address, as bis-rgv.com does, and keeps the choice for a year in
+the `prism-lang` cookie (set by the server, unreadable to the page's
+scripts). Until someone picks, a browser that asks for Spanish first gets
+Spanish. Dates read the Spanish way ("lun, 5 oct"); amounts stay `$1,234.56`,
+as U.S. banks write them in either language.
+
+- Every sentence on screen goes through a translator whose key is the English
+  sentence (`src/lib/i18n/t.ts`); the Spanish is in `src/lib/i18n/es/`, one
+  file per part of the app, written in "tú", in the voice of bis-rgv.com. A sentence with no Spanish
+  shows in English, and `pnpm test` names it.
+- The browser is handed the Spanish only on a page that's in Spanish, so an
+  English page downloads none of it.
+- In Spanish: every screen a person uses — the money screens, Connections
+  and its imports, Account (with a Language · Idioma setting), the
+  household, app consent and unsubscribe; and alert and recap emails and
+  phone alerts, in the language the person last used Prism in (kept with
+  their account, `profiles.language`). Connected apps (MCP) answer in
+  English.
+- The calendar file speaks the person's language too: its bills, paydays and
+  card or loan payments, their notes, and the calendar's name. A download
+  follows the page. A person's own calendar link follows the language their
+  visits are in, because the link's sealed snapshot records it, and a visit in
+  a new language writes it again at once. The demo feed's link carries
+  `?lang=es` from a Spanish page. Event IDs don't depend on the language, so
+  a calendar that changes language renames its events instead of adding more.
+- The privacy policy and the terms are translated too, but **held**: the
+  English governs, so each Spanish page shows only once a lawyer has approved
+  it against the English in force (`src/lib/legal-languages.ts`). Until then
+  `/privacy` and `/terms` read in English in either language. To publish one,
+  set its `SPANISH_APPROVED` entry to the English date the lawyer approved
+  (the page's "Last updated"). If the English changes afterwards, its Spanish
+  has to change in the same commit (`legal-spanish.test.ts`), and the page
+  goes back to English on its own until the new Spanish is approved. Each
+  Spanish page opens with a note that it's a translation and the English
+  governs.
 
 ## Screens
 

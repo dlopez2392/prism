@@ -1,10 +1,11 @@
 // Cash flow, while it loads: the hero beside money in and out, the flow, paychecks beside the income mix, two chart cards, then the savings rate.
 
 import { Block, Header, Loading } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function CashFlowLoading() {
   return (
-    <Loading label="Loading your cash flow">
+    <Loading label={msg("Loading your cash flow")}>
       <Header eyebrow action />
       <div className="grid grid-cols-1 gap-3 sm:gap-5 md:grid-cols-4">
         <Block className="h-56 md:col-span-2" />

@@ -10,6 +10,8 @@ import { useId } from "react";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useT } from "@/components/locale";
+import { msg } from "@/lib/i18n/t";
 import {
   CalendarRange,
   ChartPie,
@@ -33,27 +35,27 @@ type NavItem = { href: string; label: string; icon: LucideIcon };
 
 export const NAV: { group: string; items: NavItem[] }[] = [
   {
-    group: "Your money",
+    group: msg("Your money"),
     items: [
-      { href: "/", label: "Overview", icon: LayoutDashboard },
-      { href: "/cash-flow", label: "Cash flow", icon: Waves },
-      { href: "/spending", label: "Spending", icon: ChartPie },
-      { href: "/budgets", label: "Budgets", icon: Target },
-      { href: "/year", label: "Your year", icon: CalendarRange },
-      { href: "/taxes", label: "Taxes", icon: ReceiptText },
+      { href: "/", label: msg("Overview"), icon: LayoutDashboard },
+      { href: "/cash-flow", label: msg("Cash flow"), icon: Waves },
+      { href: "/spending", label: msg("Spending"), icon: ChartPie },
+      { href: "/budgets", label: msg("Budgets"), icon: Target },
+      { href: "/year", label: msg("Your year"), icon: CalendarRange },
+      { href: "/taxes", label: msg("Taxes"), icon: ReceiptText },
     ],
   },
   {
-    group: "Your future",
+    group: msg("Your future"),
     items: [
-      { href: "/future", label: "Future", icon: Telescope },
-      { href: "/goals", label: "Goals", icon: PiggyBank },
-      { href: "/net-worth", label: "Net worth", icon: Landmark },
+      { href: "/future", label: msg("Future"), icon: Telescope },
+      { href: "/goals", label: msg("Goals"), icon: PiggyBank },
+      { href: "/net-worth", label: msg("Net worth"), icon: Landmark },
     ],
   },
 ];
 
-const CONNECTIONS: NavItem = { href: "/connections", label: "Connections", icon: PlugZap };
+const CONNECTIONS: NavItem = { href: "/connections", label: msg("Connections"), icon: PlugZap };
 const TABS = ["/", "/spending", "/budgets", "/future"];
 
 function isActive(pathname: string, href: string) {
@@ -86,11 +88,12 @@ export type AccountNav = { signedIn: boolean; email: string | null } | null;
 
 function accountItem(account: AccountNav): NavItem | null {
   if (!account) return null;
-  return account.signedIn ? { href: "/account", label: "Account", icon: UserRound } : { href: "/sign-in", label: "Sign in", icon: UserRound };
+  return account.signedIn ? { href: "/account", label: msg("Account"), icon: UserRound } : { href: "/sign-in", label: msg("Sign in"), icon: UserRound };
 }
 
 export function Sidebar({ householdName, sourceLabel, account }: { householdName: string; sourceLabel: string; account: AccountNav }) {
   const pathname = usePathname();
+  const t = useT();
   const link = (item: NavItem) => {
     const active = isActive(pathname, item.href);
     const Icon = item.icon;
@@ -106,26 +109,26 @@ export function Sidebar({ householdName, sourceLabel, account }: { householdName
         >
           {active ? <span aria-hidden className="bg-prism absolute inset-y-2 -left-3 w-[3px] rounded-r-pill" /> : null}
           <Icon aria-hidden className={clsx("size-[18px]", active ? "text-accent" : "")} strokeWidth={2.2} />
-          {item.label}
+          {t(item.label)}
         </Link>
       </li>
     );
   };
   return (
     <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface-1/70 px-3 py-5 backdrop-blur-xl lg:flex print:hidden">
-      <Link href="/" className="mb-7 flex items-center gap-2.5 px-3" aria-label={`${BRAND.product} by ${BRAND.company} — overview`}>
+      <Link href="/" className="mb-7 flex items-center gap-2.5 px-3" aria-label={t("{product} by {company} — overview", { product: BRAND.product, company: BRAND.company })}>
         <PrismMark className="size-8" />
         <span className="leading-tight">
           <span className="block text-xl font-extrabold tracking-tight text-ink-1">{BRAND.product}</span>
           <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">
-            <BisMark size={10} /> by {BRAND.companyShort}
+            <BisMark size={10} /> {t("by {company}", { company: BRAND.companyShort })}
           </span>
         </span>
       </Link>
-      <nav aria-label="Main" className="-mx-3 flex-1 overflow-y-auto px-3">
+      <nav aria-label={t("Main")} className="-mx-3 flex-1 overflow-y-auto px-3">
         {NAV.map((g) => (
           <div key={g.group} className="mb-6">
-            <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">{g.group}</div>
+            <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-3">{t(g.group)}</div>
             <ul className="space-y-0.5">{g.items.map(link)}</ul>
           </div>
         ))}
@@ -154,7 +157,7 @@ export function Sidebar({ householdName, sourceLabel, account }: { householdName
               className="mt-3 flex h-9 items-center justify-center gap-1.5 rounded-ctl border border-line-strong text-sm font-semibold text-ink-1 transition-colors duration-150 hover:bg-surface-3"
             >
               <UserRound aria-hidden className="size-4" />
-              Sign in
+              {t("Sign in")}
             </Link>
           ) : null}
         </div>
@@ -165,6 +168,7 @@ export function Sidebar({ householdName, sourceLabel, account }: { householdName
 
 export function BottomNav({ account }: { account: AccountNav }) {
   const pathname = usePathname();
+  const t = useT();
   const all = NAV.flatMap((g) => g.items);
   const tabs = TABS.map((h) => all.find((i) => i.href === h)!);
   const you = accountItem(account);
@@ -173,7 +177,7 @@ export function BottomNav({ account }: { account: AccountNav }) {
   return (
     <>
       <nav
-        aria-label="Main"
+        aria-label={t("Main")}
         className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface-1/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden print:hidden"
       >
         <ul className="mx-auto grid max-w-lg grid-cols-5">
@@ -188,7 +192,7 @@ export function BottomNav({ account }: { account: AccountNav }) {
                   className={clsx("flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-semibold", active ? "text-accent-ink" : "text-ink-3")}
                 >
                   <Icon aria-hidden className="size-5" strokeWidth={2.2} />
-                  {item.label}
+                  {t(item.label)}
                 </Link>
               </li>
             );
@@ -200,7 +204,7 @@ export function BottomNav({ account }: { account: AccountNav }) {
               className={clsx("flex h-16 w-full flex-col items-center justify-center gap-1 text-[11px] font-semibold", moreActive ? "text-accent-ink" : "text-ink-3")}
             >
               <Menu aria-hidden className="size-5" strokeWidth={2.2} />
-              More
+              {t("More")}
             </button>
           </li>
         </ul>
@@ -223,7 +227,7 @@ export function BottomNav({ account }: { account: AccountNav }) {
                   className={clsx("flex h-12 items-center gap-3 rounded-ctl px-3 text-sm font-semibold", active ? "bg-accent-soft text-ink-1" : "text-ink-2 hover:bg-surface-3")}
                 >
                   <Icon aria-hidden className="size-[18px]" />
-                  {item.label}
+                  {t(item.label)}
                 </Link>
               </li>
             );

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AlertSnapshot } from "@/lib/finance/alert-snapshot";
 import { sealJson, sealPacked } from "@/lib/server/vault";
 import { decryptAsPhone, phoneKeys } from "./test-helpers";
+import type { T } from "@/lib/i18n/t";
 import { vapidKeys } from "./webpush";
 
 vi.mock("server-only", () => ({}));
@@ -28,6 +29,7 @@ const snap: AlertSnapshot = {
   at: "2026-10-05T18:00:00.000Z",
   by: "visit",
   today: "2026-10-05",
+  lang: "en",
   alerts: [
     {
       id: "price-rise:s1:1599",
@@ -58,13 +60,14 @@ const row = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function fakeDb(due: unknown[], { failRecord = false, devices = [] as unknown[] | null } = {}) {
+function fakeDb(due: unknown[], { failRecord = false, devices = [] as unknown[] | null, languages = [] as unknown[] | null } = {}) {
   const calls: [string, Record<string, unknown>][] = [];
   return {
     calls,
     rpc: async (fn: string, args: Record<string, unknown>) => {
       calls.push([fn, args]);
       if (fn === "alerts_due") return { data: due, error: null };
+      if (fn === "alerts_languages") return languages ? { data: languages, error: null } : { data: null, error: { message: "no" } };
       if (fn === "push_due") return devices ? { data: devices, error: null } : { data: null, error: { message: "no" } };
       return { data: null, error: failRecord ? { message: "no" } : null };
     },
@@ -72,6 +75,9 @@ function fakeDb(due: unknown[], { failRecord = false, devices = [] as unknown[] 
 }
 
 const resend = (status = 200) => vi.fn(async () => new Response("{}", { status }));
+/** What one email sent through Resend carried. */
+const sentEmail = (fetchImpl: ReturnType<typeof resend>, n = 0) => JSON.parse(String((fetchImpl.mock.calls[n] as unknown as [string, RequestInit])[1].body)) as { subject: string; text: string; html: string };
+const recorded = (db: ReturnType<typeof fakeDb>) => db.calls.find(([fn]) => fn === "alerts_sent")?.[1];
 
 describe("the alert email job", () => {
   it("sends what's new to each person, then records it by fingerprint, all with the secret", async () => {
@@ -83,6 +89,7 @@ describe("the alert email job", () => {
     expect(JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body)).to).toEqual(["a@x.test"]);
     expect(db.calls).toEqual([
       ["alerts_due", { p_secret: config.secret }],
+      ["alerts_languages", { p_secret: config.secret }],
       ["alerts_sent", { p_secret: config.secret, p_user_id: U, p_fingerprints: [fingerprint(U, "price-rise:s1:1599")] }],
       ["push_due", { p_secret: config.secret }],
     ]);
@@ -91,7 +98,7 @@ describe("the alert email job", () => {
   it("records nothing that didn't go, so it's tried again tomorrow", async () => {
     const db = fakeDb([row()]);
     expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl: resend(500) })).toMatchObject({ sent: 0, failed: 1 });
-    expect(db.calls.map(([fn]) => fn)).toEqual(["alerts_due"]);
+    expect(db.calls.map(([fn]) => fn)).toEqual(["alerts_due", "alerts_languages"]);
   });
 
   it("stops at once when Resend refuses the key itself, leaving everyone else for tomorrow", async () => {
@@ -113,13 +120,13 @@ describe("the alert email job", () => {
     const db = fakeDb([row({ sealed: sealPacked(snap, randomBytes(32)), banks })]);
     const fetchImpl = resend();
     expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ sent: 1, unopened: 1 });
-    expect(db.calls[1]![1].p_fingerprints).toEqual([fingerprint(U, "bank:item-1:sign-in:2026-10-05")]);
+    expect(recorded(db)!.p_fingerprints).toEqual([fingerprint(U, "bank:item-1:sign-in:2026-10-05")]);
   });
 
   it("ignores anything in a row that isn't what the database promises", async () => {
     const db = fakeDb([row({ kinds: ["price-rise", "everything"], banks: [{ id: "x", name: "X", attention: "drop tables" }, null], sent: [42] })]);
     expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl: resend() })).toMatchObject({ sent: 1 });
-    expect(db.calls[1]![1].p_fingerprints).toHaveLength(1);
+    expect(recorded(db)!.p_fingerprints).toHaveLength(1);
   });
 
   it("fails loudly when the database won't say who is due", async () => {
@@ -155,6 +162,21 @@ describe("the alert email job", () => {
         const read = JSON.parse(decryptAsPhone(Buffer.from(init.body as Uint8Array), phone.privateKey, phone.authSecret).toString());
         expect(read).toEqual({ title: "StreamCo went up to $15.99", body: "It was $12.99.", url: "/cash-flow" });
       }
+    });
+
+    it("speaks the person's language on the phone too", async () => {
+      const spanish: AlertSnapshot = { ...snap, lang: "es", alerts: [{ ...snap.alerts[0]!, title: "StreamCo subió a $15.99", detail: "Antes costaba $12.99." }] };
+      const banks = [{ id: "item-1", name: "Your bank", attention: "sign-in", since: "2026-10-05T09:00:00Z", disconnect_at: null }];
+      const fetchImpl = services();
+      const db = fakeDb([row({ sealed: sealPacked(spanish, key), banks })], { devices: [device("d1", FCM)], languages: [{ user_id: U, language: "es" }] });
+      await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl });
+      const init = pushes(fetchImpl)[0]![1];
+      const read = JSON.parse(decryptAsPhone(Buffer.from(init.body as Uint8Array), phone.privateKey, phone.authSecret).toString());
+      expect(read).toEqual({
+        title: "Tu banco necesita que vuelvas a iniciar sesión",
+        body: "Hasta que lo hagas, Prism no puede ver nada nuevo de ese banco. Vuelve a iniciar sesión en Conexiones y continuará donde se quedó. Y 1 más en el correo de hoy.",
+        url: "/connections",
+      });
     });
 
     it("keeps an amount off the phone when the person turned amounts off", async () => {
@@ -197,7 +219,7 @@ describe("the alert email job", () => {
       expect(pushes(fetchImpl)).toEqual([]);
       const quiet = fakeDb([row({ kinds: ["bank"] })], { devices: [device("d1", FCM)] });
       await runAlertJob(quiet, config, key, { now: TUESDAY, fetchImpl: services() });
-      expect(quiet.calls.map(([fn]) => fn)).toEqual(["alerts_due"]);
+      expect(quiet.calls.map(([fn]) => fn)).toEqual(["alerts_due", "alerts_languages"]);
     });
 
     it("asks for the devices once a run, and still emails everyone when the database won't list them", async () => {
@@ -224,9 +246,9 @@ describe("the alert email job", () => {
       const db = fakeDb([row(oldSnap)]);
       const fetchImpl = resend();
       expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ refreshed: 1, unrefreshed: 0, sent: 1 });
-      expect(morningCheck).toHaveBeenCalledWith(db, config, key, U, TUESDAY);
-      const html = JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body)).text as string;
-      expect(html).toMatch(/check of your banks on Tue, Oct 6/);
+      expect(morningCheck.mock.calls[0]!.slice(0, 5)).toEqual([db, config, key, U, TUESDAY]);
+      expect((morningCheck.mock.calls[0]![5] as T).locale).toBe("en");
+      expect(sentEmail(fetchImpl).text).toMatch(/check of your banks on Tue, Oct 6/);
     });
 
     it("leaves the banks alone when the snapshot is recent", async () => {
@@ -257,6 +279,67 @@ describe("the alert email job", () => {
       morningCheck.mockClear();
       await runAlertJob(fakeDb([row(oldSnap)]), config, key, { now: TUESDAY, fetchImpl: resend(), deadline: Date.now() + REFRESH_LIMIT_MS - 1 });
       expect(morningCheck).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("in the language the person reads Prism in", () => {
+    const spanish: AlertSnapshot = {
+      ...snap,
+      lang: "es",
+      alerts: [{ ...snap.alerts[0]!, title: "StreamCo subió a $15.99", detail: "Antes costaba $12.99.", quiet: { title: "StreamCo subió su precio", detail: "Su último cargo fue más alto." } }],
+    };
+    const banks = [{ id: "item-1", name: "Your bank", attention: "sign-in", since: "2026-10-05T09:00:00Z", disconnect_at: null }];
+    const recent = { snapshot_at: "2026-10-06T08:00:00.000Z" };
+    afterEach(() => {
+      morningCheck.mockReset();
+      morningCheck.mockResolvedValue(null);
+      vi.restoreAllMocks();
+    });
+
+    it("writes to each person in theirs, and to anyone the database doesn't name in English", async () => {
+      const db = fakeDb([row({ sealed: sealPacked(spanish, key), banks, ...recent }), row({ user_id: V, email: "b@x.test", banks, ...recent })], {
+        languages: [
+          { user_id: U, language: "es" },
+          { user_id: V, language: "fr" },
+        ],
+      });
+      const fetchImpl = resend();
+      expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ sent: 2 });
+      const es = sentEmail(fetchImpl, 0);
+      expect(es.subject).toBe("Tu banco necesita que vuelvas a iniciar sesión, y 1 más");
+      expect(es.html).toMatch(/^<!doctype html><html lang="es">/);
+      expect(es.text).toContain("StreamCo subió a $15.99");
+      expect(es.text).toContain("Dejar de recibir estos correos: ");
+      expect(es.text).not.toMatch(/Stop these emails|needs you to sign in/);
+      const en = sentEmail(fetchImpl, 1);
+      expect(en.subject).toBe("Your bank needs you to sign in again, and 1 more");
+      expect(en.html).toMatch(/^<!doctype html><html lang="en">/);
+      // A snapshot already in their language, and recent: no need to read the banks again.
+      expect(morningCheck).not.toHaveBeenCalled();
+    });
+
+    it("words the bills again when the snapshot is in a language they've since left, and sends the old words rather than none", async () => {
+      morningCheck.mockResolvedValue({ ...spanish, by: "morning", at: TUESDAY.toISOString(), today: "2026-10-06" });
+      const db = fakeDb([row(recent)], { languages: [{ user_id: U, language: "es" }] });
+      const fetchImpl = resend();
+      expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ refreshed: 1, sent: 1 });
+      expect((morningCheck.mock.calls[0]![5] as T).locale).toBe("es");
+      expect(sentEmail(fetchImpl).subject).toBe("StreamCo subió a $15.99");
+
+      morningCheck.mockResolvedValue(null);
+      const unchecked = resend();
+      expect(await runAlertJob(fakeDb([row(recent)], { languages: [{ user_id: U, language: "es" }] }), config, key, { now: TUESDAY, fetchImpl: unchecked })).toMatchObject({ sent: 1 });
+      expect(sentEmail(unchecked).subject).toBe("StreamCo went up to $15.99");
+      expect(sentEmail(unchecked).text).toContain("Dejar de recibir estos correos");
+    });
+
+    it("writes in English when the database won't say, and still sends", async () => {
+      const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const fetchImpl = resend();
+      expect(await runAlertJob(fakeDb([row({ banks, ...recent })], { languages: null }), config, key, { now: TUESDAY, fetchImpl })).toMatchObject({ sent: 1 });
+      expect(sentEmail(fetchImpl).subject).toBe("Your bank needs you to sign in again, and 1 more");
+      expect(logged).toHaveBeenCalledWith(expect.stringMatching(/emails go in English/));
+      expect(JSON.stringify(logged.mock.calls)).not.toMatch(/a@x\.test|StreamCo/);
     });
   });
 });

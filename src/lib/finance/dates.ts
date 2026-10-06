@@ -43,6 +43,11 @@ export function startOfMonth(date: ISODate): ISODate {
   return `${date.slice(0, 7)}-01`;
 }
 
+/** The last day of `date`'s month: "2026-02-28" for any day in February 2026. */
+export function endOfMonth(date: ISODate): ISODate {
+  return `${date.slice(0, 7)}-${String(daysInMonth(date)).padStart(2, "0")}`;
+}
+
 export function daysInMonth(date: ISODate): number {
   const [y, m] = date.split("-").map(Number);
   return new Date(Date.UTC(y!, m!, 0)).getUTCDate();

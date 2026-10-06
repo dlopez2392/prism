@@ -3,7 +3,7 @@
 // than the device it was added on.
 
 import { watchErrors } from "../helpers";
-import { codeFor, expect, household, importRows, newEmail, signIn, test } from "./fixtures";
+import { codeFor, expect, household, importRows, mailSeen, newEmail, signIn, test } from "./fixtures";
 
 test("a new account is made from the emailed code, asked its name, and signed out again", async ({ page }, info) => {
   const errors = watchErrors(page);
@@ -15,7 +15,8 @@ test("a new account is made from the emailed code, asked its name, and signed ou
 
   await page.getByLabel("First name").fill("Robin");
   await page.getByRole("button", { name: "Save and continue" }).click();
-  await page.goto("/");
+  // Saving goes on to Overview itself; going there first would cut the save off.
+  await page.waitForURL((u) => u.pathname === "/");
   await expect(page.locator("h1")).toContainText("Robin");
 
   await page.goto("/account");
@@ -30,9 +31,9 @@ test("a mistyped code is refused in words, and the right one still works", async
   const email = newEmail(info.project.name);
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
-  const sent = Date.now();
+  const seen = await mailSeen(email);
   await page.getByRole("button", { name: "Email me a code" }).click();
-  const code = await codeFor(email, sent);
+  const code = await codeFor(email, seen);
   const wrong = code.slice(0, -1) + String((Number(code.at(-1)) + 1) % 10);
 
   await page.getByLabel("Code from the email").fill(wrong);
@@ -45,6 +46,8 @@ test("a mistyped code is refused in words, and the right one still works", async
 });
 
 test("imported money replaces the example household, and follows the account to another device", async ({ page, browser, account, baseURL }) => {
+  // Two sign-ins and an import: more than the default half minute on a busy machine.
+  test.setTimeout(60_000);
   const errors = watchErrors(page);
   // The banner is in the page at every width (a phone shows it shorter).
   await expect(page.getByText("You're viewing a demo household")).toBeAttached();
