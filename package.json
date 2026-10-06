@@ -35,15 +35,15 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
-    "@playwright/test": "1.56.1",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^22.20.4",
+    "@types/node": "^22.20.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
     "typescript": "^6",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.3"
   }
 }
