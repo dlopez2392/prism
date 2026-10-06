@@ -19,6 +19,7 @@
 import { addDays, daysBetween } from "./dates";
 import { parseAmount, parseCsv, parseDate } from "./import";
 import type { Cents, ISODate, P2pApp, P2pDirection, P2pNote, Transaction } from "./types";
+import { EN, msg, type T } from "@/lib/i18n/t";
 
 export const P2P_APPS = ["venmo", "paypal", "cashapp"] as const satisfies readonly P2pApp[];
 export type { P2pApp, P2pDirection };
@@ -54,6 +55,16 @@ export type P2pRow = {
 
 export type P2pFile = { app: P2pApp; rows: P2pRow[]; skipped: number };
 
+/**
+ * The names Prism gives a payment itself. They're kept as written here, in English, like everything else
+ * that's kept, and said in the page's language wherever a payment is shown (p2pLabel).
+ */
+const TO_BANK = msg("Moved to your bank");
+const FROM_BANK = msg("Added from your bank");
+const SOMEONE_ON_VENMO = msg("Someone on Venmo");
+const SOMEONE_ON_CASH_APP = msg("Someone on Cash App");
+const OWN_NAMES: ReadonlySet<string> = new Set([TO_BANK, FROM_BANK, SOMEONE_ON_VENMO, SOMEONE_ON_CASH_APP]);
+
 // ── Cleaning what other people wrote ─────────────────────────────────────────
 
 /** Control characters, line and paragraph separators, and the invisible marks that reorder or hide text (an emoji's joiner stays). */
@@ -80,11 +91,13 @@ export function appOf(merchant: string): P2pApp | null {
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
-function headerAt(rows: string[][], ...needles: string[]): number {
+/** The first row (of the first 30) holding every one of `needles` as a cell: a file's header. */
+export function headerAt(rows: string[][], ...needles: string[]): number {
   return rows.findIndex((r, i) => i < 30 && needles.every((n) => r.some((c) => norm(c) === n)));
 }
 
-function columns(header: string[]) {
+/** A header's column finder: the first of several names it goes by. */
+export function columns(header: string[]) {
   const names = header.map(norm);
   return (...want: string[]) => {
     for (const w of want) {
@@ -95,7 +108,7 @@ function columns(header: string[]) {
   };
 }
 
-const cell = (row: string[], i: number) => (i >= 0 ? (row[i] ?? "") : "");
+export const cell = (row: string[], i: number) => (i >= 0 ? (row[i] ?? "") : "");
 const unique = (xs: Cents[]) => [...new Set(xs.filter((x) => x !== 0))];
 
 /** The account holder in a Venmo file: the name on one side of nearly every payment. */
@@ -139,7 +152,7 @@ function venmo(rows: string[][], at: number): P2pFile {
       const feeAbs = Math.abs(parseAmount(cell(r, fee)) ?? 0);
       // Out of Venmo into the bank arrives positive, less any instant-transfer fee; money added from the bank leaves it negative.
       const bank = amount < 0 ? unique([-amount, -amount - feeAbs]) : unique([-amount]);
-      out.push({ app: "venmo", date, amount, dir: "transfer", name: amount < 0 ? "Moved to your bank" : "Added from your bank", note: null, bank });
+      out.push({ app: "venmo", date, amount, dir: "transfer", name: amount < 0 ? TO_BANK : FROM_BANK, note: null, bank });
       continue;
     }
     const f = cell(r, from).trim();
@@ -153,7 +166,7 @@ function venmo(rows: string[][], at: number): P2pFile {
       date,
       amount,
       dir: amount < 0 ? "to" : "from",
-      name: cleanText(other || "Someone on Venmo", P2P_LIMITS.name),
+      name: cleanText(other || SOMEONE_ON_VENMO, P2P_LIMITS.name),
       note: cleanText(cell(r, note), P2P_LIMITS.note) || null,
       bank: inApp ? [] : [amount],
     });
@@ -187,11 +200,11 @@ function cashApp(rows: string[][], at: number): P2pFile {
     const t = cell(r, type);
     const netAbs = Math.abs(parseAmount(cell(r, net)) ?? amount);
     if (/cash\s?out|withdraw/i.test(t)) {
-      out.push({ app: "cashapp", date, amount, dir: "transfer", name: "Moved to your bank", note: null, bank: unique([Math.abs(amount), netAbs]) });
+      out.push({ app: "cashapp", date, amount, dir: "transfer", name: TO_BANK, note: null, bank: unique([Math.abs(amount), netAbs]) });
       continue;
     }
     if (/cash\s?in|add(ed)?\s?cash/i.test(t)) {
-      out.push({ app: "cashapp", date, amount, dir: "transfer", name: "Added from your bank", note: null, bank: unique([-Math.abs(amount)]) });
+      out.push({ app: "cashapp", date, amount, dir: "transfer", name: FROM_BANK, note: null, bank: unique([-Math.abs(amount)]) });
       continue;
     }
     // Card purchases, Bitcoin, stocks and boosts aren't payments between people.
@@ -206,7 +219,7 @@ function cashApp(rows: string[][], at: number): P2pFile {
       date,
       amount,
       dir: amount < 0 ? "to" : "from",
-      name: cleanText(cell(r, who) || "Someone on Cash App", P2P_LIMITS.name),
+      name: cleanText(cell(r, who) || SOMEONE_ON_CASH_APP, P2P_LIMITS.name),
       note: cleanText(cell(r, notes), P2P_LIMITS.note) || null,
       bank: fromBank ? [amount] : [],
     });
@@ -244,7 +257,7 @@ function payPal(rows: string[][], at: number): P2pFile {
     }
     if (/withdraw|transfer to bank|standard transfer|instant transfer/i.test(t)) {
       const netAbs = Math.abs(parseAmount(cell(r, net)) ?? amount);
-      out.push({ app: "paypal", date, amount, dir: "transfer", name: "Moved to your bank", note: null, bank: unique([Math.abs(amount), netAbs]) });
+      out.push({ app: "paypal", date, amount, dir: "transfer", name: TO_BANK, note: null, bank: unique([Math.abs(amount), netAbs]) });
       continue;
     }
     const who = cleanText(cell(r, name), P2P_LIMITS.name);
@@ -414,7 +427,8 @@ export function applyP2pNotes<T extends Transaction>(txns: T[], notes: P2pNotes)
   return txns.map((t) => (Object.hasOwn(notes.notes, t.id) ? { ...t, p2p: notes.notes[t.id]! } : t));
 }
 
-/** "To Alex Kim", "From Sam", or "Moved to your bank", as a ledger line reads it. */
-export function p2pLabel(n: Pick<P2pNote, "dir" | "name">): string {
-  return n.dir === "to" ? `To ${n.name}` : n.dir === "from" ? `From ${n.name}` : n.name;
+/** "To Alex Kim", "From Sam", or "Moved to your bank", as a ledger line reads it. A name Prism gave it is said in the page's language; a person's stays theirs. */
+export function p2pLabel(n: Pick<P2pNote, "dir" | "name">, t: T = EN): string {
+  const name = OWN_NAMES.has(n.name) ? t(n.name) : n.name;
+  return n.dir === "to" ? t("To {name}", { name }) : n.dir === "from" ? t("From {name}", { name }) : name;
 }

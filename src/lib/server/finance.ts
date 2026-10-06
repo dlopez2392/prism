@@ -19,12 +19,13 @@ import { feedSnapshot } from "@/lib/finance/calendar";
 import type { Cents, FinanceData, Goal, Holding, Institution, ISODate, Transaction } from "@/lib/finance/types";
 import { importAccountId, summarize, type ImportedHistory, type ImportSummary, type LockedImport } from "@/lib/finance/import";
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
-import { needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
+import { holdingsOnly, needsSync, syncTransactions, validState, type StoredSync, type SyncState } from "@/lib/plaid/sync";
 import { mapAccount, mapHoldings, mapTransaction } from "@/lib/plaid/map";
 import { getLiabilities, holdsDebt, liabilitiesEnabled, liabilitiesStale, toLiability, type StoredLiability } from "@/lib/plaid/liabilities";
 import { NO_RULES, recategorize, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { manualAccount, manualInstitution, validManualItems, type ManualItem } from "@/lib/finance/manual";
-import { applyDetails, NO_DETAILS, type SplitRule, type TxnDetails } from "@/lib/finance/details";
+import { applyDetails, hideAccounts, NO_DETAILS, type SplitRule, type TxnDetails } from "@/lib/finance/details";
+import { applyOrderNotes, NO_ORDER_NOTES, type OrderNotes } from "@/lib/finance/orders";
 import { applyP2pNotes, NO_P2P_NOTES, type P2pNotes } from "@/lib/finance/p2p";
 import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
@@ -44,6 +45,7 @@ import {
   liveCoinbaseToken,
   loadAccount,
   saveAccountPlaidSync,
+  saveAccountLanguage,
   saveAccountTimeZone,
   saveAlertSnapshot,
   saveCoinbaseValue,
@@ -57,6 +59,9 @@ import { analyze } from "@/lib/finance/model";
 import { CARRYOVER_COOKIE, readPlan } from "./plan-store";
 import { loadHouseholdPlan, loadShares, loadSharedMoney, type HouseholdPlan, type SharedMoneyRow } from "./household-store";
 import { open, openPacked, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "./vault";
+import type { Locale } from "@/lib/i18n/locale";
+import { getT } from "@/lib/i18n/server";
+import { msg, type T } from "@/lib/i18n/t";
 
 export type Loaded = FinanceData & {
   /** A problem worth a banner — the data shown is still real, just incomplete. */
@@ -71,7 +76,8 @@ export type Loaded = FinanceData & {
   /** The signed-in person, or null on a device-only visit. */
   account: { email: string | null; firstName: string | null; calendarFeed: boolean; alerts: AlertSettings | null } | null;
   /** Signed in, with money or plans still sitting on this device from before: what they are. */
-  carryover: string[];
+  /** What's still on this device from before signing in, each a sentence to translate (with its count). */
+  carryover: Carryover[];
   /** What the signed-in person added by hand, as they entered it, for the editor on Net worth. */
   manual: ManualItem[];
   /** Their homes RentCast keeps up to date: the address and last range, for the editor. Never the household's. */
@@ -159,6 +165,8 @@ export type Sources = {
   imports: ImportedHistory[];
   /** Who their Venmo, PayPal and Cash App payments were for (finance/p2p.ts). A device keeps none. */
   p2p: P2pNotes;
+  /** What their Amazon charges paid for (finance/orders.ts). A device keeps none. */
+  orders: OrderNotes;
   /** Their splits, tags and who owes them (finance/details.ts). A device keeps none. */
   details: TxnDetails;
   /** Imports that won't open under any key this deployment has. A device keeps none. */
@@ -173,6 +181,8 @@ export type Sources = {
   feedUpdatedAt: string | null;
   /** The zone the account last saw the person in. */
   timeZone: string | null;
+  /** The language the account last saw the person read Prism in. Null on a device-only visit. */
+  language: Locale | null;
   /** Each bank's stored sync, and whether a new one may be saved (never for a connected app). Null on a device-only visit. */
   plaidSync: PlaidSync | null;
   /** Their alert email choices and snapshot's age. Null on a device-only visit. */
@@ -202,8 +212,8 @@ type WalletSource = {
   offline?: boolean;
 };
 
-/** `p2p` is left out where nothing reads a person's payment notes: the morning check never does. Splits change totals, so it reads `details`. */
-export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets"> & { p2p?: P2pNotes; details?: TxnDetails };
+/** `p2p` and `orders` are left out where nothing reads them: the morning check never does. Splits change totals, so it reads `details`. */
+export type Money = Pick<Sources, "items" | "coinbase" | "plaidSync" | "categories" | "manual" | "imports" | "wallets"> & { p2p?: P2pNotes; orders?: OrderNotes; details?: TxnDetails };
 
 function safeVaultKey(): VaultKey | null {
   try {
@@ -268,6 +278,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       },
       imports: a.imports,
       p2p: a.p2pNotes,
+      orders: a.orderNotes,
       details: a.details,
       lockedImports: a.lockedImports,
       inHousehold: a.inHousehold,
@@ -276,6 +287,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
       timeZone: a.timeZone,
+      language: a.language,
       alerts: a.alerts,
       plaidSync: {
         stored: a.plaidSync,
@@ -313,6 +325,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     wallets: { list: [], save: null, scan: null },
     imports: [],
     p2p: NO_P2P_NOTES,
+    orders: NO_ORDER_NOTES,
     details: NO_DETAILS,
     lockedImports: [],
     inHousehold: false,
@@ -321,6 +334,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     coinbase: cb && link ? { config: cb, token: async () => (isExpired(link) ? null : link.accessToken) } : null,
     feedUpdatedAt: null,
     timeZone: null,
+    language: null,
     // A device keeps no sync: its banks are read in full each time, as before accounts.
     plaidSync: null,
     alerts: null,
@@ -341,18 +355,20 @@ export async function sourceGoals(sources?: Sources): Promise<Goal[]> {
   return isLive(s) ? [] : buildDemoData(await requestToday()).goals;
 }
 
+export type Carryover = { text: string; n?: number };
+
 /** Money or plans a signed-in person still has on this device from before they signed in. */
-function carryoverOf(jar: Jar, signedIn: boolean): string[] {
+function carryoverOf(jar: Jar, signedIn: boolean): Carryover[] {
   if (!signedIn || jar.get(CARRYOVER_COOKIE)?.value === "later") return [];
-  const out: string[] = [];
+  const out: Carryover[] = [];
   const banks = plaidConfig() ? vaultItems(jar).length : 0;
-  if (banks) out.push(banks === 1 ? "a linked bank" : `${banks} linked banks`);
-  if (coinbaseConfig() && safeVaultKey() && readLink(jar.get(COINBASE_COOKIE)?.value, safeVaultKey()!)) out.push("Coinbase");
+  if (banks) out.push(banks === 1 ? { text: msg("a linked bank") } : { text: msg("{n} linked banks"), n: banks });
+  if (coinbaseConfig() && safeVaultKey() && readLink(jar.get(COINBASE_COOKIE)?.value, safeVaultKey()!)) out.push({ text: "Coinbase" });
   // Decoded, not merely present: a cookie deleted by an action in this same
   // request is still listed during the re-render, with an empty value.
   const plan = readPlan(jar);
-  if (plan.budgets) out.push("your budgets");
-  if (plan.goals) out.push("your goals");
+  if (plan.budgets) out.push({ text: msg("your budgets") });
+  if (plan.goals) out.push({ text: msg("your goals") });
   return out;
 }
 
@@ -379,10 +395,13 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
   const imported = withImports(owned, src.imports, src.categories, none.banks && none.manual && none.wallets);
   const all = withWallets(imported, read.wallets, none.banks && none.manual && none.imports);
   // Who each Venmo, PayPal or Cash App line was for: the person's own notes, on their own lines.
-  const noted = src.p2p ? applyP2pNotes(all.transactions, src.p2p) : all.transactions;
+  const paid = src.p2p ? applyP2pNotes(all.transactions, src.p2p) : all.transactions;
+  // And what each Amazon charge paid for, from their own order history.
+  const noted = src.orders ? applyOrderNotes(paid, src.orders) : paid;
   // Then what they added themselves: a split becomes its parts, after their category fixes.
   const detailed = src.details ? applyDetails(noted, src.details) : noted;
-  // The household sees each line as the bank sent it (undetailed): the same for every member, and none of anyone's own notes.
+  // The household sees each line as the bank sent it (undetailed): the same figures for every member. A person's own payment
+  // and order notes stay on their own lines in their own view of it; no other member is ever sent them (household_shared_money).
   return { money: detailed === all.transactions ? all : { ...all, transactions: detailed }, wallets: read.wallets, undetailed: noted };
 }
 
@@ -476,7 +495,7 @@ export const getFinance = cache(async (): Promise<Loaded> => {
   if ((await cookies()).get(VIEW_COOKIE)?.value !== "household" || !src.account || !src.inHousehold) return loaded;
   try {
     // After the calendar's refresh in ownMoney: the feed is only ever the person's own bills.
-    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household", splitRules: [] };
+    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household", splitRules: [], hiddenAccounts: [], hiddenHoldings: [] };
   } catch {
     return { ...loaded, notice: "We couldn't load your household just now. This is your own money." };
   }
@@ -487,20 +506,22 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
   const zone = jar.get("prism-tz")?.value;
   const today = todayIn(zone);
   const localHour = hourIn(zone);
+  const t = await getT();
   const src = await getSources();
   const planEdited = { budgets: src.plan.budgets !== null, goals: src.plan.goals !== null };
 
   const own = await moneyFor(src, today);
   let base = own.money;
   if (src.account) {
-    if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base);
+    if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base, t.locale, src.language !== t.locale);
     base = greeted(base, src.firstName, isLive(src));
     rememberZone(src.account, src.timeZone, zone);
+    rememberLanguage(src.account, src.language, t.locale);
     if (src.coinbaseShared) rememberCoinbase(src.account, src.coinbaseShared, base);
   }
-  // The person's own edits win over seeded or drafted budgets and goals.
+  // The person's own edits win over seeded or drafted budgets and goals; then the accounts they left out of their totals step aside.
   const personal: Loaded = {
-    ...applyPlan(base, src.plan),
+    ...hideAccounts(applyPlan(base, src.plan), src.details ?? null),
     localHour,
     planEdited,
     accountsEnabled: supabaseEnv() !== null,
@@ -523,7 +544,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
     householdPlan: null,
     splitRules: Object.entries(src.details?.rules ?? {}).map(([key, rule]) => ({ key, ...rule })),
   };
-  if (src.account) rememberAlerts(src.account, src.alerts, isLive(src) ? personal : null);
+  if (src.account) rememberAlerts(src.account, src.alerts, isLive(src) ? personal : null, t, src.language !== t.locale);
   // What the household is shown of my own money: my lines without my splits, tags or who owes me.
   const shared: Live = own.undetailed ? { ...base, transactions: own.undetailed } : base;
   return { loaded: personal, base, shared, src, today };
@@ -584,10 +605,6 @@ function openMember(row: SharedMoneyRow, key: VaultKey, today: ISODate): MemberM
 }
 
 /**
- * Keep the account's time zone current, so a connected app's "this month" is
- * the person's month. After the response, and only when it moved.
- */
-/**
  * The household sees a shared Coinbase as the value copied on its owner's
  * own visits (never anyone else's, and never a connected app's). Refreshed
  * after the response, at most every ten minutes, and only from a live load:
@@ -606,10 +623,11 @@ const COINBASE_COPY_EVERY = 10 * 60_000;
  * What this visit found worth an alert, left for the email job (which can't
  * read anyone's money itself): after the response, only for someone who
  * turned emails on, from their own money (never the household's or the
- * demo's), and at most every quarter hour unless the last one was sealed
- * under an older vault key. Once nothing of theirs is live, the last one goes.
+ * demo's), in the language of the page, and at most every quarter hour unless
+ * the last one was sealed under an older vault key or written in the language
+ * they've just left. Once nothing of theirs is live, the last one goes.
  */
-function rememberAlerts(account: Account, alerts: Sources["alerts"], money: FinanceData | null): void {
+function rememberAlerts(account: Account, alerts: Sources["alerts"], money: FinanceData | null, t: T, newLanguage: boolean): void {
   if (!alerts?.on) return;
   const key = safeVaultKey();
   if (!key) return;
@@ -617,9 +635,9 @@ function rememberAlerts(account: Account, alerts: Sources["alerts"], money: Fina
     if (alerts.takenAt) after(() => forgetAlertSnapshot(account).catch(() => undefined));
     return;
   }
-  if (alerts.takenAt && !alerts.stale && Date.now() - Date.parse(alerts.takenAt) < ALERT_SNAPSHOT_EVERY) return;
+  if (alerts.takenAt && !alerts.stale && !newLanguage && Date.now() - Date.parse(alerts.takenAt) < ALERT_SNAPSHOT_EVERY) return;
   after(() =>
-    saveAlertSnapshot(account, alertSnapshot(analyze(money), new Date().toISOString()), key).catch((e: unknown) =>
+    saveAlertSnapshot(account, alertSnapshot(analyze(money, t), new Date().toISOString(), "visit", t), key).catch((e: unknown) =>
       // No figure in the message: only that the job will use the last one.
       console.error("Prism: a visit's alert snapshot wasn't kept:", e instanceof Error ? e.name : "unknown error"),
     ),
@@ -627,10 +645,24 @@ function rememberAlerts(account: Account, alerts: Sources["alerts"], money: Fina
 }
 const ALERT_SNAPSHOT_EVERY = 15 * 60_000;
 
+/**
+ * Keep the account's time zone current, so a connected app's "this month" is
+ * the person's month. After the response, and only when it moved.
+ */
 function rememberZone(account: Account, stored: string | null, seen: string | undefined): void {
   const zone = validZone(seen);
   if (!zone || zone === stored) return;
   after(() => saveAccountTimeZone(account, zone).catch(() => undefined));
+}
+
+/**
+ * Keep the language Prism writes to them in (alert emails, phone alerts) the
+ * one they read it in: their pick on the toggle, else their browser's. After
+ * the response, and only when it moved.
+ */
+function rememberLanguage(account: Account, stored: Locale | null, seen: Locale): void {
+  if (seen === stored) return;
+  after(() => saveAccountLanguage(account, seen).catch(() => undefined));
 }
 
 
@@ -657,13 +689,14 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     manual: a.manual,
     imports: a.imports,
     p2p: a.p2pNotes,
+    orders: a.orderNotes,
     details: a.details,
     // Read again in memory when stale; a connected app never saves (and the database wouldn't let it).
     wallets: { list: a.wallets, save: null, scan: null },
     coinbase: cb && key && record ? { config: cb, token: async () => (isExpired(record.tokens, Date.now() + 60_000) ? null : record.tokens.accessToken) } : null,
   };
   const base = greeted((await moneyFor(src, today, "Coinbase balances update the next time you open Prism.")).money, a.firstName, isLive(src));
-  const planned = applyPlan(base, a.plan);
+  const planned = hideAccounts(applyPlan(base, a.plan), a.details);
   return {
     source: planned.source,
     today: planned.today,
@@ -674,6 +707,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     budgets: planned.budgets,
     goals: planned.goals,
     holdings: planned.holdings,
+    hiddenAccounts: planned.hiddenAccounts,
     credit: planned.credit,
     notice: planned.notice,
     demo: !isLive(src),
@@ -690,18 +724,23 @@ export async function agentFinance(account: Account): Promise<AgentData> {
  */
 export async function morningFinance(src: Money, plan: Plan, today: ISODate): Promise<FinanceData | null> {
   if (!isLive(src)) return null;
-  return applyPlan((await moneyFor(src, today)).money, plan);
+  return hideAccounts(applyPlan((await moneyFor(src, today)).money, plan), src.details ?? null);
 }
 
 const FEED_STALE_MS = 6 * 60 * 60_000;
 
-async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live): Promise<void> {
-  if (!updatedAt || Date.now() - Date.parse(updatedAt) < FEED_STALE_MS) return;
+/**
+ * The calendar feed's snapshot, written again every six hours of visits, in
+ * the language of the page, and at once when they've just changed language,
+ * so their calendar follows them. Only for someone who has a feed.
+ */
+async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live, lang: Locale, newLanguage: boolean): Promise<void> {
+  if (!updatedAt || (!newLanguage && Date.now() - Date.parse(updatedAt) < FEED_STALE_MS)) return;
   // No key, no refresh: a snapshot is only ever stored sealed.
   const key = safeVaultKey();
   if (!key) return;
   try {
-    await saveFeedSnapshot(account, feedSnapshot(data), key);
+    await saveFeedSnapshot(account, feedSnapshot(data, lang), key);
   } catch {
     // A stale calendar is better than a broken page.
   }
@@ -794,8 +833,12 @@ async function bankFor(
   const startedAt = new Date().toISOString();
   let next: SyncState;
   try {
-    const [acc, synced] = await Promise.all([getAccounts(config, item.accessToken), syncTransactions(config, item.accessToken, copy, { today })]);
-    next = { ...synced, accounts: acc.accounts };
+    const [acc, synced] = await Promise.allSettled([getAccounts(config, item.accessToken), syncTransactions(config, item.accessToken, copy, { today })]);
+    if (acc.status === "rejected") throw acc.reason;
+    if (synced.status === "fulfilled") next = { ...synced.value, accounts: acc.value.accounts };
+    // An investment account on its own has no transactions to give, so Plaid refusing them is no outage: its holdings are the news.
+    else if (holdingsOnly(acc.value.accounts)) next = { v: 1, cursor: "", transactions: [], ready: true, accounts: acc.value.accounts };
+    else throw synced.reason;
   } catch (e) {
     if (copy?.accounts && stored?.syncedAt) {
       return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored.syncedAt, fromCopy: true, signInAgain: isReauth(e), answered: false };

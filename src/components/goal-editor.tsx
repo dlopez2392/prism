@@ -13,27 +13,30 @@ import { startTransition, useActionState, useRef, useState, type FormEvent } fro
 import { CircleCheck, Pencil, PiggyBank, Plus, RotateCcw, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { buttonGhost, buttonPrimary, buttonSmall, Dialog, FormMessage, MoneyInput, SelectInput, TextInput } from "@/components/dialog";
+import { useT } from "@/components/locale";
 import { addMonths } from "@/lib/finance/dates";
-import { money0 } from "@/lib/finance/format";
+import { capitalized, money0, monthLong } from "@/lib/finance/format";
 import { dollarsInput, GOAL_EMOJIS, GOAL_HORIZON_YEARS, GOAL_NAME_MAX, IDLE, type GoalSettings, type PlanFormState } from "@/lib/finance/plan";
+import { msg } from "@/lib/i18n/t";
 import { deleteGoal, restoreGoals, saveGoal } from "@/lib/server/plan-actions";
 
 const EMOJI_NAMES: Record<(typeof GOAL_EMOJIS)[number], string> = {
-  "🛟": "Life ring",
-  "🏡": "House",
-  "🗾": "Map",
-  "💻": "Laptop",
-  "🚗": "Car",
-  "🎓": "Graduation cap",
-  "💍": "Ring",
-  "👶": "Baby",
-  "🏖️": "Beach",
-  "🎁": "Gift",
-  "🐶": "Dog",
-  "🌱": "Seedling",
+  "🛟": msg("Life ring"),
+  "🏡": msg("House"),
+  "🗾": msg("Map"),
+  "💻": msg("Laptop"),
+  "🚗": msg("Car"),
+  "🎓": msg("Graduation cap"),
+  "💍": msg("Ring"),
+  "👶": msg("Baby"),
+  "🏖️": msg("Beach"),
+  "🎁": msg("Gift"),
+  "🐶": msg("Dog"),
+  "🌱": msg("Seedling"),
 };
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** "01" … "12", for the month picker: each month named in the page's language. */
+const MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
 
 type Mode = "new" | "edit" | "empty";
 
@@ -59,6 +62,7 @@ export function GoalEditor({
   /** Accounts the goal may follow (the whole list; ones other goals follow are left out here). */
   accounts?: FollowableAccount[];
 }) {
+  const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
@@ -73,7 +77,7 @@ export function GoalEditor({
     <>
       {mode === "edit" ? (
         <>
-          <button type="button" onClick={open} aria-label={`Edit ${goal?.name ?? "goal"}`} className="grid size-8 place-items-center rounded-ctl text-ink-3 transition-colors duration-150 hover:bg-surface-3 hover:text-ink-1">
+          <button type="button" onClick={open} aria-label={goal ? t("Edit {name}", { name: goal.name }) : t("Edit goal")} className="grid size-8 place-items-center rounded-ctl text-ink-3 transition-colors duration-150 hover:bg-surface-3 hover:text-ink-1">
             <Pencil aria-hidden className="size-4" />
           </button>
           {/* The card itself shows the change; this tells a screen reader. */}
@@ -94,14 +98,14 @@ export function GoalEditor({
           </p>
           <button type="button" onClick={open} className={mode === "empty" ? clsx(buttonPrimary, "h-9") : buttonSmall}>
             <Plus aria-hidden className="size-4" />
-            {mode === "empty" ? "Add a goal" : "New goal"}
+            {mode === "empty" ? t("Add a goal") : t("New goal")}
           </button>
         </div>
       )}
       <Dialog
         dialogRef={dialog}
-        title={goal ? `Edit ${goal.name}` : household ? "A new household goal" : "A new goal"}
-        description={goal ? undefined : "Name it, give it a number and a month, and Prism charts the way there."}
+        title={goal ? t("Edit {name}", { name: goal.name }) : household ? t("A new household goal") : t("A new goal")}
+        description={goal ? undefined : t("Name it, give it a number and a month, and Prism charts the way there.")}
         icon={PiggyBank}
       >
         <GoalForm
@@ -142,6 +146,7 @@ function GoalForm({
   onDone: (message: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [state, action, pending] = useActionState(async (prev: PlanFormState, form: FormData) => {
     const next = form.get("intent") === "delete" ? await deleteGoal(prev, form) : await saveGoal(prev, form);
     if (next.status === "saved") onDone(next.message);
@@ -185,10 +190,10 @@ function GoalForm({
       <input type="hidden" name="id" value={goal?.id ?? ""} />
       {household ? <input type="hidden" name="scope" value="household" /> : null}
       <div className="grid gap-4">
-        <TextInput name="name" label="What are you saving for?" defaultValue={goal?.name ?? ""} maxLength={GOAL_NAME_MAX} error={errors.name} />
+        <TextInput name="name" label={t("What are you saving for?")} defaultValue={goal?.name ?? ""} maxLength={GOAL_NAME_MAX} error={errors.name} />
 
         <fieldset>
-          <legend className="mb-1.5 text-[13px] font-semibold text-ink-2">Icon</legend>
+          <legend className="mb-1.5 text-[13px] font-semibold text-ink-2">{t("Icon")}</legend>
           <div className="grid grid-cols-6 gap-2">
             {GOAL_EMOJIS.map((e) => (
               <label key={e} className="relative">
@@ -199,7 +204,7 @@ function GoalForm({
                 >
                   {e}
                 </span>
-                <span className="sr-only">{EMOJI_NAMES[e]}</span>
+                <span className="sr-only">{t(EMOJI_NAMES[e])}</span>
               </label>
             ))}
           </div>
@@ -210,21 +215,24 @@ function GoalForm({
           <div>
             <SelectInput
               name="account"
-              label="Saved so far comes from"
+              label={t("Saved so far comes from")}
               showLabel
               defaultValue={follow}
               onChange={setFollow}
               invalid={Boolean(errors.account)}
               options={[
-                { value: "", label: "What I enter" },
+                { value: "", label: t("What I enter") },
                 ...free.map((a) => ({ value: a.id, label: `${a.name} · ${a.detail}` })),
-                ...(gone ? [{ value: gone, label: "The account it followed (not available now)" }] : []),
+                ...(gone ? [{ value: gone, label: t("The account it followed (not available now)") }] : []),
               ]}
             />
             {errors.account ? <p className="mt-1 text-xs font-medium text-crit-ink">{errors.account}</p> : null}
             {followed ? (
               <p className="mt-1.5 text-xs text-ink-3">
-                {money0(followed.balance)} in {followed.name} today. What&apos;s saved follows its balance from now on, month by month.
+                {t("{amount} in {account} today. What's saved follows its balance from now on, month by month.", {
+                  amount: money0(followed.balance),
+                  account: followed.name,
+                })}
               </p>
             ) : null}
           </div>
@@ -233,27 +241,27 @@ function GoalForm({
         )}
 
         <div className={clsx("grid gap-4", follow ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
-          <MoneyInput name="target" label="Target" defaultValue={goal ? dollarsInput(goal.target) : ""} placeholder="5,000" error={errors.target} />
+          <MoneyInput name="target" label={t("Target")} defaultValue={goal ? dollarsInput(goal.target) : ""} placeholder="5,000" error={errors.target} />
           {follow ? (
             // The balance travels as the last amount known, shown if the account ever goes away.
             <input type="hidden" name="saved" value={dollarsInput(followed ? Math.max(0, followed.balance) : (goal?.saved ?? 0))} />
           ) : (
-            <MoneyInput name="saved" label="Saved so far" defaultValue={goal ? dollarsInput(goal.saved) : ""} placeholder="0" error={errors.saved} />
+            <MoneyInput name="saved" label={t("Saved so far")} defaultValue={goal ? dollarsInput(goal.saved) : ""} placeholder="0" error={errors.saved} />
           )}
-          <MoneyInput name="monthly" label="Each month" defaultValue={goal ? dollarsInput(goal.monthlyContribution) : ""} placeholder="200" error={errors.monthly} />
+          <MoneyInput name="monthly" label={t("Each month")} defaultValue={goal ? dollarsInput(goal.monthlyContribution) : ""} placeholder="200" error={errors.monthly} />
         </div>
 
         <fieldset>
-          <legend className="mb-1 text-[13px] font-semibold text-ink-2">Reach it by</legend>
+          <legend className="mb-1 text-[13px] font-semibold text-ink-2">{t("Reach it by")}</legend>
           <div className="grid grid-cols-[1.4fr_1fr] gap-2">
             <SelectInput
               name="month"
-              label="Month"
+              label={t("Month")}
               defaultValue={String(Number(target.slice(5, 7)))}
-              options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
+              options={MONTHS.map((mm) => ({ value: String(Number(mm)), label: capitalized(monthLong(`2000-${mm}`, t.locale)) }))}
               invalid={Boolean(errors.targetDate)}
             />
-            <SelectInput name="year" label="Year" defaultValue={target.slice(0, 4)} options={years.map((y) => ({ value: y, label: y }))} invalid={Boolean(errors.targetDate)} />
+            <SelectInput name="year" label={t("Year")} defaultValue={target.slice(0, 4)} options={years.map((y) => ({ value: y, label: y }))} invalid={Boolean(errors.targetDate)} />
           </div>
           {errors.targetDate ? <p className="mt-1 text-xs font-medium text-crit-ink">{errors.targetDate}</p> : null}
         </fieldset>
@@ -264,15 +272,17 @@ function GoalForm({
       {confirming ? (
         <div role="alert" className="mt-5 rounded-ctl border border-line-strong bg-surface-2 p-3">
           <p className="text-sm font-semibold text-ink-1">
-            Delete “{goal?.name}”? Its progress chart goes with it{household ? ", for everyone in your household" : ""}.
+            {household
+              ? t("Delete “{name}”? Its progress chart goes with it, for everyone in your household.", { name: goal?.name ?? "" })
+              : t("Delete “{name}”? Its progress chart goes with it.", { name: goal?.name ?? "" })}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={remove} disabled={pending} className="inline-flex h-9 items-center gap-1.5 rounded-ctl border border-crit bg-surface-1 px-3.5 text-sm font-semibold text-crit-ink transition-colors duration-150 hover:bg-surface-3 disabled:opacity-60">
               <Trash2 aria-hidden className="size-4" />
-              {pending ? "Deleting…" : "Delete goal"}
+              {pending ? t("Deleting…") : t("Delete goal")}
             </button>
             <button type="button" onClick={() => setConfirming(false)} className={buttonSmall}>
-              Keep it
+              {t("Keep it")}
             </button>
           </div>
         </div>
@@ -282,23 +292,23 @@ function GoalForm({
         {goal && !confirming ? (
           <button type="button" onClick={() => setConfirming(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-crit-ink hover:underline">
             <Trash2 aria-hidden className="size-4" />
-            Delete
+            {t("Delete")}
           </button>
         ) : (
           <span />
         )}
         <div className="ml-auto flex gap-2">
           <button type="button" onClick={onCancel} className={buttonGhost}>
-            Cancel
+            {t("Cancel")}
           </button>
           <button type="submit" disabled={pending} className={buttonPrimary}>
-            {pending ? "Saving…" : goal ? "Save goal" : "Add goal"}
+            {pending ? t("Saving…") : goal ? t("Save goal") : t("Add goal")}
           </button>
         </div>
       </div>
       <p className="mt-4 text-xs text-ink-3">
-        {household ? "Saved for your household: everyone in it can update it. " : signedIn ? "Saved to your account. " : "Saved in this browser only. "}
-        {follow ? "What's saved updates itself from the account." : "Update what you've saved whenever you like."}
+        {household ? t("Saved for your household: everyone in it can update it.") : signedIn ? t("Saved to your account.") : t("Saved in this browser only.")}{" "}
+        {follow ? t("What's saved updates itself from the account.") : t("Update what you've saved whenever you like.")}
       </p>
     </form>
   );
@@ -306,12 +316,13 @@ function GoalForm({
 
 /** Demo only: throw away this device's goal edits and bring back Alex's goals. */
 export function RestoreGoals() {
+  const t = useT();
   const [state, action, pending] = useActionState(restoreGoals, IDLE);
   return (
     <form action={action}>
       <button type="submit" disabled={pending} className={clsx(buttonSmall, "border-transparent text-ink-2")}>
         <RotateCcw aria-hidden className="size-4" />
-        {pending ? "Restoring…" : "Restore example goals"}
+        {pending ? t("Restoring…") : t("Restore example goals")}
       </button>
       {state.status === "error" ? <p className="mt-1 text-xs text-crit-ink">{state.message}</p> : null}
     </form>

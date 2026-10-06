@@ -9,8 +9,10 @@ import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { buttonGhost, buttonPrimary, Dialog } from "@/components/dialog";
 import { removeImport } from "@/lib/server/import-actions";
+import { useT } from "@/components/locale";
 
 export function RemoveImport({ id, name, rows }: { id: string; name: string | null; rows: number | null }) {
+  const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   return (
@@ -21,21 +23,21 @@ export function RemoveImport({ id, name, rows }: { id: string; name: string | nu
         className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-ctl border border-line px-2.5 text-xs font-semibold text-ink-2 hover:bg-surface-3"
       >
         <Trash2 aria-hidden className="size-3.5" />
-        Remove
+        {t("Remove")}
       </button>
       <Dialog
         dialogRef={dialog}
-        title={name === null ? "Remove this import?" : `Remove ${name}?`}
+        title={name === null ? t("Remove this import?") : t("Remove {name}?", { name })}
         icon={Trash2}
         description={
           rows === null
-            ? "Prism can't open it, so none of it is on screen. Removing it deletes it from your account."
+            ? t("Prism can't open it, so none of it is on screen. Removing it deletes it from your account.")
             : rows === 1
-              ? "Its imported transaction leaves every screen in Prism."
-              : `Its ${rows.toLocaleString("en-US")} imported transactions leave every screen in Prism.`
+              ? t("Its imported transaction leaves every screen in Prism.")
+              : t("Its {n} imported transactions leave every screen in Prism.", { n: rows.toLocaleString("en-US") })
         }
       >
-        <p className="text-sm text-ink-2">The file on your computer isn&apos;t touched, so you can import it again any time.</p>
+        <p className="text-sm text-ink-2">{t("The file on your computer isn't touched, so you can import it again any time.")}</p>
         {state.error ? (
           <p role="alert" className="mt-3 text-sm font-medium text-crit-ink">
             {state.error}
@@ -53,10 +55,10 @@ export function RemoveImport({ id, name, rows }: { id: string; name: string | nu
               setState({ busy: false, error: r.ok ? null : r.message });
             }}
           >
-            {state.busy ? "Removing…" : "Remove it"}
+            {state.busy ? t("Removing…") : t("Remove it")}
           </button>
           <button type="button" className={buttonGhost} onClick={() => dialog.current?.close()}>
-            Keep it
+            {t("Keep it")}
           </button>
         </div>
       </Dialog>

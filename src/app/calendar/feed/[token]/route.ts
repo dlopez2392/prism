@@ -7,16 +7,19 @@
 // bills and paydays, refreshed as they use Prism. No balance, no transaction,
 // no bank token is reachable from here. "Reset link" in Prism kills a leaked URL.
 // The snapshot is stored sealed, so only this server, with the vault key,
-// can read it: the database never holds the bills themselves.
+// can read it: the database never holds the bills themselves. It names the
+// language the person's visits were in, and the calendar is written in it.
 
 import { createClient } from "@supabase/supabase-js";
 import { validDue, type CalendarOptions } from "@/lib/finance/calendar";
 import { feedTokenHash, openFeedSnapshot } from "@/lib/server/feed-token";
 import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { calendarResponse } from "@/lib/server/calendar-response";
+import { isLocale } from "@/lib/i18n/locale";
+import { translator } from "@/lib/i18n/translator";
 import { supabaseEnv } from "@/lib/supabase/config";
 
-type Snapshot = { v: 1; streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"]; dues?: unknown };
+type Snapshot = { v: 1; streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"]; dues?: unknown; lang?: unknown };
 
 const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
@@ -41,6 +44,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     // Due payments arrived with card and loan terms; a snapshot from before them simply has none.
     { streams: snap.streams, accounts: snap.accounts, dues: Array.isArray(snap.dues) ? snap.dues.filter(validDue) : [], today: new Date().toISOString().slice(0, 10) },
     // Private: the URL is a secret, so no shared cache may keep a copy.
-    { feed: true, filename: "prism-bills.ics", cacheControl: "private, max-age=900", demo: false },
+    // A snapshot from before languages has none, and was English.
+    { feed: true, filename: "prism-bills.ics", cacheControl: "private, max-age=900", demo: false, t: translator(isLocale(snap.lang) ? snap.lang : "en") },
   );
 }

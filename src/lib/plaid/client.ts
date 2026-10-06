@@ -13,6 +13,7 @@
 //   PLAID_API_URL                   — TEST HOOK, sandbox only: point at a fake Plaid
 
 import { BRAND } from "@/lib/brand";
+import { EN, type T } from "@/lib/i18n/t";
 
 /** Just the variables read here — a plain record, so tests can pass one. */
 export type Env = Record<string, string | undefined>;
@@ -54,13 +55,14 @@ export class PlaidError extends Error {
  * error code and message — never a token or a secret), and the person gets
  * plain words, with the code only as a reference to quote.
  */
-export function plaidFailure(e: unknown, step: string, sorry: string): string {
+/** `sorry` is a whole sentence in the person's language; Plaid's own `displayMessage` comes in Plaid's (English). */
+export function plaidFailure(e: unknown, step: string, sorry: string, t: T = EN): string {
   if (e instanceof PlaidError) {
     console.error(`${step}: ${e.message}`);
-    return e.displayMessage ?? `${sorry} Try again in a minute. (Plaid code: ${e.code})`;
+    return e.displayMessage ?? t("{sorry} Try again in a minute. (Plaid code: {code})", { sorry, code: e.code });
   }
   console.error(`${step}: ${e instanceof Error ? e.message : String(e)}`);
-  return "Plaid is unreachable right now. Try again in a minute.";
+  return t("Plaid is unreachable right now. Try again in a minute.");
 }
 
 export async function plaidRequest<T>(
@@ -175,6 +177,18 @@ export const LINK_PRODUCTS = ["transactions"] as const;
 /** Fetched when the bank supports it, and billed from the moment a bank links: only what Prism reads today. */
 export const LINK_OPTIONAL_PRODUCTS = ["investments"] as const;
 /**
+ * What a person connects: a bank (its transactions, and its investments where
+ * it has them), or an investment account on its own. Plaid shows only the
+ * institutions and accounts that support every product in `products`, and its
+ * Transactions covers bank and card accounts, never investment accounts, so a
+ * brokerage account (Robinhood, Webull) can't appear in a bank link at all.
+ * An investment link turns the two round: holdings first, and transactions
+ * where a cash account sits alongside them.
+ */
+export type LinkKind = "bank" | "investments";
+export const INVESTMENT_LINK_PRODUCTS = ["investments"] as const;
+export const INVESTMENT_LINK_OPTIONAL_PRODUCTS = ["transactions"] as const;
+/**
  * Consent only: Plaid asks the person's permission at link time, fetches
  * nothing, and bills nothing until Prism first calls the product. So a later
  * feature (a card's due date and minimum payment, say) needs no re-linking,
@@ -197,7 +211,7 @@ export const LINK_COUNTRIES = ["US"] as const;
 export async function createLinkToken(
   config: PlaidConfig,
   clientUserId: string,
-  opts: { webhookUrl?: string | null; redirectUri?: string | null; accessToken?: string } = {},
+  opts: { webhookUrl?: string | null; redirectUri?: string | null; accessToken?: string; kind?: LinkKind } = {},
   env: Env = process.env,
 ) {
   const body: Record<string, unknown> = {
@@ -210,9 +224,10 @@ export async function createLinkToken(
   if (opts.accessToken) {
     body.access_token = opts.accessToken;
   } else {
-    body.products = [...LINK_PRODUCTS];
+    const investments = opts.kind === "investments";
+    body.products = [...(investments ? INVESTMENT_LINK_PRODUCTS : LINK_PRODUCTS)];
     // Asked for when the institution supports them; never blocks the link.
-    body.optional_products = [...LINK_OPTIONAL_PRODUCTS];
+    body.optional_products = [...(investments ? INVESTMENT_LINK_OPTIONAL_PRODUCTS : LINK_OPTIONAL_PRODUCTS)];
     body.additional_consented_products = [...LINK_CONSENTED_PRODUCTS];
     body.transactions = { days_requested: 730 };
   }

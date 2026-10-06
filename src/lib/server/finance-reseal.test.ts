@@ -12,9 +12,10 @@ const account = { userId: "u1", email: "a@x.test", supabase: {} };
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => account }));
 const reseal = vi.fn(async () => undefined);
 vi.mock("./account-store", () => ({
-  loadAccount: async () => ({ firstName: null, timeZone: null, plan: { budgets: null, goals: null }, categories: { v: 1, merchants: {}, transactions: {} }, manual: [], imports: [], lockedImports: [], wallets: [], items: [], plaidSync: new Map(), coinbase: null, feedUpdatedAt: null, reseal }),
+  loadAccount: async () => ({ firstName: null, timeZone: null, language: "en", plan: { budgets: null, goals: null }, categories: { v: 1, merchants: {}, transactions: {} }, manual: [], imports: [], lockedImports: [], wallets: [], items: [], plaidSync: new Map(), coinbase: null, feedUpdatedAt: null, reseal }),
   liveCoinbaseToken: vi.fn(),
   saveAccountPlaidSync: vi.fn(),
+  saveAccountLanguage: vi.fn(async () => undefined),
   saveAccountTimeZone: vi.fn(),
   saveFeedSnapshot: vi.fn(),
 }));

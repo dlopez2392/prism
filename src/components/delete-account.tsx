@@ -7,16 +7,22 @@
 
 import { useActionState, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { useT } from "@/components/locale";
 import { deleteAccount, type DeleteState } from "@/lib/server/auth-actions";
 
 export function DeleteAccount({ email }: { email: string }) {
+  const t = useT();
   const [state, action, pending] = useActionState<DeleteState, FormData>(deleteAccount, {});
   const [typed, setTyped] = useState("");
   const matches = typed.trim().toLowerCase() === email.toLowerCase();
+  // One whole sentence, with the address set in bold wherever the language puts it.
+  const [before, after] = t("Type {email} to confirm").split("{email}");
   return (
     <form action={action} className="mt-4">
       <label htmlFor="confirm-delete" className="mb-1 block text-[13px] font-semibold text-ink-2">
-        Type <span className="font-bold text-ink-1">{email}</span> to confirm
+        {before}
+        <span className="font-bold text-ink-1">{email}</span>
+        {after}
       </label>
       <input
         id="confirm-delete"
@@ -37,7 +43,7 @@ export function DeleteAccount({ email }: { email: string }) {
         className="mt-3 inline-flex h-10 items-center gap-1.5 rounded-ctl border border-crit bg-surface-1 px-4 text-sm font-semibold text-crit-ink transition-colors duration-150 hover:bg-surface-3 disabled:opacity-40"
       >
         <Trash2 aria-hidden className="size-4" />
-        {pending ? "Deleting…" : "Delete my account"}
+        {pending ? t("Deleting…") : t("Delete my account")}
       </button>
     </form>
   );

@@ -7,7 +7,9 @@
 // separated by a 2px surface gap (a pad angle), never a stroke.
 
 import { useState, type ReactNode } from "react";
+import { useT } from "@/components/locale";
 import { arcPath, polar, strokeArc } from "@/lib/charts/geometry";
+import { msg } from "@/lib/i18n/t";
 import { fmt, type ValueFormat } from "./core";
 
 export type Slice = { id: string; label: string; value: number; color: string };
@@ -22,6 +24,7 @@ export function Donut({
   ariaLabel,
   active,
   onActive,
+  onSelect,
 }: {
   slices: Slice[];
   size?: number;
@@ -33,6 +36,8 @@ export function Donut({
   /** Controlled highlight, so a legend beside the donut can drive it. */
   active?: string | null;
   onActive?: (id: string | null) => void;
+  /** A slice chosen, by a click or by Enter: what it opens is the caller's. */
+  onSelect?: (id: string) => void;
 }) {
   const [own, setOwn] = useState<string | null>(null);
   const hot = active !== undefined ? active : own;
@@ -67,6 +72,16 @@ export function Donut({
               onPointerLeave={() => set(null)}
               onFocus={() => set(s.id)}
               onBlur={() => set(null)}
+              onClick={onSelect ? () => onSelect(s.id) : undefined}
+              onKeyDown={
+                onSelect
+                  ? (e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      onSelect(s.id);
+                    }
+                  : undefined
+              }
             />
           );
         })}
@@ -186,25 +201,28 @@ const SCORE_BANDS: { from: number; to: number; color: string }[] = [
   { from: 740, to: 850, color: "var(--good)" },
 ];
 
+/** The band a score falls in; its label is English, shown with t(). */
 export function scoreBand(score: number): { label: string; color: string } {
-  if (score >= 800) return { label: "Exceptional", color: "var(--good)" };
-  if (score >= 740) return { label: "Very good", color: "var(--good)" };
-  if (score >= 670) return { label: "Good", color: "var(--warn)" };
-  if (score >= 580) return { label: "Fair", color: "var(--serious)" };
-  return { label: "Needs work", color: "var(--crit)" };
+  if (score >= 800) return { label: msg("Exceptional"), color: "var(--good)" };
+  if (score >= 740) return { label: msg("Very good"), color: "var(--good)" };
+  if (score >= 670) return { label: msg("Good"), color: "var(--warn)" };
+  if (score >= 580) return { label: msg("Fair"), color: "var(--serious)" };
+  return { label: msg("Needs work"), color: "var(--crit)" };
 }
 
 /** A semicircular 300–850 gauge. Band colours carry status; the word says it too. */
 export function ScoreGauge({ score, size = 240 }: { score: number; size?: number }) {
+  const t = useT();
   const c = size / 2;
   const r = c - 14;
   const h = c + 18;
   const toA = (v: number) => -Math.PI / 2 + ((v - 300) / 550) * Math.PI;
   const [mx, my] = polar(c, c, r, toA(score));
   const band = scoreBand(score);
+  const bandLabel = t(band.label);
   return (
     <div className="relative mx-auto" style={{ width: size, height: h }}>
-      <svg width={size} height={h} role="img" aria-label={`Credit score ${score}, ${band.label}`} className="block">
+      <svg width={size} height={h} role="img" aria-label={t("Credit score {score}, {band}", { score, band: bandLabel })} className="block">
         {SCORE_BANDS.map((b) => (
           <path
             key={b.from}
@@ -220,7 +238,7 @@ export function ScoreGauge({ score, size = 240 }: { score: number; size?: number
       </svg>
       <div className="absolute inset-x-0 bottom-1 text-center">
         <div className="text-4xl font-bold tracking-tight text-ink-1">{score}</div>
-        <div className="text-xs font-medium text-ink-2">{band.label} · 300–850</div>
+        <div className="text-xs font-medium text-ink-2">{bandLabel} · 300–850</div>
       </div>
     </div>
   );

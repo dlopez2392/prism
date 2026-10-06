@@ -10,6 +10,7 @@
 import { useId, type ComponentType, type ReactNode, type RefObject } from "react";
 import { X } from "lucide-react";
 import clsx from "clsx";
+import { useT } from "@/components/locale";
 
 export function Dialog({
   dialogRef,
@@ -25,6 +26,7 @@ export function Dialog({
   children: ReactNode;
 }) {
   const id = useId();
+  const t = useT();
   return (
     <dialog
       ref={dialogRef}
@@ -44,7 +46,7 @@ export function Dialog({
               {description ? <p className="mt-0.5 text-[13px] text-ink-3">{description}</p> : null}
             </div>
           </div>
-          <button type="button" onClick={() => dialogRef.current?.close()} aria-label="Close" className="grid size-8 shrink-0 place-items-center rounded-ctl text-ink-3 hover:bg-surface-3">
+          <button type="button" onClick={() => dialogRef.current?.close()} aria-label={t("Close")} className="grid size-8 shrink-0 place-items-center rounded-ctl text-ink-3 hover:bg-surface-3">
             <X className="size-4" />
           </button>
         </div>

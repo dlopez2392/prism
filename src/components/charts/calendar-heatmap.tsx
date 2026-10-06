@@ -10,7 +10,8 @@
 import { useMemo, useState } from "react";
 import { binOf, quantileThresholds } from "@/lib/charts/geometry";
 import { dayOfWeek } from "@/lib/finance/dates";
-import { dayDate, money, monthShort } from "@/lib/finance/format";
+import { capitalized, dayDate, money, monthShort, weekdayShort } from "@/lib/finance/format";
+import { useT } from "@/components/locale";
 import { ChartPlaceholder, ChartTooltip, useWidth } from "./core";
 
 const BINS = 5;
@@ -21,6 +22,8 @@ const TOP = 18;
 export function CalendarHeatmap({ days, ariaLabel }: { days: { date: string; amount: number }[]; ariaLabel: string }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  const t = useT();
+  const { locale } = t;
 
   const all = useMemo(() => {
     if (days.length === 0) return null;
@@ -60,14 +63,14 @@ export function CalendarHeatmap({ days, ariaLabel }: { days: { date: string; amo
         ) : (
           <>
             <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block" onPointerLeave={() => setHover(null)}>
-              {["Mon", "Wed", "Fri"].map((d, i) => (
-                <text key={d} x={0} y={TOP + (1 + i * 2) * step + size / 2} dy="0.32em" className="fill-[var(--ink-3)] text-[10px]">
-                  {d}
+              {[1, 3, 5].map((dow, i) => (
+                <text key={dow} x={0} y={TOP + (1 + i * 2) * step + size / 2} dy="0.32em" className="fill-[var(--ink-3)] text-[10px]">
+                  {capitalized(weekdayShort(dow, locale))}
                 </text>
               ))}
               {monthLabels.map((c) => (
                 <text key={`m-${c.date}`} x={LEFT + c.col * step} y={10} className="fill-[var(--ink-3)] text-[10px] font-medium">
-                  {monthShort(c.date)}
+                  {capitalized(monthShort(c.date, locale))}
                 </text>
               ))}
               {grid.cells.map((c, i) => {
@@ -94,19 +97,19 @@ export function CalendarHeatmap({ days, ariaLabel }: { days: { date: string; amo
                 x={LEFT + grid.cells[hover]!.col * step + size}
                 y={TOP + grid.cells[hover]!.row * step - 8}
                 width={width}
-                title={dayDate(grid.cells[hover]!.date)}
-                rows={[{ color: `var(--seq-${Math.max(1, binOf(grid.cells[hover]!.amount, grid.thresholds))})`, key: "dot", label: "spent", value: money(grid.cells[hover]!.amount) }]}
+                title={capitalized(dayDate(grid.cells[hover]!.date, locale))}
+                rows={[{ color: `var(--seq-${Math.max(1, binOf(grid.cells[hover]!.amount, grid.thresholds))})`, key: "dot", label: t("spent"), value: money(grid.cells[hover]!.amount) }]}
               />
             ) : null}
           </>
         )}
       </div>
       <div className="mt-2 flex items-center justify-end gap-1.5 text-[11px] text-ink-3" aria-hidden>
-        <span className="mr-1">Less</span>
+        <span className="mr-1">{t("Less")}</span>
         {Array.from({ length: BINS + 1 }, (_, b) => (
           <span key={b} className="size-3 rounded-[3px]" style={{ background: `var(--seq-${b})` }} />
         ))}
-        <span className="ml-1">More</span>
+        <span className="ml-1">{t("More")}</span>
       </div>
     </div>
   );

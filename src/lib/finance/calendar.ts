@@ -9,12 +9,18 @@
 // Every event is all-day (a DATE, no time or zone): a bill is due on a day,
 // and a floating date lands on that day wherever the phone is. Reminders fire
 // at 9 AM relative to that day. UIDs are a stable hash of the stream, so a
-// fresh download updates the same series instead of duplicating it.
+// fresh download updates the same series instead of duplicating it, and a
+// calendar that changes language renames its events rather than adding more.
+// Every word is in the language of `t` (English unless asked): a person's own
+// feed is in the language their visits last wrote its snapshot in.
 
+import { BRAND } from "@/lib/brand";
 import { addDays, dayOfMonth, dayOfWeek } from "./dates";
 import { money, money0, shortDate } from "./format";
 import { detectRecurring, upcoming, type Cadence, type RecurringStream } from "./recurring";
 import type { Account, Cents, ISODate, Transaction } from "./types";
+import type { Locale } from "@/lib/i18n/locale";
+import { EN, msg, type T } from "@/lib/i18n/t";
 
 export type Reminder = "none" | "same_day" | "day_before" | "three_days";
 
@@ -43,13 +49,13 @@ export function parseReminder(x: string | null | undefined): Reminder {
  */
 const OCCURRENCES: Record<Cadence, number> = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12, quarterly: 4, semiannual: 2, annual: 2 };
 const EVERY: Record<Cadence, string> = {
-  weekly: "every week",
-  biweekly: "every two weeks",
-  semimonthly: "twice a month",
-  monthly: "every month",
-  quarterly: "every three months",
-  semiannual: "twice a year",
-  annual: "every year",
+  weekly: msg("every week"),
+  biweekly: msg("every two weeks"),
+  semimonthly: msg("twice a month"),
+  monthly: msg("every month"),
+  quarterly: msg("every three months"),
+  semiannual: msg("twice a year"),
+  annual: msg("every year"),
 };
 /** Months between a series' dates, for the cadences that keep the same day of the month. */
 const INTERVAL: Partial<Record<Cadence, number>> = { quarterly: 3, semiannual: 6 };
@@ -107,7 +113,12 @@ export type CalendarOptions = {
   calendarName: string;
   /** A subscribed feed says how often to refetch; a download says it is a snapshot. */
   feed: boolean;
+  /** The language its words are in; English when not given. */
+  t?: T;
 };
+
+/** An event's category, as calendar apps that show them read it: the English names Prism's own screens use, translated where written. */
+const CATEGORY = { bills: msg("Bills"), subscriptions: msg("Subscriptions"), transfers: msg("Transfers"), paydays: msg("Paydays") } as const;
 
 export type BillEvent = {
   uid: string;
@@ -115,7 +126,7 @@ export type BillEvent = {
   rrule: string;
   title: string;
   description: string;
-  category: "Bills" | "Subscriptions" | "Transfers" | "Paydays";
+  category: string;
 };
 
 /** The first occurrence after the last real charge that is today or later, as the series itself would date it. */
@@ -208,27 +219,45 @@ export function remindable(streams: RecurringStream[], accounts: CalendarOptions
 }
 
 export function billEvents(opts: CalendarOptions): BillEvent[] {
+  const t = opts.t ?? EN;
+  const { locale } = t;
   const accounts = new Map(opts.accounts.map((a) => [a.id, a]));
   const events: BillEvent[] = [];
+  const more = t("See what's coming up: {url}", { url: `${opts.origin}/future` });
   for (const s of remindable(opts.streams, opts.accounts, opts.paydays)) {
     const account = accounts.get(s.accountId);
     const payday = isPayday(s, account);
 
-    const exact = s.variable ? `about ${money0(Math.abs(s.amount))}` : money(Math.abs(s.amount));
+    const exact = s.variable ? t("about {amount}", { amount: money0(Math.abs(s.amount)) }) : money(Math.abs(s.amount));
     const amount = payday ? `+${exact}` : exact;
-    const title = payday ? `Payday: ${s.merchant}` : s.merchant;
-    const where = account ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}` : null;
+    const title = payday ? t("Payday: {name}", { name: s.merchant }) : s.merchant;
+    const vars = { amount, account: account ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}` : "", every: t(EVERY[s.cadence]) };
+    const expected = payday
+      ? account
+        ? t("Expected in: {amount} · {account} · {every}.", vars)
+        : t("Expected in: {amount} · {every}.", vars)
+      : account
+        ? t("Expected out: {amount} · {account} · {every}.", vars)
+        : t("Expected out: {amount} · {every}.", vars);
 
     const lines = [
-      `${payday ? "Expected in" : "Expected out"}: ${amount}${where ? ` · ${where}` : ""} · ${EVERY[s.cadence]}.`,
+      expected,
       s.variable
-        ? "The amount changes from one time to the next; this is the typical recent charge."
-        : `Based on the last ${s.occurrences} ${payday ? "deposits" : "charges"}.`,
+        ? t("The amount changes from one time to the next; this is the typical recent charge.")
+        : payday
+          ? t("Based on the last {n} deposits.", { n: s.occurrences })
+          : t("Based on the last {n} charges.", { n: s.occurrences }),
     ];
     if (s.priceChange) {
-      lines.push(`The price went up from ${money(Math.abs(s.priceChange.from))} to ${money(Math.abs(s.priceChange.to))} on ${shortDate(s.priceChange.date)}.`);
+      lines.push(
+        t("The price went up from {from} to {to} on {date}.", {
+          from: money(Math.abs(s.priceChange.from)),
+          to: money(Math.abs(s.priceChange.to)),
+          date: shortDate(s.priceChange.date, locale),
+        }),
+      );
     }
-    lines.push("", `See what's coming up: ${opts.origin}/future`);
+    lines.push("", more);
 
     for (const series of seriesFor(s, opts.today)) {
       events.push({
@@ -237,30 +266,36 @@ export function billEvents(opts: CalendarOptions): BillEvent[] {
         rrule: series.rrule,
         title: opts.amountsInTitles ? `${title} · ${amount}` : title,
         description: lines.join("\n"),
-        category: payday ? "Paydays" : s.kind === "subscription" ? "Subscriptions" : s.kind === "transfer" ? "Transfers" : "Bills",
+        category: t(payday ? CATEGORY.paydays : s.kind === "subscription" ? CATEGORY.subscriptions : s.kind === "transfer" ? CATEGORY.transfers : CATEGORY.bills),
       });
     }
   }
   for (const d of opts.dues ?? []) {
     if (d.due < opts.today) continue;
     const label = `${d.name}${d.mask ? ` ••${d.mask}` : ""}`;
-    const owed = [d.minimum !== null ? `minimum ${money(d.minimum)}` : null, d.statement !== null ? `statement balance ${money(d.statement)}` : null].filter(Boolean);
+    const owed = [
+      d.minimum !== null ? t("minimum {amount}", { amount: money(d.minimum) }) : null,
+      d.statement !== null ? t("statement balance {amount}", { amount: money(d.statement) }) : null,
+    ].filter(Boolean);
     events.push({
       // One event per account and due date: a fresh copy updates it, and next month's is a new one.
       uid: `${stableHash(`due|${d.accountId}|${d.due}`)}@prism.bis`,
       start: d.due,
       rrule: "",
-      title: opts.amountsInTitles && d.minimum !== null ? `${label} payment due · ${money(d.minimum)} min` : `${label} payment due`,
+      title:
+        opts.amountsInTitles && d.minimum !== null
+          ? t("{account} payment due · {amount} min", { account: label, amount: money(d.minimum) })
+          : t("{account} payment due", { account: label }),
       description: [
-        `Payment due${owed.length ? `: ${owed.join(" · ")}` : ""}.`,
-        "From your lender. The next statement brings the next due date.",
+        owed.length ? t("Payment due: {owed}.", { owed: owed.join(" · ") }) : t("Payment due."),
+        t("From your lender. The next statement brings the next due date."),
         "",
-        `See what's coming up: ${opts.origin}/future`,
+        more,
       ].join("\n"),
-      category: "Bills",
+      category: t(CATEGORY.bills),
     });
   }
-  return events.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : a.title.localeCompare(b.title)));
+  return events.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : a.title.localeCompare(b.title, locale)));
 }
 
 /** RFC 5545 §3.3.11: backslash, semicolon, comma and newline are escaped in TEXT. */
@@ -297,6 +332,7 @@ const icsDate = (d: ISODate) => d.replace(/-/g, "");
 const icsStamp = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
 export function buildCalendar(opts: CalendarOptions): string {
+  const t = opts.t ?? EN;
   const events = billEvents(opts);
   const stamp = icsStamp(opts.now);
   const lines: string[] = [
@@ -306,13 +342,13 @@ export function buildCalendar(opts: CalendarOptions): string {
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeText(opts.calendarName)}`,
-    `X-WR-CALDESC:${escapeText("Bills, subscriptions and paydays Prism found repeating. Information, not financial advice.")}`,
+    `X-WR-CALDESC:${escapeText(t("Bills, subscriptions and paydays {product} found repeating. Information, not financial advice.", { product: BRAND.product }))}`,
   ];
   if (opts.feed) lines.push("REFRESH-INTERVAL;VALUE=DURATION:PT12H", "X-PUBLISHED-TTL:PT12H");
 
   const footer = opts.feed
-    ? "This calendar updates itself."
-    : `A snapshot from ${shortDate(opts.today)}. Download it again from Prism to refresh.`;
+    ? t("This calendar updates itself.")
+    : t("A snapshot from {date}. Download it again from {product} to refresh.", { date: shortDate(opts.today, t.locale), product: "Prism" });
 
   for (const e of events) {
     lines.push(
@@ -325,7 +361,7 @@ export function buildCalendar(opts: CalendarOptions): string {
       ...(e.rrule ? [`RRULE:${e.rrule}`] : []),
       `SUMMARY:${escapeText(e.title)}`,
       `DESCRIPTION:${escapeText(`${e.description}\n${footer}`)}`,
-      `CATEGORIES:${e.category}`,
+      `CATEGORIES:${escapeText(e.category)}`,
       `URL:${opts.origin}/future`,
       // A reminder is not a meeting: never mark the day as busy.
       "TRANSP:TRANSPARENT",
@@ -343,13 +379,17 @@ export function buildCalendar(opts: CalendarOptions): string {
 /**
  * What a person's calendar feed publishes: their repeating bills and paydays
  * and the few account labels those name — never a balance, a transaction or
- * which transactions formed a stream. Stored, then served to calendar apps
- * that never sign in, so it holds exactly what the calendar shows and no more.
+ * which transactions formed a stream — and the language to write them in, the
+ * one their visit was in. Stored, then served to calendar apps that never sign
+ * in, so it holds exactly what the calendar shows and no more.
  */
-export function feedSnapshot(data: { transactions: Transaction[]; accounts: (CalendarOptions["accounts"][number] & Pick<Account, "liability">)[]; today: ISODate }) {
+export function feedSnapshot(
+  data: { transactions: Transaction[]; accounts: (CalendarOptions["accounts"][number] & Pick<Account, "liability">)[]; today: ISODate },
+  lang: Locale = "en",
+) {
   const streams = remindable(detectRecurring(data.transactions, data.today), data.accounts, true).map((s) => ({ ...s, transactionIds: [] as string[] }));
   const used = new Set(streams.map((s) => s.accountId));
   const accounts = data.accounts.filter((a) => used.has(a.id)).map(({ id, name, mask, kind }) => ({ id, name, mask, kind }));
   // A card's or a loan's next payment: its label, the date and what the lender asks — no balance history, no rate.
-  return { v: 1 as const, builtOn: data.today, streams, accounts, dues: dueReminders(data.accounts, data.today) };
+  return { v: 1 as const, builtOn: data.today, lang, streams, accounts, dues: dueReminders(data.accounts, data.today) };
 }

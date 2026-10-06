@@ -112,11 +112,20 @@ export type Transaction = {
   tags?: string[];
   /** Someone owes the person for this, until they mark it paid back. */
   owed?: Owed;
+  /** Left out of every total by the person (finance/details.ts): by itself ("line"), or with the account it's in ("account"). Still listed. */
+  excluded?: "line" | "account";
+  /** What an Amazon charge paid for, from the person's own order history (finance/orders.ts). */
+  order?: OrderNote;
   pending: boolean;
 };
 
 /** Who owes the person for a transaction, how much, and the day they marked it paid back (null while it's open). */
 export type Owed = { who: string; amount: Cents; paid: ISODate | null };
+
+/** One thing an Amazon charge paid for: what it was, how many, and what it cost with its share of tax and shipping. */
+export type OrderItem = { name: string; qty: number; amount: Cents };
+/** What an Amazon charge paid for, from the person's own order history: the order's number, the day it was placed, and its items. */
+export type OrderNote = { order: string; date: ISODate; items: OrderItem[] };
 
 export type P2pApp = "venmo" | "paypal" | "cashapp";
 /** "To Alex", "From Alex", or money moved between the app and the bank. */
@@ -185,4 +194,8 @@ export type FinanceData = {
   goals: Goal[];
   holdings: Holding[];
   credit: CreditScore | null;
+  /** The person's accounts they left out of every total (finance/details.ts hideAccounts): listed, never added up. */
+  hiddenAccounts?: Account[];
+  /** What those accounts hold, set aside with them: in a download of the person's data, never in a total. */
+  hiddenHoldings?: Holding[];
 };

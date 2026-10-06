@@ -11,12 +11,14 @@ import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { DeleteAccount } from "@/components/delete-account";
 import { buttonGhost, buttonPrimary } from "@/components/dialog";
 import { HouseholdCard } from "@/components/household";
+import { LanguageSetting } from "@/components/language-setting";
 import { NameForm } from "@/components/name-form";
 import { PhoneAlerts } from "@/components/phone-alerts";
 import { SignOutButton } from "@/components/sign-in-form";
 import { TwoStepSettings } from "@/components/two-step";
 import { Card, CardHeader, PageHeader, StatusPill } from "@/components/ui";
 import { alertsConfig } from "@/lib/alerts/send";
+import { getT } from "@/lib/i18n/server";
 import { vapidKeys } from "@/lib/alerts/webpush";
 import { signOut } from "@/lib/server/auth-actions";
 import { connectingEnabled, MCP_PATH } from "@/lib/server/connected-apps";
@@ -27,12 +29,16 @@ import { requestOrigin } from "@/lib/server/origin";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
 
-export const metadata: Metadata = { title: "Account" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Account") };
+}
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const t = await getT();
   const data = await getPersonalFinance();
   if (!data.accountsEnabled || !data.account) redirect("/sign-in");
-  const email = data.account.email ?? "your account";
+  const email = data.account.email ?? t("your account");
   const firstName = data.account.firstName;
   const welcome = (await searchParams).welcome === "1" && !firstName;
   // Offered only where the job can run: Resend and the job's secret are set (never on a preview).
@@ -50,35 +56,57 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const coinbase = data.institutions.some((i) => i.source === "coinbase");
 
   const rows: { icon: LucideIcon; label: string; value: string; on: boolean }[] = [
-    { icon: Landmark, label: "Linked banks", value: banks ? `${banks} linked` : "None yet", on: banks > 0 },
-    { icon: Wallet, label: "Coinbase", value: coinbase ? "Connected" : "Not connected", on: coinbase },
-    { icon: Target, label: "Budgets", value: data.planEdited.budgets ? `${data.budgets.length} set by you` : "Suggested", on: data.planEdited.budgets },
-    { icon: PiggyBank, label: "Goals", value: data.goals.length ? `${data.goals.length} ${data.goals.length === 1 ? "goal" : "goals"}` : "None yet", on: data.goals.length > 0 },
-    { icon: CalendarClock, label: "Calendar link", value: data.account.calendarFeed ? "On" : "Off — turn it on from Future", on: data.account.calendarFeed },
-    ...(alerts ? [{ icon: BellRing, label: "Alert emails", value: alerts.on ? "On" : "Off — turn them on below", on: alerts.on }] : []),
+    { icon: Landmark, label: t("Linked banks"), value: banks === 1 ? t("1 linked") : banks ? t("{n} linked", { n: banks }) : t("None yet"), on: banks > 0 },
+    { icon: Wallet, label: "Coinbase", value: coinbase ? t("Connected") : t("Not connected"), on: coinbase },
+    {
+      icon: Target,
+      label: t("Budgets"),
+      value: data.planEdited.budgets ? (data.budgets.length === 1 ? t("1 set by you") : t("{n} set by you", { n: data.budgets.length })) : t("Suggested"),
+      on: data.planEdited.budgets,
+    },
+    {
+      icon: PiggyBank,
+      label: t("Goals"),
+      value: data.goals.length === 1 ? t("1 goal") : data.goals.length ? t("{n} goals", { n: data.goals.length }) : t("None yet"),
+      on: data.goals.length > 0,
+    },
+    { icon: CalendarClock, label: t("Calendar link"), value: data.account.calendarFeed ? t("On") : t("Off — turn it on from Future"), on: data.account.calendarFeed },
+    ...(alerts ? [{ icon: BellRing, label: t("Alert emails"), value: alerts.on ? t("On") : t("Off — turn them on below"), on: alerts.on }] : []),
     ...(alerts && devices
-      ? [{ icon: Smartphone, label: "Alerts on devices", value: devices.length ? `${devices.length} ${devices.length === 1 ? "device" : "devices"}` : "None yet", on: devices.length > 0 }]
+      ? [
+          {
+            icon: Smartphone,
+            label: t("Alerts on devices"),
+            value: devices.length === 1 ? t("1 device") : devices.length ? t("{n} devices", { n: devices.length }) : t("None yet"),
+            on: devices.length > 0,
+          },
+        ]
       : []),
   ];
 
+  // One whole sentence, so a language can put the link where its words need it.
+  const [beforeLink, afterLink] = t("Once you link a bank or import your history on {connections}, you can download all of it here.").split("{connections}");
+
   return (
     <div className="space-y-5">
-      <PageHeader title="Account" subtitle={`Signed in as ${email}.`} action={<SignOutButton action={signOut} />} />
+      <PageHeader title={t("Account")} subtitle={t("Signed in as {email}.", { email })} action={<SignOutButton action={signOut} />} />
 
       <Card className="p-5 sm:p-6">
         <CardHeader
-          title={welcome ? "Welcome to Prism. What should we call you?" : "Your name"}
+          title={welcome ? t("Welcome to Prism. What should we call you?") : t("Your name")}
           subtitle={
             welcome
-              ? "Your first name is only used to say good morning on the Overview. Skip it if you like; you can add it here any time."
-              : "Prism uses your first name to say good morning on the Overview, and nowhere else."
+              ? t("Your first name is only used to say good morning on the Overview. Skip it if you like; you can add it here any time.")
+              : t("Prism uses your first name to say good morning on the Overview, and nowhere else.")
           }
         />
         <NameForm firstName={firstName} welcome={welcome} />
       </Card>
 
+      <LanguageSetting />
+
       <Card className="p-5 sm:p-6">
-        <CardHeader title="Saved to your account" subtitle="Everything here follows you to any device you sign in on." />
+        <CardHeader title={t("Saved to your account")} subtitle={t("Everything here follows you to any device you sign in on.")} />
         <ul className="mt-3 divide-y divide-[var(--line)]">
           {rows.map(({ icon: Icon, label, value, on }) => (
             <li key={label} className="flex items-center gap-3 py-3">
@@ -96,8 +124,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <section id="alerts" className="scroll-mt-6">
           <Card className="p-5 sm:p-6">
             <CardHeader
-              title="Alert emails"
-              subtitle="A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and short summaries: on Mondays, and early each month for the month before. Bills and figures are as of your last visit, or this morning's check of your banks if you allow it, and each email says which. No tracking, and one click stops them."
+              title={t("Alert emails")}
+              subtitle={t(
+                "A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and short summaries: on Mondays, and early each month for the month before. Bills and figures are as of your last visit, or this morning's check of your banks if you allow it, and each email says which. No tracking, and one click stops them.",
+              )}
             />
             <AlertEmails settings={alerts} email={email} />
           </Card>
@@ -108,8 +138,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <section id="phone" className="scroll-mt-6">
           <Card className="p-5 sm:p-6">
             <CardHeader
-              title="Alerts on your phone"
-              subtitle="The same alerts as your emails, as a notification, the moment each email goes. Each one is encrypted for your device, so the service that delivers it can't read it."
+              title={t("Alerts on your phone")}
+              subtitle={t(
+                "The same alerts as your emails, as a notification, the moment each email goes. Each one is encrypted for your device, so the service that delivers it can't read it.",
+              )}
             />
             <PhoneAlerts vapidKey={vapidKeys(config.secret).publicKey} devices={devices} alertsOn={alerts.on} />
           </Card>
@@ -119,8 +151,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <section id="two-step" className="scroll-mt-6">
         <Card className="p-5 sm:p-6">
           <CardHeader
-            title="Two-step sign-in"
-            subtitle="Add a code from an authenticator app on your phone to every sign-in, so your email alone can't open Prism."
+            title={t("Two-step sign-in")}
+            subtitle={t("Add a code from an authenticator app on your phone to every sign-in, so your email alone can't open Prism.")}
           />
           <div className="mt-4">
             <TwoStepSettings factorId={twoStepFactor} supabase={supabaseEnv()!} />
@@ -131,13 +163,13 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <section id="household" className="scroll-mt-6">
         <Card className="p-5 sm:p-6">
           <CardHeader
-            title="Household"
+            title={t("Household")}
             subtitle={
               household === undefined
-                ? "We couldn't load your household just now. Try again in a minute."
+                ? t("We couldn't load your household just now. Try again in a minute.")
                 : household
-                  ? "Everyone keeps their own login. Each of you chooses what to share on Connections, and sees only what the others share."
-                  : "Share chosen accounts with a partner or family, up to four adults. Each of you keeps your own login, and nothing is shared until you choose it."
+                  ? t("Everyone keeps their own login. Each of you chooses what to share on Connections, and sees only what the others share.")
+                  : t("Share chosen accounts with a partner or family, up to four adults. Each of you keeps your own login, and nothing is shared until you choose it.")
             }
           />
           {household === undefined ? null : <HouseholdCard household={household} />}
@@ -147,8 +179,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <section id="ai" className="scroll-mt-6">
         <Card className="p-5 sm:p-6">
           <CardHeader
-            title="Ask AI about your money"
-            subtitle="Connect Claude or ChatGPT, then ask things like “What did I spend on eating out last month?” Connected apps can read — never move money or change anything."
+            title={t("Ask AI about your money")}
+            subtitle={t("Connect Claude or ChatGPT, then ask things like “What did I spend on eating out last month?” Connected apps can read — never move money or change anything.")}
           />
           <ConnectedApps endpoint={endpoint} enabled={enabled} apps={apps} />
         </Card>
@@ -157,31 +189,33 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <section id="data" className="scroll-mt-6">
         <Card className="p-5 sm:p-6">
           <CardHeader
-            title="Download your data"
-            subtitle="Everything Prism shows you, yours to keep: spreadsheets of every transaction, account and month-end balance, your budgets and goals, and one file with all of it. Nothing in it can open your accounts."
+            title={t("Download your data")}
+            subtitle={t(
+              "Everything Prism shows you, yours to keep: spreadsheets of every transaction, account and month-end balance, your budgets and goals, and one file with all of it. Nothing in it can open your accounts.",
+            )}
           />
           {data.source === "demo" ? (
             <p className="mt-4 rounded-ctl bg-surface-2 p-3 text-sm text-ink-2">
-              Once you link a bank or import your history on{" "}
+              {beforeLink}
               <Link href="/connections" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
-                Connections
+                {t("Connections")}
               </Link>
-              , you can download all of it here.
+              {afterLink}
             </p>
           ) : (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <a href="/account/export/everything.zip" className={buttonPrimary}>
                 <Download aria-hidden className="size-4" />
-                Download everything
+                {t("Download everything")}
               </a>
               <a href="/account/export/transactions.csv" className={buttonGhost}>
-                Transactions only
+                {t("Transactions only")}
               </a>
               <Link href="/year" className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
-                See your year on one page
+                {t("See your year on one page")}
               </Link>
               <Link href="/taxes" className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
-                Your tax summary
+                {t("Your tax summary")}
               </Link>
             </div>
           )}
@@ -190,8 +224,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
 
       <Card className="p-5 sm:p-6">
         <CardHeader
-          title="Delete your account"
-          subtitle="Every bank link is removed at the bank, Coinbase access is revoked, and your budgets, goals and calendar link are erased. This can't be undone, so download your data first if you want a copy."
+          title={t("Delete your account")}
+          subtitle={t(
+            "Every bank link is removed at the bank, Coinbase access is revoked, and your budgets, goals and calendar link are erased. This can't be undone, so download your data first if you want a copy.",
+          )}
         />
         <DeleteAccount email={email} />
       </Card>
@@ -226,6 +262,7 @@ async function registeredFactor(): Promise<string | null> {
 
 /** The apps this person has let in, newest first — or null when they can't be listed right now. */
 async function connectedApps(): Promise<ConnectedApp[] | null> {
+  const t = await getT();
   const account = await currentAccount();
   if (!account) return null;
   const { data, error } = await account.supabase.auth.oauth.listGrants();
@@ -238,7 +275,7 @@ async function connectedApps(): Promise<ConnectedApp[] | null> {
       } catch {
         host = null;
       }
-      return { clientId: g.client.id, name: g.client.name?.trim() || "An app", host, grantedAt: g.granted_at };
+      return { clientId: g.client.id, name: g.client.name?.trim() || t("An app"), host, grantedAt: g.granted_at };
     })
     .sort((a, b) => (a.grantedAt < b.grantedAt ? 1 : -1));
 }

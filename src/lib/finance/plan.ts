@@ -12,6 +12,7 @@
 // cookie is untrusted, so each validator is all-or-nothing: one bad field
 // discards the whole list rather than half-applying it.
 
+import { msg } from "@/lib/i18n/t";
 import { SPEND_CATEGORIES } from "./categories";
 import { addDays, addMonths } from "./dates";
 import type { Account, AccountKind, Budget, Cents, FinanceData, Goal, ISODate, SpendCategoryId } from "./types";
@@ -218,9 +219,9 @@ export function readBudgetForm(form: FormData): { budgets: Budget[] } | { errors
     const text = typeof raw === "string" ? raw.trim() : "";
     if (text === "") continue;
     const cents = parseDollars(text);
-    if (cents === null) errors[category] = "Enter an amount like 450 or 450.50.";
+    if (cents === null) errors[category] = msg("Enter an amount like 450 or 450.50.");
     else if (cents === 0) continue;
-    else if (cents > MAX_MONTHLY) errors[category] = "That's more than $1,000,000 a month.";
+    else if (cents > MAX_MONTHLY) errors[category] = msg("That's more than $1,000,000 a month.");
     else budgets.push({ category, limit: cents });
   }
   return Object.keys(errors).length ? { errors } : { budgets };
@@ -228,7 +229,11 @@ export function readBudgetForm(form: FormData): { budgets: Budget[] } | { errors
 
 export type GoalInput = Omit<GoalSettings, "id" | "colorSlot">;
 
-/** Reads the goal editor's form. `today` bounds the target month. */
+/**
+ * Reads the goal editor's form. `today` bounds the target month. Each message
+ * is marked for translation; "{max}" in one is GOAL_NAME_MAX, filled in where
+ * it's shown (plan-actions.ts).
+ */
 export function readGoalForm(form: FormData, today: ISODate): { goal: GoalInput } | { errors: FieldErrors } {
   const text = (k: string) => {
     const v = form.get(k);
@@ -237,35 +242,35 @@ export function readGoalForm(form: FormData, today: ISODate): { goal: GoalInput 
   const errors: FieldErrors = {};
 
   const name = cleanGoalName(text("name"));
-  if (name === null) errors.name = text("name") ? `Keep it to ${GOAL_NAME_MAX} characters.` : "Give the goal a name.";
+  if (name === null) errors.name = text("name") ? msg("Keep it to {max} characters.") : msg("Give the goal a name.");
 
   const emoji = text("emoji");
-  if (!GOAL_EMOJIS.includes(emoji as (typeof GOAL_EMOJIS)[number])) errors.emoji = "Pick an icon.";
+  if (!GOAL_EMOJIS.includes(emoji as (typeof GOAL_EMOJIS)[number])) errors.emoji = msg("Pick an icon.");
 
   const money = (key: string, required: boolean, max: Cents, tooBig: string) => {
     const t = text(key);
     if (t === "") {
-      if (required) errors[key] = "Enter an amount.";
+      if (required) errors[key] = msg("Enter an amount.");
       return 0;
     }
     const c = parseDollars(t);
-    if (c === null) errors[key] = "Enter an amount like 5000 or 5,000.";
+    if (c === null) errors[key] = msg("Enter an amount like 5000 or 5,000.");
     else if (c > max) errors[key] = tooBig;
     return c ?? 0;
   };
   const account = text("account");
-  if (account !== "" && !ACCOUNT_ID.test(account)) errors.account = "Pick an account from the list.";
-  const target = money("target", true, MAX_TARGET, "That's more than $10,000,000.");
+  if (account !== "" && !ACCOUNT_ID.test(account)) errors.account = msg("Pick an account from the list.");
+  const target = money("target", true, MAX_TARGET, msg("That's more than $10,000,000."));
   // A goal that follows an account sends that account's balance here, as the last amount known.
-  const saved = money("saved", false, MAX_TARGET, "That's more than $10,000,000.");
-  const monthlyContribution = money("monthly", false, MAX_MONTHLY, "That's more than $1,000,000 a month.");
-  if (!errors.target && target === 0) errors.target = "The target needs to be more than $0.";
+  const saved = money("saved", false, MAX_TARGET, msg("That's more than $10,000,000."));
+  const monthlyContribution = money("monthly", false, MAX_MONTHLY, msg("That's more than $1,000,000 a month."));
+  if (!errors.target && target === 0) errors.target = msg("The target needs to be more than $0.");
 
   const month = `${text("year")}-${text("month").padStart(2, "0")}`;
   const targetDate = monthEndOf(month);
   const first = today.slice(0, 7);
   const last = `${Number(today.slice(0, 4)) + GOAL_HORIZON_YEARS}-12`;
-  if (!targetDate || month < first || month > last) errors.targetDate = "Pick a month from this one onward.";
+  if (!targetDate || month < first || month > last) errors.targetDate = msg("Pick a month from this one onward.");
 
   if (Object.keys(errors).length) return { errors };
   // accountId is always present, undefined when the goal is entered by hand, so an edit can unlink.

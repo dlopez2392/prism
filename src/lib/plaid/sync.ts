@@ -132,6 +132,15 @@ async function syncFrom(config: PlaidConfig, accessToken: string, from: SyncStat
   }
 }
 
+/**
+ * Accounts that only hold investments (a brokerage account on its own) have
+ * no transactions Plaid can give: its Transactions covers bank and card
+ * accounts. Asking may be refused, and for these that refusal is the answer.
+ */
+export function holdingsOnly(accounts: Pick<PlaidAccount, "type">[]): boolean {
+  return accounts.length > 0 && accounts.every((a) => a.type === "investment" || a.type === "brokerage");
+}
+
 /** A stored copy, and what's known about it. */
 export type StoredSync = { state: SyncState | null; version: number; syncedAt: string | null; changedAt: string | null };
 

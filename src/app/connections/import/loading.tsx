@@ -1,10 +1,11 @@
 // Import history, while it loads: the steps, then the card that chooses a file.
 
 import { Block, CardTitle, Frame, Header, Loading } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function ImportLoading() {
   return (
-    <Loading label="Loading the import">
+    <Loading label={msg("Loading the import")}>
       <Header eyebrow />
       <Block className="h-6 w-80 max-w-full" />
       <Frame>

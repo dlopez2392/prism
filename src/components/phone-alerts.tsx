@@ -15,9 +15,10 @@
 import { useEffect, useState, useTransition } from "react";
 import { CircleCheck, Laptop, Smartphone, Tablet, type LucideIcon } from "lucide-react";
 import { buttonGhost, buttonPrimary, buttonSmall } from "@/components/dialog";
+import { useT } from "@/components/locale";
 import { Bone } from "@/components/skeletons";
 import { StatusPill } from "@/components/ui";
-import { DEVICE_NAMES, deviceKind, type DeviceKind } from "@/lib/alerts/devices";
+import { DEVICE_LABELS, DEVICE_NAMES, deviceKind, THIS_DEVICE, type DeviceKind } from "@/lib/alerts/devices";
 import { BRAND } from "@/lib/brand";
 import { dayDate } from "@/lib/finance/format";
 import { testDevice, turnOffDevice, turnOnDevice, type PhoneResult } from "@/lib/server/phone-actions";
@@ -62,15 +63,16 @@ const appleMobile = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Maci
 const installed = () => window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
 export function PhoneAlerts({ vapidKey, devices, alertsOn }: { vapidKey: string; devices: PhoneDevice[] | null; alertsOn: boolean }) {
+  const t = useT();
   const [here, setHere] = useState<Here>({ kind: "checking" });
-  const [name, setName] = useState<string>(DEVICE_NAMES.Other);
+  const [kind, setKind] = useState<DeviceKind>("Other");
   const [result, setResult] = useState<PhoneResult | null>(null);
   const [pending, start] = useTransition();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setName(DEVICE_NAMES[deviceKind(navigator.userAgent, touch())]);
+      setKind(deviceKind(navigator.userAgent, touch()));
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
         if (!cancelled) setHere(appleMobile() && !installed() ? { kind: "install" } : { kind: "unsupported" });
         return;
@@ -104,7 +106,7 @@ export function PhoneAlerts({ vapidKey, devices, alertsOn }: { vapidKey: string;
           else
             setResult({
               status: "error",
-              message: `Allow notifications when your browser asks, and ${BRAND.product} can send alerts here.`,
+              message: t("Allow notifications when your browser asks, and {product} can send alerts here.", { product: BRAND.product }),
             });
           return;
         }
@@ -128,7 +130,7 @@ export function PhoneAlerts({ vapidKey, devices, alertsOn }: { vapidKey: string;
       } catch {
         setResult({
           status: "error",
-          message: "This browser didn't let notifications start. Try again, or reload the page.",
+          message: t("This browser didn't let notifications start. Try again, or reload the page."),
         });
       }
     });
@@ -154,7 +156,7 @@ export function PhoneAlerts({ vapidKey, devices, alertsOn }: { vapidKey: string;
   if (!alertsOn) {
     return (
       <p className="mt-4 rounded-ctl bg-surface-2 p-3 text-sm text-ink-2">
-        Turn on alert emails above first. A device gets the same alerts, the moment each email goes.
+        {t("Turn on alert emails above first. A device gets the same alerts, the moment each email goes.")}
       </p>
     );
   }
@@ -163,65 +165,70 @@ export function PhoneAlerts({ vapidKey, devices, alertsOn }: { vapidKey: string;
     <div className="mt-4 space-y-4">
       <div className="rounded-ctl bg-surface-2 p-3 text-sm text-ink-1">
         {here.kind === "checking" ? (
-          <div aria-busy="true" aria-label="Checking this device" className="space-y-2">
+          <div aria-busy="true" aria-label={t("Checking this device")} className="space-y-2">
             <Bone className="h-4 w-48" />
             <Bone className="h-10 w-56" />
           </div>
         ) : here.kind === "install" ? (
           <div>
-            <p className="font-semibold">First, add {BRAND.product} to your Home Screen</p>
+            <p className="font-semibold">{t("First, add {product} to your Home Screen", { product: BRAND.product })}</p>
             <p className="mt-0.5 text-xs text-ink-2">
-              An iPhone or iPad lets {BRAND.product} send notifications only from the Home Screen app. It takes three taps:
+              {t("An iPhone or iPad lets {product} send notifications only from the Home Screen app. It takes three taps:", { product: BRAND.product })}
             </p>
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
-              <li>Tap Share, the square with an arrow, at the bottom of Safari.</li>
-              <li>Choose Add to Home Screen, then Add.</li>
-              <li>Open {BRAND.product} from your Home Screen and come back to this page.</li>
+              <li>{t("Tap Share, the square with an arrow, at the bottom of Safari.")}</li>
+              <li>{t("Choose Add to Home Screen, then Add.")}</li>
+              <li>{t("Open {product} from your Home Screen and come back to this page.", { product: BRAND.product })}</li>
             </ol>
           </div>
         ) : here.kind === "unsupported" ? (
-          <p>This browser can&apos;t show notifications from {BRAND.product}. On a phone, use Safari on an iPhone (iOS 16.4 or later) or Chrome on Android.</p>
+          <p>
+            {t("This browser can't show notifications from {product}. On a phone, use Safari on an iPhone (iOS 16.4 or later) or Chrome on Android.", {
+              product: BRAND.product,
+            })}
+          </p>
         ) : here.kind === "blocked" ? (
-          <p>Notifications are blocked for {BRAND.product} in this browser. Allow them in its settings, then reload this page.</p>
+          <p>{t("Notifications are blocked for {product} in this browser. Allow them in its settings, then reload this page.", { product: BRAND.product })}</p>
         ) : onHere ? (
           <div className="flex flex-wrap items-center gap-3">
-            <StatusPill status="good">On for this {name}</StatusPill>
+            <StatusPill status="good">{t("On for {device}", { device: t(THIS_DEVICE[kind]) })}</StatusPill>
             <button type="button" disabled={pending} onClick={() => test(hash!)} className={buttonGhost}>
-              Send a test
+              {t("Send a test")}
             </button>
             <button type="button" disabled={pending} onClick={() => stop(hash!, true)} className={buttonGhost}>
-              Stop on this {name}
+              {t("Stop on {device}", { device: t(THIS_DEVICE[kind]) })}
             </button>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" disabled={pending} onClick={turnOn} className={buttonPrimary}>
-              {pending ? "Turning on…" : `Send alerts to this ${name}`}
+              {pending ? t("Turning on…") : t("Send alerts to {device}", { device: t(THIS_DEVICE[kind]) })}
             </button>
-            <span className="text-xs text-ink-3">Your browser will ask to allow notifications.</span>
+            <span className="text-xs text-ink-3">{t("Your browser will ask to allow notifications.")}</span>
           </div>
         )}
       </div>
 
       {devices === null ? (
         <p role="alert" className="text-sm font-medium text-crit-ink">
-          We couldn&apos;t load your other devices just now. Try again in a minute.
+          {t("We couldn't load your other devices just now. Try again in a minute.")}
         </p>
       ) : others.length ? (
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-3">Also getting alerts</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-3">{t("Also getting alerts")}</p>
           <ul className="mt-1 divide-y divide-[var(--line)]">
             {others.map((d) => {
               const Icon = ICONS[d.device] ?? Laptop;
+              const label = DEVICE_LABELS[d.device];
               return (
                 <li key={d.hash} className="flex flex-wrap items-center gap-3 py-2.5">
                   <Icon aria-hidden className="size-4 shrink-0 text-ink-3" />
                   <span className="min-w-0 flex-1 text-sm text-ink-1">
-                    {d.device === "Other" ? "A browser" : DEVICE_NAMES[d.device]}
-                    <span className="text-ink-3"> · since {dayDate(d.since.slice(0, 10))}</span>
+                    {label ? t(label) : DEVICE_NAMES[d.device]}
+                    <span className="text-ink-3"> · {t("since {date}", { date: dayDate(d.since.slice(0, 10), t.locale) })}</span>
                   </span>
                   <button type="button" disabled={pending} onClick={() => stop(d.hash, false)} className={buttonSmall}>
-                    Stop
+                    {t("Stop")}
                   </button>
                 </li>
               );

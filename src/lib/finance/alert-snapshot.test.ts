@@ -1,9 +1,11 @@
 // What a visit leaves for the email job (alert-snapshot.ts): the alerts it
 // found except a bank's (the database has those fresher), the week's figures
 // as the screens count them, the next two weeks' bills, and nothing that
-// doesn't read as one when it's opened again.
+// doesn't read as one when it's opened again; its alerts in the language it
+// was taken in.
 
 import { describe, expect, it } from "vitest";
+import { translator } from "@/lib/i18n/translator";
 import { alertSnapshot, validSnapshot } from "./alert-snapshot";
 import { sumSpending } from "./cashflow";
 import { analyze } from "./model";
@@ -67,6 +69,19 @@ describe("a visit's alert snapshot", () => {
 
   it("opens again as itself, through JSON, as the job will read it", () => {
     expect(validSnapshot(JSON.parse(JSON.stringify(snap)))).toEqual(snap);
+  });
+
+  it("words its alerts in the language it's taken in, and says which; one from before languages is English", () => {
+    expect(snap.lang).toBe("en");
+    const es = alertSnapshot(analyze(data(txns()), translator("es")), AT, "visit", translator("es"));
+    expect(es.lang).toBe("es");
+    expect(es.alerts.map((x) => x.id)).toEqual(snap.alerts.map((x) => x.id));
+    expect(es.alerts.map((x) => x.title)).not.toEqual(snap.alerts.map((x) => x.title));
+    expect(validSnapshot(JSON.parse(JSON.stringify(es)))!.lang).toBe("es");
+    const before = JSON.parse(JSON.stringify(snap));
+    delete before.lang;
+    expect(validSnapshot(before)!.lang).toBe("en");
+    expect(validSnapshot({ ...before, lang: "fr" })!.lang).toBe("en");
   });
 
   it("opens as nothing when it doesn't read as a snapshot", () => {

@@ -320,6 +320,18 @@ describe("Venmo, PayPal and Cash App payments", () => {
   });
 });
 
+describe("Amazon orders", () => {
+  it("cite what a charge paid for, sellers' words as data, and are found by an item's name", () => {
+    const data = live();
+    const t = data.transactions.find((x) => x.amount < 0 && x.date >= addDays(TODAY, -20))!;
+    Object.assign(t, { merchant: "AMZN Mktp US", order: { order: "111-1", date: t.date, items: [{ name: "Dog food", qty: 1, amount: -t.amount }] } });
+    const found = searchTransactions(data, { query: "dog food" });
+    expect(found.transactions).toHaveLength(1);
+    expect(found.transactions[0]).toMatchObject({ merchant: "AMZN Mktp US", amazon_order: { order_number: "111-1", items: [{ name: "Dog food", quantity: 1, amount: t.amount / 100 }] } });
+    expect(searchTransactions(data, { limit: 100 }).transactions.filter((x) => "amazon_order" in x)).toHaveLength(1);
+  });
+});
+
 describe("get_tax_summary", () => {
   it("sorts the year into what a return asks about, money out negative, citing each line and the form to trust", () => {
     const data = demo();

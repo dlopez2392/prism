@@ -14,6 +14,7 @@ import { sameOriginJson } from "@/lib/server/request-guard";
 import { cookieOptions, emptyVault, open, seal, VAULT_COOKIE, vaultKey, type VaultItem, type VaultKey } from "@/lib/server/vault";
 import { supabaseEnv } from "@/lib/supabase/config";
 import { currentAccount } from "@/lib/supabase/server";
+import { getT } from "@/lib/i18n/server";
 
 const MAX_ITEMS = 8;
 
@@ -33,19 +34,21 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { publicToken?: unknown } | null;
   const publicToken = typeof body?.publicToken === "string" ? body.publicToken : "";
   if (!/^public-(sandbox|production)-[\w-]+$/.test(publicToken)) {
-    return NextResponse.json({ error: "bad_request", message: "Missing public token." }, { status: 400 });
+    const t = await getT();
+    return NextResponse.json({ error: "bad_request", message: t("Missing public token.") }, { status: 400 });
   }
 
   const account = await currentAccount();
   // Checked again here, not only when Link opened: a session can end in between, and a
   // public token alone must never be enough to park a real bank in a cookie.
-  const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: config.env !== "sandbox" });
+  const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: config.env !== "sandbox" }, await getT());
   if (refusal) return NextResponse.json({ error: refusal.error, message: refusal.message }, { status: refusal.status });
   const jar = await cookies();
   const vault = account ? null : (open(jar.get(VAULT_COOKIE)?.value, key) ?? emptyVault());
   const linked = account ? (await loadAccount(account, key)).items.length : vault!.items.length;
   if (linked >= MAX_ITEMS) {
-    return NextResponse.json({ error: "too_many", message: `Prism links up to ${MAX_ITEMS} institutions.` }, { status: 409 });
+    const t = await getT();
+    return NextResponse.json({ error: "too_many", message: t("Prism links up to {n} institutions.", { n: MAX_ITEMS }) }, { status: 409 });
   }
 
   try {
@@ -63,6 +66,7 @@ export async function POST(req: Request) {
     if (jar.has(RETURN_COOKIE)) jar.set(RETURN_COOKIE, "", clearedReturnCookie());
     return NextResponse.json({ ok: true, institutionName });
   } catch (e) {
-    return NextResponse.json({ error: "plaid_error", message: plaidFailure(e, "Linking a bank could not finish", "Plaid couldn't finish connecting your bank.") }, { status: 502 });
+    const t = await getT();
+    return NextResponse.json({ error: "plaid_error", message: plaidFailure(e, "Linking a bank could not finish", t("Plaid couldn't finish connecting your bank."), t) }, { status: 502 });
   }
 }

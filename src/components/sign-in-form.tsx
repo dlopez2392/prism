@@ -14,23 +14,26 @@ import { useActionState } from "react";
 import { Mail } from "lucide-react";
 import { buttonGhost, buttonPrimary } from "@/components/dialog";
 import { signInStep, type SignInState } from "@/lib/server/auth-actions";
+import { useT } from "@/components/locale";
 
 const input =
   "h-11 w-full rounded-ctl border border-line-strong bg-surface-2 px-3 text-[15px] text-ink-1 placeholder:text-ink-3 focus:border-[var(--focus)] aria-[invalid=true]:border-crit";
 
 export function SignInForm({ linkError, next }: { linkError: boolean; next?: string | null }) {
   const [state, action, pending] = useActionState<SignInState, FormData>(signInStep, { step: "email" });
+  const t = useT();
 
   if (state.step === "code") {
     return (
       <form action={action} noValidate>
         <input type="hidden" name="email" value={state.email} />
         <p className="text-sm text-ink-2">
-          We sent a code to <span className="font-semibold text-ink-1">{state.email}</span>
-          {state.resent ? " — a fresh one" : ""}. It works once, for about an hour. You can also tap the link in that email on this device.
+          {state.resent
+            ? t("We sent a code to {email} — a fresh one. It works once, for about an hour. You can also tap the link in that email on this device.", { email: state.email })
+            : t("We sent a code to {email}. It works once, for about an hour. You can also tap the link in that email on this device.", { email: state.email })}
         </p>
         <label htmlFor="code" className="mt-5 mb-1 block text-[13px] font-semibold text-ink-2">
-          Code from the email
+          {t("Code from the email")}
         </label>
         <input
           id="code"
@@ -50,14 +53,14 @@ export function SignInForm({ linkError, next }: { linkError: boolean; next?: str
           </p>
         ) : null}
         <button type="submit" name="intent" value="verify" disabled={pending} className={`${buttonPrimary} mt-5 w-full`}>
-          {pending ? "Checking…" : "Sign in"}
+          {pending ? t("Checking…") : t("Sign in")}
         </button>
         <div className="mt-3 flex flex-wrap justify-between gap-2">
           <button type="submit" name="intent" value="resend" disabled={pending} className="text-sm font-semibold text-accent-ink hover:underline disabled:opacity-60">
-            Send a new code
+            {t("Send a new code")}
           </button>
           <button type="submit" name="intent" value="change" disabled={pending} className="text-sm font-semibold text-ink-2 hover:underline disabled:opacity-60">
-            Use a different email
+            {t("Use a different email")}
           </button>
         </div>
       </form>
@@ -69,11 +72,11 @@ export function SignInForm({ linkError, next }: { linkError: boolean; next?: str
       {next ? <input type="hidden" name="next" value={next} /> : null}
       {linkError && !state.error ? (
         <p role="alert" className="mb-4 rounded-ctl bg-surface-2 px-3 py-2 text-sm font-medium text-ink-1">
-          That sign-in link has expired or was already used. Ask for a new code below.
+          {t("That sign-in link has expired or was already used. Ask for a new code below.")}
         </p>
       ) : null}
       <label htmlFor="email" className="mb-1 block text-[13px] font-semibold text-ink-2">
-        Email
+        {t("Email")}
       </label>
       <input
         id="email"
@@ -81,7 +84,7 @@ export function SignInForm({ linkError, next }: { linkError: boolean; next?: str
         type="email"
         autoComplete="email"
         defaultValue={state.email ?? ""}
-        placeholder="you@example.com"
+        placeholder={t("you@example.com")}
         autoFocus
         aria-invalid={state.error ? true : undefined}
         aria-describedby={state.error ? "email-error" : undefined}
@@ -95,18 +98,18 @@ export function SignInForm({ linkError, next }: { linkError: boolean; next?: str
       {/* The primary button comes first, so Enter always sends the code. */}
       <button type="submit" name="intent" value="send" disabled={pending} className={`${buttonPrimary} mt-5 w-full`}>
         <Mail aria-hidden className="size-4" />
-        {pending ? "Sending…" : "Email me a code"}
+        {pending ? t("Sending…") : t("Email me a code")}
       </button>
-      <p className="mt-3 text-center text-xs text-ink-3">No password. New here? The same code creates your account.</p>
+      <p className="mt-3 text-center text-xs text-ink-3">{t("No password. New here? The same code creates your account.")}</p>
       {/* Where an account is created, the Terms are in view (terms.test.ts checks both links stay). */}
       <p className="mt-2 text-center text-xs text-ink-3">
-        By continuing, you agree to the{" "}
+        {t("By continuing, you agree to the")}{" "}
         <Link href="/terms" className="font-semibold text-ink-2 underline-offset-2 hover:underline">
-          Terms of Service
+          {t("Terms of Service")}
         </Link>{" "}
-        and acknowledge the{" "}
+        {t("and acknowledge the")}{" "}
         <Link href="/privacy" className="font-semibold text-ink-2 underline-offset-2 hover:underline">
-          Privacy Policy
+          {t("Privacy Policy")}
         </Link>
         .
       </p>
@@ -115,10 +118,11 @@ export function SignInForm({ linkError, next }: { linkError: boolean; next?: str
 }
 
 export function SignOutButton({ action }: { action: () => Promise<void> }) {
+  const t = useT();
   return (
     <form action={action}>
       <button type="submit" className={buttonGhost}>
-        Sign out
+        {t("Sign out")}
       </button>
     </form>
   );

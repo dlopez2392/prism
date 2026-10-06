@@ -1,10 +1,11 @@
 // Your year, while it loads: the hero beside money in and out, three tiles, the months, where it went beside who was paid, then the year in a few lines.
 
 import { Block, Header, Loading } from "@/components/skeletons";
+import { msg } from "@/lib/i18n/t";
 
 export default function YearLoading() {
   return (
-    <Loading label="Loading your year">
+    <Loading label={msg("Loading your year")}>
       <Header eyebrow action />
       <div className="grid grid-cols-1 gap-3 sm:gap-5 md:grid-cols-4">
         <Block className="h-48 md:col-span-2" />

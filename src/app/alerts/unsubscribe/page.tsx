@@ -11,34 +11,42 @@ import { PrismMark } from "@/components/shell";
 import { Card } from "@/components/ui";
 import { alertsConfig, unsubscribeFor } from "@/lib/alerts/send";
 import { BRAND } from "@/lib/brand";
+import { getT } from "@/lib/i18n/server";
 import { supabaseEnv } from "@/lib/supabase/config";
 
-export const metadata: Metadata = { title: "Stop alert emails", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Stop alert emails"), robots: { index: false } };
+}
 
 type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
 
 export default async function UnsubscribePage({ searchParams }: { searchParams: Promise<Params> }) {
+  const t = await getT();
   const params = await searchParams;
   const config = alertsConfig();
   const u = one(params.u);
-  const t = one(params.t);
+  const token = one(params.t);
   // The button is offered only where /api/alerts/unsubscribe can act on it.
-  const valid = config !== null && supabaseEnv() !== null && unsubscribeFor(u, t, config.secret) !== null;
+  const valid = config !== null && supabaseEnv() !== null && unsubscribeFor(u, token, config.secret) !== null;
   const account = (
     <Link href="/account#alerts" className={buttonGhost}>
-      Open your Account page
+      {t("Open your Account page")}
     </Link>
   );
 
   let icon = <BellOff aria-hidden className="size-5 text-accent-ink" />;
-  let title = "Stop alert emails?";
-  let body = `${BRAND.product} will stop emailing you alerts and Monday summaries. Your accounts, budgets and goals stay exactly as they are, and you can turn emails back on from your Account page.`;
+  let title = t("Stop alert emails?");
+  let body = t(
+    "{product} will stop emailing you alerts and Monday summaries. Your accounts, budgets and goals stay exactly as they are, and you can turn emails back on from your Account page.",
+    { product: BRAND.product },
+  );
   let action = valid ? (
-    <form method="post" action={`/api/alerts/unsubscribe?u=${encodeURIComponent(u!)}&t=${encodeURIComponent(t!)}`}>
+    <form method="post" action={`/api/alerts/unsubscribe?u=${encodeURIComponent(u!)}&t=${encodeURIComponent(token!)}`}>
       <input type="hidden" name="from" value="page" />
       <button type="submit" className={buttonPrimary}>
-        Stop alert emails
+        {t("Stop alert emails")}
       </button>
     </form>
   ) : (
@@ -46,18 +54,18 @@ export default async function UnsubscribePage({ searchParams }: { searchParams: 
   );
   if (one(params.done)) {
     icon = <CircleCheck aria-hidden className="size-5 text-good-ink" />;
-    title = "Alert emails are off";
-    body = `${BRAND.product} won't email you alerts any more. If you change your mind, turn them back on from your Account page.`;
+    title = t("Alert emails are off");
+    body = t("{product} won't email you alerts any more. If you change your mind, turn them back on from your Account page.", { product: BRAND.product });
     action = account;
   } else if (one(params.failed)) {
     icon = <CircleAlert aria-hidden className="size-5 text-crit-ink" />;
-    title = "That didn't go through";
-    body = `We couldn't reach your account just now, so your alert emails are still on. Try the link again in a minute, or turn them off from your Account page.`;
+    title = t("That didn't go through");
+    body = t("We couldn't reach your account just now, so your alert emails are still on. Try the link again in a minute, or turn them off from your Account page.");
     action = account;
   } else if (!valid) {
     icon = <CircleAlert aria-hidden className="size-5 text-crit-ink" />;
-    title = "This link doesn't work";
-    body = `It may have been cut short by your email app. Sign in and turn alert emails off from your Account page instead.`;
+    title = t("This link doesn't work");
+    body = t("It may have been cut short by your email app. Sign in and turn alert emails off from your Account page instead.");
   }
 
   return (

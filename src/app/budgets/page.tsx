@@ -13,29 +13,36 @@ import { Key } from "@/components/charts/core";
 import { CategoryIcon } from "@/components/category-icon";
 import { Card, CardHeader, EmptyState, Meter, PageHeader, StatusPill } from "@/components/ui";
 import { daysLeftInMonth, monthEnd, typicalMonthlySpend, type BudgetStatus } from "@/lib/finance/budgets";
-import { CATEGORIES, categoryColor } from "@/lib/finance/categories";
+import { categoryColor, categoryLabel } from "@/lib/finance/categories";
 import { lastChanged, money0, monthLong, shortDate } from "@/lib/finance/format";
 import { analyze } from "@/lib/finance/model";
 import { getFinance } from "@/lib/server/finance";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/t";
 
-export const metadata: Metadata = { title: "Budgets" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t("Budgets") };
+}
 
-function state(b: BudgetStatus) {
-  if (b.state === "over") return <StatusPill status="crit">Over by {money0(b.spent - b.limit)}</StatusPill>;
-  if (b.state === "at_risk") return <StatusPill status="warn">Watch — on pace for {money0(b.projected)}</StatusPill>;
-  return <StatusPill status="good">On track</StatusPill>;
+function state(b: BudgetStatus, t: T) {
+  if (b.state === "over") return <StatusPill status="crit">{t("Over by {amount}", { amount: money0(b.spent - b.limit) })}</StatusPill>;
+  if (b.state === "at_risk") return <StatusPill status="warn">{t("Watch — on pace for {amount}", { amount: money0(b.projected) })}</StatusPill>;
+  return <StatusPill status="good">{t("On track")}</StatusPill>;
 }
 
 export default async function BudgetsPage() {
   // The Me / Household switch decides: the person's own budgets, or the household's, pacing what it spends from shared accounts.
-  const data = await getFinance();
+  const [data, t] = await Promise.all([getFinance(), getT()]);
+  const { locale } = t;
   const household = data.view === "household" && data.householdPlan !== null;
-  const changed = household ? lastChanged(data.householdPlan?.budgetsChanged) : null;
-  const a = analyze(data);
+  const changed = household ? lastChanged(data.householdPlan?.budgetsChanged, t) : null;
+  const a = analyze(data, t);
   const { budgets, budgetTotals: totals } = a;
   const left = daysLeftInMonth(a.today);
   const end = monthEnd(a.today);
-  const month = monthLong(a.today);
+  const month = monthLong(a.today, locale);
+  const plan = household ? t("Your household's plan for {month}.", { month }) : t("Your plan for {month}.", { month });
   const edited = data.planEdited.budgets;
   const drafted = data.source === "plaid" && !edited;
   const editor = (variant: "ghost" | "primary", label?: string) => (
@@ -55,37 +62,37 @@ export default async function BudgetsPage() {
   if (budgets.length === 0) {
     return (
       <div>
-        <PageHeader title="Budgets" subtitle={household ? `Your household's plan for ${month}.${changed ? ` ${changed}` : ""}` : `Your plan for ${month}.`} />
+        <PageHeader title={t("Budgets")} subtitle={changed ? `${plan} ${changed}` : plan} />
         <Card>
           {household ? (
             edited ? (
               <EmptyState
                 icon={Target}
-                title="No household budgets set"
-                body="Give any category a monthly limit and we'll pace what the household spends from shared accounts against it all month."
-                action={editor("primary", "Set a budget")}
+                title={t("No household budgets set")}
+                body={t("Give any category a monthly limit and we'll pace what the household spends from shared accounts against it all month.")}
+                action={editor("primary", t("Set a budget"))}
               />
             ) : (
               <EmptyState
                 icon={Target}
-                title="Household budgets appear once shared accounts have a month of spending"
-                body="We draft them from what your household shares, so you start from what's real. Or set the household's own now."
-                action={editor("primary", "Set a budget")}
+                title={t("Household budgets appear once shared accounts have a month of spending")}
+                body={t("We draft them from what your household shares, so you start from what's real. Or set the household's own now.")}
+                action={editor("primary", t("Set a budget"))}
               />
             )
           ) : edited ? (
             <EmptyState
               icon={Target}
-              title="No budgets set"
-              body="Give any category a monthly limit and we'll pace your spending against it all month."
-              action={editor("primary", "Set a budget")}
+              title={t("No budgets set")}
+              body={t("Give any category a monthly limit and we'll pace your spending against it all month.")}
+              action={editor("primary", t("Set a budget"))}
             />
           ) : (
             <EmptyState
               icon={Target}
-              title="Budgets appear once there's a month of spending"
-              body="We draft a budget per category from your last three months, so you start from what's real. Or set your own now."
-              action={editor("primary", "Set a budget")}
+              title={t("Budgets appear once there's a month of spending")}
+              body={t("We draft a budget per category from your last three months, so you start from what's real. Or set your own now.")}
+              action={editor("primary", t("Set a budget"))}
             />
           )}
         </Card>
@@ -96,41 +103,45 @@ export default async function BudgetsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow={`${left} ${left === 1 ? "day" : "days"} left in ${month}`}
-        title="Budgets"
+        eyebrow={left === 1 ? t("1 day left in {month}", { month }) : t("{n} days left in {month}", { n: left, month })}
+        title={t("Budgets")}
         subtitle={
           household
             ? drafted
-              ? "Drafted from what your household shares, over the last three months. Change any line to set the household's own."
-              : `Your household's plan for ${month}, pacing spending from shared accounts.${changed ? ` ${changed}` : ""}`
+              ? t("Drafted from what your household shares, over the last three months. Change any line to set the household's own.")
+              : [t("Your household's plan for {month}, pacing spending from shared accounts.", { month }), changed].filter(Boolean).join(" ")
             : drafted
-              ? "Drafted from your last three months — a starting point from what's real. Change any line to make it yours."
+              ? t("Drafted from your last three months — a starting point from what's real. Change any line to make it yours.")
               : edited
-                ? `Your plan for ${month}, saved ${data.account ? "to your account" : "on this device"}, and how it's going.`
-                : `Your plan for ${month}, and how it's going.`
+                ? data.account
+                  ? t("Your plan for {month}, saved to your account, and how it's going.", { month })
+                  : t("Your plan for {month}, saved on this device, and how it's going.", { month })
+                : t("Your plan for {month}, and how it's going.", { month })
         }
         action={editor("ghost")}
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <Card hero className="p-5 sm:p-6 lg:col-span-5">
-          <div className="text-sm font-semibold text-[var(--on-hero-soft)]">Left to spend in {month}</div>
+          <div className="text-sm font-semibold text-[var(--on-hero-soft)]">{t("Left to spend in {month}", { month })}</div>
           <div className="mt-1 text-[48px] font-extrabold leading-none tracking-tight">{money0(Math.max(0, totals.remaining))}</div>
           <p className="mt-2 text-sm text-[var(--on-hero-soft)]">
-            About {money0(Math.max(0, totals.remaining) / left)} a day for the next {left} {left === 1 ? "day" : "days"}.
+            {left === 1
+              ? t("About {amount} a day for the next 1 day.", { amount: money0(Math.max(0, totals.remaining) / left) })
+              : t("About {amount} a day for the next {n} days.", { amount: money0(Math.max(0, totals.remaining) / left), n: left })}
           </p>
           <div className="mt-6 h-3 w-full overflow-hidden rounded-pill bg-[var(--on-hero-faint)]">
             <div className="h-full rounded-pill bg-[var(--on-hero)]" style={{ width: `${Math.min(100, (totals.spent / totals.limit) * 100)}%` }} />
           </div>
           <div className="mt-2 flex justify-between text-xs font-semibold text-[var(--on-hero-soft)]">
-            <span>{money0(totals.spent)} spent</span>
-            <span>{money0(totals.limit)} planned</span>
+            <span>{t("{amount} spent", { amount: money0(totals.spent) })}</span>
+            <span>{t("{amount} planned", { amount: money0(totals.limit) })}</span>
           </div>
           <dl className="mt-6 grid grid-cols-3 gap-3">
             {[
-              { label: "On track", icon: CircleCheck, n: budgets.filter((b) => b.state === "on_track").length },
-              { label: "Watch", icon: TriangleAlert, n: budgets.filter((b) => b.state === "at_risk").length },
-              { label: "Over", icon: OctagonAlert, n: budgets.filter((b) => b.state === "over").length },
+              { label: t("On track"), icon: CircleCheck, n: budgets.filter((b) => b.state === "on_track").length },
+              { label: t("Watch"), icon: TriangleAlert, n: budgets.filter((b) => b.state === "at_risk").length },
+              { label: t("Over"), icon: OctagonAlert, n: budgets.filter((b) => b.state === "over").length },
             ].map(({ label, icon: Icon, n }) => (
               <div key={label} className="rounded-ctl bg-[var(--on-hero-faint)] p-3">
                 <dt className="flex items-center gap-1.5 text-xs font-semibold text-[var(--on-hero-soft)]">
@@ -144,16 +155,16 @@ export default async function BudgetsPage() {
         </Card>
 
         <Card className="p-5 sm:p-6 lg:col-span-7">
-          <CardHeader title="Spent, projected and planned" subtitle={`Projection uses what usually lands after today — ${shortDate(end)} is month end`} />
+          <CardHeader title={t("Spent, projected and planned")} subtitle={t("Projection uses what usually lands after today — {date} is month end", { date: shortDate(end, locale) })} />
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2">
             <span className="flex items-center gap-1.5">
-              <Key color="var(--c-1)" kind="rect" /> Spent
+              <Key color="var(--c-1)" kind="rect" /> {t("Spent")}
             </span>
             <span className="flex items-center gap-1.5">
-              <span aria-hidden className="size-2.5 rounded-[3px] bg-[var(--c-1)] opacity-35" /> Still to come (projected)
+              <span aria-hidden className="size-2.5 rounded-[3px] bg-[var(--c-1)] opacity-35" /> {t("Still to come (projected)")}
             </span>
             <span className="flex items-center gap-1.5">
-              <span aria-hidden className="h-3 w-0.5 rounded-pill bg-ink-1" /> Budget
+              <span aria-hidden className="h-3 w-0.5 rounded-pill bg-ink-1" /> {t("Budget")}
             </span>
           </div>
           <ul className="mt-4 space-y-3">
@@ -163,8 +174,17 @@ export default async function BudgetsPage() {
               const projPct = (Math.max(0, b.projected - b.spent) / scale) * 100;
               return (
                 <li key={b.category} className="grid grid-cols-[88px_1fr_auto] items-center gap-3 sm:grid-cols-[120px_1fr_auto]">
-                  <span className="truncate text-sm font-semibold text-ink-1">{CATEGORIES[b.category].label}</span>
-                  <div className="relative h-4 rounded-pill bg-surface-2" role="img" aria-label={`${CATEGORIES[b.category].label}: ${money0(b.spent)} spent, ${money0(b.projected)} projected, budget ${money0(b.limit)}`}>
+                  <span className="truncate text-sm font-semibold text-ink-1">{categoryLabel(b.category, t)}</span>
+                  <div
+                    className="relative h-4 rounded-pill bg-surface-2"
+                    role="img"
+                    aria-label={t("{category}: {spent} spent, {projected} projected, budget {limit}", {
+                      category: categoryLabel(b.category, t),
+                      spent: money0(b.spent),
+                      projected: money0(b.projected),
+                      limit: money0(b.limit),
+                    })}
+                  >
                     <div className="absolute inset-y-0 left-0 h-full rounded-l-pill" style={{ width: `${spentPct}%`, background: color }} />
                     <div className="absolute inset-y-0 h-full rounded-r-pill opacity-35" style={{ left: `calc(${spentPct}% + 2px)`, width: `${projPct}%`, background: color }} />
                     <div className="absolute -inset-y-1 w-0.5 rounded-pill bg-ink-1" style={{ left: `${(b.limit / scale) * 100}%` }} />
@@ -179,7 +199,7 @@ export default async function BudgetsPage() {
         </Card>
       </div>
 
-      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {sorted.map((b) => {
           const color = categoryColor(b.category);
           const perDay = Math.max(0, b.remaining) / left;
@@ -192,33 +212,37 @@ export default async function BudgetsPage() {
                   tick={b.timeElapsed}
                   size={92}
                   stroke={11}
-                  label={`${CATEGORIES[b.category].label}: ${Math.round(b.used * 100)}% of budget used, ${Math.round(b.timeElapsed * 100)}% of the month gone`}
+                  label={t("{category}: {used}% of budget used, {gone}% of the month gone", {
+                    category: categoryLabel(b.category, t),
+                    used: Math.round(b.used * 100),
+                    gone: Math.round(b.timeElapsed * 100),
+                  })}
                 >
                   <span className="num text-lg font-extrabold text-ink-1">{Math.round(b.used * 100)}%</span>
                 </ProgressRing>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <CategoryIcon category={b.category} size="sm" />
-                    <span className="truncate text-[15px] font-bold text-ink-1">{CATEGORIES[b.category].label}</span>
+                    <span className="truncate text-[15px] font-bold text-ink-1">{categoryLabel(b.category, t)}</span>
                   </div>
                   <div className="num mt-2 text-xl font-extrabold tracking-tight text-ink-1">
-                    {money0(b.spent)} <span className="text-sm font-semibold text-ink-3">of {money0(b.limit)}</span>
+                    {money0(b.spent)} <span className="text-sm font-semibold text-ink-3">{t("of {limit}", { limit: money0(b.limit) })}</span>
                   </div>
-                  <div className="mt-2">{state(b)}</div>
+                  <div className="mt-2">{state(b, t)}</div>
                 </div>
               </div>
               <div className="mt-4 border-t border-line pt-3">
-                <Meter ratio={b.used} color={color} marker={b.timeElapsed} label={`${CATEGORIES[b.category].label} budget used`} />
+                <Meter ratio={b.used} color={color} marker={b.timeElapsed} label={t("{category} budget used", { category: categoryLabel(b.category, t) })} />
                 <div className="mt-2 flex justify-between text-xs text-ink-3">
-                  <span>{b.remaining >= 0 ? `${money0(perDay)}/day left` : `${money0(-b.remaining)} over`}</span>
-                  <span>Ends near {money0(b.projected)}</span>
+                  <span>{b.remaining >= 0 ? t("{amount}/day left", { amount: money0(perDay) }) : t("{amount} over", { amount: money0(-b.remaining) })}</span>
+                  <span>{t("Ends near {amount}", { amount: money0(b.projected) })}</span>
                 </div>
               </div>
             </Card>
           );
         })}
       </ul>
-      <p className="text-xs text-ink-3">The tick on each ring and bar marks how far through {month} you are. Colour behind the tick means you&apos;re under pace.</p>
+      <p className="text-xs text-ink-3">{t("The tick on each ring and bar marks how far through {month} you are. Colour behind the tick means you're under pace.", { month })}</p>
     </div>
   );
 }

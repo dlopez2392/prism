@@ -39,7 +39,13 @@
   `src/lib/finance/types.ts`. Without `PLAID_CLIENT_ID`/`PLAID_SECRET` the app
   runs on the deterministic demo household in `src/lib/finance/demo.ts`.
   Linking ANYTHING real (a bank or Coinbase) ends the demo: real and made-up
-  money are never shown together.
+  money are never shown together. A brokerage account connects through the
+  investment link (`LinkKind` in `src/lib/plaid/client.ts`: Investments
+  required, transactions optional), because Plaid's Transactions never covers
+  investment accounts and a link shows only what supports every required
+  product. A connection whose accounts all hold investments has no
+  transactions, so Plaid refusing them is no outage (`holdingsOnly`), and
+  never for a connection with a bank or card account in it.
 - **Committed integrations (owner-approved, do not drop or substitute without
   the owner's sign-off)** — full notes in `docs/ROADMAP.md`:
   1. Investment accounts through Plaid (already built in).
@@ -95,7 +101,12 @@
   anything else owned, or money owed, SEALED in `profiles.sealed_manual_items`,
   one value per month carried forward (so trends work), account-only, merged
   in `moneyFor` under the "Added by you" institution. Any of them makes the
-  household the person's own (`isLive`), never the demo. The profile's
+  household the person's own (`isLive`), never the demo. People find them
+  through `AddWhatYouOwn` on Net worth (a tile per kind, above the accounts
+  until something is added), Overview's "Add your home or car" while nothing
+  is, and Connections' home and car entries; `addLink(kind)` opens the form
+  with that kind chosen. Keep a way in that visible: a home tucked behind a
+  small Add was missed by the owner. The profile's
   sealed columns re-seal in ONE write guarded by `updated_at` (`staleSeals`).
 - Households (`supabase/migrations/20260930000000_households.sql`,
   `src/lib/finance/household.ts`): up to four adults, each with their OWN
@@ -183,6 +194,58 @@
   OTHER people's words: keep them cleaned (`cleanText`), sealed
   (`profiles.sealed_p2p_notes`), out of the household and the morning job, and
   presented to connected apps as data, never instructions.
+- Spanish (`src/lib/i18n`): every sentence a person reads goes through a
+  translator `t`, and its English IS the key (`t("Spent this month")`); the
+  Spanish is in `es/`, one file per part of the app (a sentence two parts
+  share goes in `es/core.ts`; the test refuses one given twice). Server components and actions take `await getT()`,
+  client components `useT()`, and shared server-safe components and pure
+  functions take a `t` prop or argument that defaults to English (`EN`), so
+  connected apps and tests stay English until they're asked otherwise. The
+  alert job has no request to ask: it writes in `profiles.language`, which
+  the person's own visit keeps in step with the page (`rememberLanguage` in
+  `finance.ts`, only when it moved, never a connected app), and a snapshot's
+  pre-worded alerts carry the language they're in (`AlertSnapshot.lang`).
+  The calendar feed is the same: a calendar app asks without cookies, so its
+  sealed snapshot carries `lang`, written by the person's own visit (again at
+  once when they change language, `refreshFeedIfStale`); a download follows
+  the page, and the public demo feed takes `?lang=` from the page offering it.
+  Write WHOLE sentences with `{names}` (`t("{who} owes you
+  {amount}", …)`), never English fragments glued together, and a separate
+  sentence for one and for many. A month mid-sentence is lower case in
+  Spanish: pass `monthLong(d, t.locale)` and let a Spanish sentence that
+  starts with it write `{Month}`. Dates take `t.locale` (`format.ts`); amounts
+  stay `$1,234.56`. A sentence defined away from where it's shown (a nav
+  label, a category, a validation message) is marked `msg("…")` and
+  translated where it's shown. `i18n.test.ts` fails on a sentence with no
+  Spanish, a name the Spanish drops, or Spanish nobody asks for, and
+  `e2e/spanish.spec.ts` checks the toggle and that Spanish never scrolls
+  sideways at 360px (it found a grid sized to "Comida y restaurantes" and
+  Sankey labels cut short). The choice is the `prism-lang` cookie, set by a
+  server action (`language-actions.ts`), else the browser's
+  Accept-Language. Translated so far: the shell, sign-in, Overview, Spending,
+  Cash flow, Budgets, Goals, Net worth, Future, Your year, Taxes, Connections
+  (with its imports), Account, the household, app consent, unsubscribe, and
+  alert and recap emails and push. The privacy policy and terms are
+  translated whole, not sentence by sentence (`app/privacy/policy-es.tsx`,
+  `app/terms/terms-es.tsx`, beside their English `-en` files; the Spanish of
+  privacy.ts's lists is in `lib/legal-es.ts`), and HELD: each shows only when
+  `SPANISH_APPROVED` in `lib/legal-languages.ts` names the English version it
+  was translated from. Set that entry only on the owner's word that a lawyer
+  approved that version; never to get a test green. A change to the English
+  legal text changes its Spanish in the same commit (`legal-spanish.test.ts`
+  checks the dates, and that both say the same thing, section by section,
+  under every combination of the operator's switches), which un-publishes
+  that page until the new Spanish is approved. A screen still only in English
+  is listed in `ENGLISH_ONLY` (`locale.ts`, now derived from the legal pages
+  still held), which marks its content `lang="en"` inside a Spanish page so a
+  screen reader reads it in an English voice.
+- Amazon orders (`src/lib/finance/orders.ts`): the same shape as the payment
+  notes above. The order history is read in the browser and never uploaded;
+  only matches travel, a batch at a time (`ORDER_LIMITS.batch`), and the
+  server re-checks each against the person's own Amazon lines, the items
+  adding up to the charge to the cent (`validOrderMatch`). Item names are
+  sellers' words: cleaned, sealed (`profiles.sealed_order_notes`), out of the
+  household and the morning job, data to connected apps, never instructions.
 - Splits, tags and who owes you (`src/lib/finance/details.ts`,
   `profiles.sealed_txn_details`): keyed by the id the BANK gave a line, never a
   part's (`<id>~<n>`). A split becomes its parts after the category fixes, so
@@ -200,6 +263,18 @@
   or `whole: true` always wins over it. Reminders about what's owed are
   written in the browser and handed to the share sheet or the clipboard:
   Prism never sends a message to anyone on a person's behalf.
+- Left out of the totals (same record: `TxnDetail.out` for a line,
+  `TxnDetails.hidden` for an account's id): `applyDetails` marks such lines
+  `excluded`, and `isSpending` / `isIncome` in `cashflow.ts` are the ONE place
+  every total asks — use them, never `isSpendCategory(t.category)` or
+  `t.category === "income"` on a transaction, or a left-out line counts again.
+  What looks for what REPEATS and the balance forecast deliberately ignore the
+  mark: the money still moved. `hideAccounts` runs AFTER `applyPlan` (a goal
+  can still follow a left-out account) and moves those accounts and their
+  holdings to `hiddenAccounts` / `hiddenHoldings`; anything that lists a
+  person's accounts rather than adds them up (Connections, transaction lists,
+  the data download via `everyAccount`) must include them. The household
+  never sees either flag.
   Tokens come from Supabase Auth's OAuth 2.1 server; `/mcp` accepts only
   tokens with a `client_id` and asks Supabase Auth about each one (so
   Disconnect is immediate). Read-only is a DATABASE rule — restrictive
@@ -230,7 +305,7 @@
 - Alert emails (`src/lib/alerts/*`, migration `alert_emails`): opt-in on the
   Account page. The daily job (`/api/cron/alerts`, Vercel Cron) holds no key
   to anyone's data: it reaches the database ONLY through `alerts_due`,
-  `alerts_sent` and `alerts_stop`, which answer to `CRON_SECRET` (the
+  `alerts_languages`, `alerts_sent` and `alerts_stop`, which answer to `CRON_SECRET` (the
   database keeps its sha256 in `job_keys`, which no API role can read). Its
   figures come from `alert_snapshots`, sealed and written only by the
   person's own visit (`rememberAlerts` in `finance.ts`, never a connected app

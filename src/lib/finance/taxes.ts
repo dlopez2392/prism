@@ -27,6 +27,7 @@
 
 import { isSpendCategory } from "./categories";
 import { incomeKind } from "./income";
+import { EN, msg, type T } from "@/lib/i18n/t";
 import type { CategoryId, Cents, FinanceData, IncomeKind, ISODate, TaxHint, Transaction } from "./types";
 import { reviewYears, yearSpan } from "./year";
 
@@ -82,103 +83,108 @@ export type TaxSummary = {
 /** A single gift this big needs the charity's written receipt to be deducted (IRS Publication 526). */
 export const GIFT_RECEIPT_FROM: Cents = 25_000;
 
-type Spec = { id: TaxSectionId; side: "in" | "out"; title: string; form: string | null; note: (year: number) => string };
+// Titles are marked here and translated by taxSummary; each note is said in the language of `t` (English unless a screen asks).
+type Spec = { id: TaxSectionId; side: "in" | "out"; title: string; form: string | null; note: (year: number, t: T) => string };
 
 export const TAX_SECTIONS: Spec[] = [
   {
     id: "pay",
     side: "in",
-    title: "Pay",
+    title: msg("Pay"),
     form: "W-2",
-    note: () => "What landed in your accounts, after taxes and deductions came out. Your W-2 shows what you earned before them, and that's the figure your return needs.",
+    note: (_year, t) => t("What landed in your accounts, after taxes and deductions came out. Your W-2 shows what you earned before them, and that's the figure your return needs."),
   },
   {
     id: "interest",
     side: "in",
-    title: "Interest",
+    title: msg("Interest"),
     form: "1099-INT",
-    note: () => "Interest is taxable. Each bank that paid you $10 or more sends a 1099-INT by early February.",
+    note: (_year, t) => t("Interest is taxable. Each bank that paid you $10 or more sends a 1099-INT by early February."),
   },
   {
     id: "dividends",
     side: "in",
-    title: "Dividends",
+    title: msg("Dividends"),
     form: "1099-DIV",
-    note: () => "Dividends are taxable, even when they're reinvested. Your brokerage sends a 1099-DIV.",
+    note: (_year, t) => t("Dividends are taxable, even when they're reinvested. Your brokerage sends a 1099-DIV."),
   },
   {
     id: "benefits",
     side: "in",
-    title: "Benefits, pensions and retirement",
+    title: msg("Benefits, pensions and retirement"),
     form: "1099-G, SSA-1099 or 1099-R",
-    note: () => "Unemployment shows on a 1099-G, Social Security on an SSA-1099, and pensions and retirement withdrawals on a 1099-R. Some or all of it can be taxable.",
+    note: (_year, t) => t("Unemployment shows on a 1099-G, Social Security on an SSA-1099, and pensions and retirement withdrawals on a 1099-R. Some or all of it can be taxable."),
   },
   {
     id: "other-income",
     side: "in",
-    title: "Other money in",
+    title: msg("Other money in"),
     form: "1099-NEC or 1099-K",
-    note: () =>
-      "Money from clients, side work or selling things online can be taxable even when no form arrives. Nothing was taken out of it for taxes, so a large amount can mean a bill in April, or quarterly estimated payments.",
+    note: (_year, t) =>
+      t("Money from clients, side work or selling things online can be taxable even when no form arrives. Nothing was taken out of it for taxes, so a large amount can mean a bill in April, or quarterly estimated payments."),
   },
   {
     id: "refunds",
     side: "in",
-    title: "Tax refunds",
+    title: msg("Tax refunds"),
     form: "1099-G",
-    note: () => "A federal refund isn't income. A state or local refund can be, if you itemized the year before; your state sends a 1099-G.",
+    note: (_year, t) => t("A federal refund isn't income. A state or local refund can be, if you itemized the year before; your state sends a 1099-G."),
   },
   {
     id: "gifts",
     side: "out",
-    title: "Gifts to charity",
+    title: msg("Gifts to charity"),
     form: null,
-    note: (year) =>
-      `${year >= 2026 ? "From 2026, up to $1,000 of cash gifts to charity ($2,000 filing jointly) can be deducted even if you don't itemize. " : ""}Keep the charity's written receipt for any single gift of $250 or more. Gifts to campaigns, parties or people aren't deductible.`,
+    note: (year, t) =>
+      year >= 2026
+        ? t(
+            "From 2026, up to $1,000 of cash gifts to charity ($2,000 filing jointly) can be deducted even if you don't itemize. Keep the charity's written receipt for any single gift of $250 or more. Gifts to campaigns, parties or people aren't deductible.",
+          )
+        : t("Keep the charity's written receipt for any single gift of $250 or more. Gifts to campaigns, parties or people aren't deductible."),
   },
   {
     id: "medical",
     side: "out",
-    title: "Medical and dental",
+    title: msg("Medical and dental"),
     form: null,
-    note: () =>
-      "Doctors, dentists, eye care, prescriptions and hospitals. They lower your taxes only if you itemize, and only the part above 7.5% of your adjusted gross income. A pharmacy's total is everything bought there, so count only the medicine.",
+    note: (_year, t) =>
+      t("Doctors, dentists, eye care, prescriptions and hospitals. They lower your taxes only if you itemize, and only the part above 7.5% of your adjusted gross income. A pharmacy's total is everything bought there, so count only the medicine."),
   },
   {
     id: "taxes-paid",
     side: "out",
-    title: "Taxes you paid",
+    title: msg("Taxes you paid"),
     form: null,
-    note: () =>
-      "Payments to the IRS, your state and your county. An estimated payment counts toward the year it was for, so one made in January or April may belong to the year before. State, local and property taxes can be deducted if you itemize, up to a limit.",
+    note: (_year, t) =>
+      t("Payments to the IRS, your state and your county. An estimated payment counts toward the year it was for, so one made in January or April may belong to the year before. State, local and property taxes can be deducted if you itemize, up to a limit."),
   },
   {
     id: "mortgage",
     side: "out",
-    title: "Mortgage payments",
+    title: msg("Mortgage payments"),
     form: "1098",
-    note: () => "Only the interest can be deducted, and only if you itemize. Your lender's 1098 shows how much of these payments was interest.",
+    note: (_year, t) => t("Only the interest can be deducted, and only if you itemize. Your lender's 1098 shows how much of these payments was interest."),
   },
   {
     id: "student-loans",
     side: "out",
-    title: "Student loan payments",
+    title: msg("Student loan payments"),
     form: "1098-E",
-    note: () => "Up to $2,500 of the interest can lower your taxable income even if you don't itemize, depending on what you earn. Your loan servicer's 1098-E shows it.",
+    note: (_year, t) => t("Up to $2,500 of the interest can lower your taxable income even if you don't itemize, depending on what you earn. Your loan servicer's 1098-E shows it."),
   },
   {
     id: "childcare",
     side: "out",
-    title: "Childcare",
+    title: msg("Childcare"),
     form: null,
-    note: () => "Care for a child under 13 while you work may qualify for the Child and Dependent Care Credit. You'll need each provider's name, address and tax ID.",
+    note: (_year, t) => t("Care for a child under 13 while you work may qualify for the Child and Dependent Care Credit. You'll need each provider's name, address and tax ID."),
   },
   {
     id: "education",
     side: "out",
-    title: "Tuition and school",
+    title: msg("Tuition and school"),
     form: "1098-T",
-    note: () => "College costs may qualify for the American Opportunity or Lifetime Learning credit, and the school's 1098-T shows what counts. School before college usually doesn't.",
+    note: (_year, t) => t("College costs may qualify for the American Opportunity or Lifetime Learning credit, and the school's 1098-T shows what counts. School before college usually doesn't."),
   },
 ];
 
@@ -295,36 +301,37 @@ export function defaultTaxYear(data: Pick<FinanceData, "transactions" | "today">
 
 const newestFirst = (a: Transaction, b: Transaction) => (a.date === b.date ? a.id.localeCompare(b.id) : a.date < b.date ? 1 : -1);
 
-export function taxSummary(data: Pick<FinanceData, "transactions" | "today">, year: number): TaxSummary {
+/** The summary, its titles and notes in the language of `t`: English for the download and connected apps, the page's own on screen. */
+export function taxSummary(data: Pick<FinanceData, "transactions" | "today">, year: number, t: T = EN): TaxSummary {
   const { from, to, partial, recordsFrom } = yearSpan(data, year);
-  const inSpan = data.transactions.filter((t) => t.date >= from && t.date <= to);
+  const inSpan = data.transactions.filter((x) => x.date >= from && x.date <= to);
   const lines = new Map<TaxSectionId, Transaction[]>(TAX_SECTIONS.map((s) => [s.id, []]));
   const political: Transaction[] = [];
 
-  for (const t of inSpan) {
-    if (t.pending) continue;
-    if (t.category === "income") {
-      if (t.amount > 0) lines.get(IN_SECTION[incomeKind(t)])!.push(t);
+  for (const x of inSpan) {
+    if (x.pending) continue;
+    if (x.category === "income") {
+      if (x.amount > 0) lines.get(IN_SECTION[incomeKind(x)])!.push(x);
       continue;
     }
-    const found = outSection(t);
+    const found = outSection(x);
     if (!found) continue;
     if ("political" in found) {
-      if (t.amount < 0) political.push(t);
+      if (x.amount < 0) political.push(x);
       continue;
     }
     // Money back counts only where it can come back, and only as the same kind of spending.
-    if (t.amount < 0 || (t.amount > 0 && REFUNDABLE.has(found.id) && isSpendCategory(t.category))) lines.get(found.id)!.push(t);
+    if (x.amount < 0 || (x.amount > 0 && REFUNDABLE.has(found.id) && isSpendCategory(x.category))) lines.get(found.id)!.push(x);
   }
 
   const sections: TaxSection[] = [];
   const nothing: TaxSummary["nothing"] = [];
   for (const spec of TAX_SECTIONS) {
     const found = lines.get(spec.id)!.sort(newestFirst);
-    const sum = found.reduce((s, t) => s + t.amount, 0);
+    const sum = found.reduce((s, x) => s + x.amount, 0);
     const total = spec.side === "in" ? sum : Math.max(0, -sum);
-    if (found.length === 0) nothing.push({ id: spec.id, title: spec.title });
-    else sections.push({ id: spec.id, side: spec.side, title: spec.title, form: spec.form, note: spec.note(year), total, lines: found });
+    if (found.length === 0) nothing.push({ id: spec.id, title: t(spec.title) });
+    else sections.push({ id: spec.id, side: spec.side, title: t(spec.title), form: spec.form, note: spec.note(year, t), total, lines: found });
   }
 
   return { year, from, to, partial, recordsFrom, sections, nothing, political: political.sort(newestFirst), transactions: inSpan.length };

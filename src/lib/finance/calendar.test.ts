@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { billEvents, buildCalendar, dueReminders, escapeText, firstUpcoming, foldLine, parseReminder, remindable, rruleFor, seriesFor, stableHash, validDue, type CalendarOptions } from "./calendar";
 import { buildDemoData } from "./demo";
 import { detectRecurring, type RecurringStream } from "./recurring";
+import { translator } from "@/lib/i18n/translator";
 
 const TODAY = "2026-09-27";
 
@@ -251,7 +252,8 @@ describe("feedSnapshot", () => {
 
   it("is empty for a household with nothing repeating", async () => {
     const { feedSnapshot } = await import("./calendar");
-    expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY })).toEqual({ v: 1, builtOn: TODAY, streams: [], accounts: [], dues: [] });
+    expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY })).toEqual({ v: 1, builtOn: TODAY, lang: "en", streams: [], accounts: [], dues: [] });
+    expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY }, "es").lang).toBe("es");
   });
 });
 
@@ -288,5 +290,38 @@ describe("card and loan payments due", () => {
   it("from a stored feed are checked before they reach a calendar", () => {
     expect(validDue(due)).toBe(true);
     for (const bad of [null, { ...due, due: "Oct 14" }, { ...due, minimum: -5 }, { ...due, minimum: 3.5 }, { ...due, name: 7 }, { ...due, mask: undefined }]) expect(validDue(bad)).toBe(false);
+  });
+});
+
+describe("in Spanish, for someone who reads Prism in Spanish", () => {
+  const es = translator("es");
+  const due = { accountId: "card", name: "Visa", mask: "1107", due: "2026-10-14", minimum: 3_500, statement: 124_050 };
+  const unfolded = (ics: string) => ics.replace(/\r\n /g, "");
+
+  it("names each event, its notes and its category in Spanish, with Spanish dates and U.S. amounts", () => {
+    const data = buildDemoData(TODAY);
+    const ics = unfolded(buildCalendar(options({ streams: detectRecurring(data.transactions, TODAY), accounts: data.accounts, dues: [due], feed: true, t: es })));
+    expect(ics).toContain("SUMMARY:Día de pago: Lumen Design Co. payroll · +$2\\,981.40");
+    expect(ics).toContain("DESCRIPTION:Salida esperada: $139.00 · Everyday Checking ••4821 · cada año.");
+    expect(ics).toContain("SUMMARY:Vence el pago de Visa ••1107 · mín. $35.00");
+    expect(ics).toContain("Vence un pago: mínimo $35.00 · saldo del estado de cuenta $1\\,240.50.");
+    expect(ics).toContain("CATEGORIES:Días de pago");
+    expect(ics).toContain("CATEGORIES:Facturas");
+    expect(ics).toContain("Este calendario se actualiza solo.");
+    expect(ics).toContain("Mira lo que viene: https://prism.example/future");
+    // Nothing English left in what a person reads.
+    expect(ics).not.toMatch(/Payday|Expected|Based on|payment due|every (week|month|year)|updates itself|coming up|Bills|Subscriptions/);
+  });
+
+  it("says a price rise and a snapshot's day the Spanish way", () => {
+    const [sub] = billEvents(options({ t: es, streams: [stream({ amount: -1_799, priceChange: { from: -1_549, to: -1_799, date: "2026-08-22" } })] }));
+    expect(sub!.description).toContain("El precio subió de $15.49 a $17.99 el 22 ago.");
+    expect(unfolded(buildCalendar(options({ t: es })))).toContain("Una copia del 27 sept. Descárgala de nuevo desde Prism para actualizarla.");
+  });
+
+  it("keeps every event's UID, so a calendar that changes language renames its events instead of adding more", () => {
+    const data = buildDemoData(TODAY);
+    const uids = (t?: ReturnType<typeof translator>) => billEvents(options({ streams: detectRecurring(data.transactions, TODAY), accounts: data.accounts, dues: [due], t })).map((e) => e.uid).sort();
+    expect(uids(es)).toEqual(uids());
   });
 });

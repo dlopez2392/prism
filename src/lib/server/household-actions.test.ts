@@ -11,6 +11,7 @@ vi.mock("./finance", () => ({ VIEW_COOKIE: "prism-view" }));
 vi.mock("./origin", () => ({ requestOrigin: async () => "https://prism.bis-rgv.com" }));
 const jar = { set: vi.fn(), delete: vi.fn() };
 vi.mock("next/headers", () => ({ cookies: async () => jar }));
+vi.mock("@/lib/i18n/server", async () => ({ getT: async () => (await import("@/lib/i18n/t")).EN }));
 const signedIn = { current: null as unknown };
 vi.mock("@/lib/supabase/server", () => ({ currentAccount: async () => signedIn.current }));
 

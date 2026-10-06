@@ -24,6 +24,7 @@ vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: "Dana",
     timeZone: "UTC",
+    language: "en",
     plan: { budgets: null, goals: null },
     categories: { v: 1, merchants: {}, transactions: {} },
     manual: [],
@@ -41,6 +42,7 @@ vi.mock("./account-store", () => ({
   clearBankAttention,
   liveCoinbaseToken: vi.fn(),
   saveAccountPlaidSync: vi.fn(async () => true),
+  saveAccountLanguage: vi.fn(async () => undefined),
   saveAccountTimeZone: vi.fn(),
   saveFeedSnapshot: vi.fn(async () => undefined),
   saveCoinbaseValue: vi.fn(),

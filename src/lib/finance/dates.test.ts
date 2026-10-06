@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { addDays, addMonths, bankHolidays, daysBetween, eachDay, isBusinessDay, lastMonths, nthWeekdayOfMonth, previousBusinessDay } from "./dates";
-import { money, money0, moneyCompact, shortDate, signedMoney0 } from "./format";
+import { addDays, addMonths, bankHolidays, daysBetween, eachDay, endOfMonth, isBusinessDay, lastMonths, nthWeekdayOfMonth, previousBusinessDay } from "./dates";
+import { dayRange, money, money0, moneyCompact, shortDate, signedMoney0 } from "./format";
 
 describe("calendar arithmetic", () => {
   it("clamps month-end when adding months", () => {
     expect(addMonths("2026-01-31", 1)).toBe("2026-02-28");
     expect(addMonths("2028-01-31", 1)).toBe("2028-02-29");
     expect(addMonths("2026-03-31", -1)).toBe("2026-02-28");
+  });
+
+  it("finds a month's last day", () => {
+    expect(endOfMonth("2026-02-10")).toBe("2026-02-28");
+    expect(endOfMonth("2028-02-01")).toBe("2028-02-29");
+    expect(endOfMonth("2026-09-30")).toBe("2026-09-30");
+    expect(endOfMonth("2026-12-01")).toBe("2026-12-31");
   });
 
   it("counts calendar days across a DST change", () => {
@@ -73,5 +80,8 @@ describe("money formatting", () => {
 
   it("formats dates without touching the viewer's zone", () => {
     expect(shortDate("2026-09-01")).toBe("Sep 1");
+    expect(dayRange("2026-09-01", "2026-09-05")).toBe("Sep 1 – 5");
+    expect(dayRange("2026-09-28", "2026-10-03")).toBe("Sep 28 – Oct 3");
+    expect(dayRange("2026-09-01", "2026-09-01")).toBe("Sep 1");
   });
 });

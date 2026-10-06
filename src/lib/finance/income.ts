@@ -9,16 +9,17 @@
 
 import { addMonths, monthKey, startOfMonth } from "./dates";
 import { perYear, type Cadence, type PaySchedule, type RecurringStream } from "./recurring";
+import { EN, msg, type T } from "@/lib/i18n/t";
 import type { Cents, IncomeKind, ISODate, Transaction } from "./types";
 
 export const INCOME_LABELS: Record<IncomeKind, string> = {
-  pay: "Pay",
-  interest: "Interest",
-  dividends: "Dividends",
-  retirement: "Retirement and pensions",
-  benefits: "Benefits",
-  "tax-refund": "Tax refunds",
-  other: "Other income",
+  pay: msg("Pay"),
+  interest: msg("Interest"),
+  dividends: msg("Dividends"),
+  retirement: msg("Retirement and pensions"),
+  benefits: msg("Benefits"),
+  "tax-refund": msg("Tax refunds"),
+  other: msg("Other income"),
 };
 
 /** Kinds of income that arrive like a paycheck: on a schedule, for living on. */
@@ -52,29 +53,35 @@ const ORDINAL = (n: number) => {
   const tail = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
   return `${n}${tail}`;
 };
-const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const NTH = ["", "first", "second", "third", "fourth"];
+const WEEKDAY = [msg("Sunday"), msg("Monday"), msg("Tuesday"), msg("Wednesday"), msg("Thursday"), msg("Friday"), msg("Saturday")];
+const NTH = ["", msg("first"), msg("second"), msg("third"), msg("fourth")];
 const EVERY: Record<Cadence, string> = {
-  weekly: "Every week",
-  biweekly: "Every two weeks",
-  semimonthly: "Twice a month",
-  monthly: "Every month",
-  quarterly: "Every three months",
-  semiannual: "Twice a year",
-  annual: "Every year",
+  weekly: msg("Every week"),
+  biweekly: msg("Every two weeks"),
+  semimonthly: msg("Twice a month"),
+  monthly: msg("Every month"),
+  quarterly: msg("Every three months"),
+  semiannual: msg("Twice a year"),
+  annual: msg("Every year"),
 };
 
-/** How a person would say when they're paid. */
-export function scheduleText(cadence: Cadence, schedule: PaySchedule | undefined): string {
-  if (!schedule) return EVERY[cadence];
-  if (schedule.kind === "weekday") return `${cadence === "weekly" ? "Every" : "Every other"} ${WEEKDAY[schedule.weekday]}`;
-  if (schedule.kind === "nthWeekday") return `The ${schedule.nth === -1 ? "last" : NTH[schedule.nth]} ${WEEKDAY[schedule.weekday]} of each month`;
-  const day = (d: number) => (d >= 31 ? "the last day" : `the ${ORDINAL(d)}`);
+/** How a person would say when they're paid, in the language of `t`. */
+export function scheduleText(cadence: Cadence, schedule: PaySchedule | undefined, t: T = EN): string {
+  if (!schedule) return t(EVERY[cadence]);
+  if (schedule.kind === "weekday") {
+    const weekday = t(WEEKDAY[schedule.weekday]!);
+    return cadence === "weekly" ? t("Every {weekday}", { weekday }) : t("Every other {weekday}", { weekday });
+  }
+  if (schedule.kind === "nthWeekday") {
+    const weekday = t(WEEKDAY[schedule.weekday]!);
+    return schedule.nth === -1 ? t("The last {weekday} of each month", { weekday }) : t("The {nth} {weekday} of each month", { nth: t(NTH[schedule.nth]!), weekday });
+  }
+  // "15th" in English; a day of the month is just its number in Spanish ("el día 15").
+  const ord = (d: number) => (t.locale === "en" ? ORDINAL(d) : String(d));
   const [a, b] = schedule.days;
-  if (b === undefined) return `${cap(day(a!))} of each month`;
-  return b >= 31 ? `${cap(day(a!))} and the last day of each month` : `The ${ORDINAL(a!)} and ${ORDINAL(b)} of each month`;
+  if (b === undefined) return a! >= 31 ? t("The last day of each month") : t("The {day} of each month", { day: ord(a!) });
+  return b >= 31 ? t("The {day} and the last day of each month", { day: ord(a!) }) : t("The {day} and {day2} of each month", { day: ord(a!), day2: ord(b) });
 }
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export type Paycheck = {
   /** The stream it was found as. */
@@ -83,8 +90,9 @@ export type Paycheck = {
   accountId: string;
   kind: IncomeKind;
   cadence: Cadence;
-  /** "Every other Friday", "The 15th and the last day of each month". */
+  /** "Every other Friday", "The 15th and the last day of each month": in English, for connected apps; a screen says it in its own language from `schedule`. */
   when: string;
+  schedule?: PaySchedule;
   /** What usually lands: the last deposit, or the typical recent one when it varies. */
   takeHome: Cents;
   variable: boolean;
@@ -113,6 +121,7 @@ export function paychecks(streams: RecurringStream[], txns: Transaction[]): Payc
       kind,
       cadence: s.cadence,
       when: scheduleText(s.cadence, s.schedule),
+      schedule: s.schedule,
       takeHome: s.amount,
       variable: s.variable,
       perYear: perYear(s.cadence),
@@ -148,7 +157,7 @@ export function incomeSummary(txns: Transaction[], streams: RecurringStream[], t
   const inMonths = new Set(months);
   const sums = new Map<IncomeKind, Cents>();
   for (const t of txns) {
-    if (t.category !== "income" || t.amount <= 0 || t.pending || !inMonths.has(monthKey(t.date))) continue;
+    if (t.category !== "income" || t.excluded || t.amount <= 0 || t.pending || !inMonths.has(monthKey(t.date))) continue;
     const k = incomeKind(t);
     sums.set(k, (sums.get(k) ?? 0) + t.amount);
   }

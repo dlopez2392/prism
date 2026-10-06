@@ -11,11 +11,13 @@ import Link from "next/link";
 import { startTransition, useActionState, type FormEvent } from "react";
 import { CircleCheck } from "lucide-react";
 import { buttonGhost, buttonPrimary, FormMessage, TextInput } from "@/components/dialog";
+import { useT } from "@/components/locale";
 import { IDLE } from "@/lib/finance/plan";
 import { FIRST_NAME_MAX } from "@/lib/profile";
 import { saveFirstName } from "@/lib/server/profile-actions";
 
 export function NameForm({ firstName, welcome }: { firstName: string | null; welcome: boolean }) {
+  const t = useT();
   const [state, action, pending] = useActionState(saveFirstName, IDLE);
   const fieldError = state.status === "error" ? state.fields?.firstName : undefined;
 
@@ -33,23 +35,23 @@ export function NameForm({ firstName, welcome }: { firstName: string | null; wel
       <div className="max-w-sm">
         <TextInput
           name="firstName"
-          label="First name"
+          label={t("First name")}
           defaultValue={firstName ?? ""}
           maxLength={FIRST_NAME_MAX}
           autoComplete="given-name"
           autoFocus={welcome}
-          hint="Just your first name. Prism never asks for a password."
+          hint={t("Just your first name. Prism never asks for a password.")}
           error={fieldError}
         />
       </div>
       {fieldError ? null : <FormMessage state={state} />}
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="submit" disabled={pending} className={buttonPrimary}>
-          {pending ? "Saving…" : welcome ? "Save and continue" : "Save name"}
+          {pending ? t("Saving…") : welcome ? t("Save and continue") : t("Save name")}
         </button>
         {welcome ? (
           <Link href="/" className={buttonGhost}>
-            Skip for now
+            {t("Skip for now")}
           </Link>
         ) : null}
         {/* Always in the DOM so screen readers announce it. */}

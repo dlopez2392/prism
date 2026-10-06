@@ -12,6 +12,7 @@
 // Stored sealed in the person's account (profiles.sealed_manual_items) and
 // read back as untrusted input: an invalid item is dropped, alone.
 
+import { msg } from "@/lib/i18n/t";
 import { lastMonths } from "./dates";
 import type { Account, AccountKind, Cents, ISODate, Institution } from "./types";
 
@@ -32,11 +33,12 @@ export type ManualItem = {
   values: ManualValue[];
 };
 
+/** Each kind's label and example name, in English: a screen shows them with t(). */
 export const MANUAL_KINDS: Record<ManualKind, { label: string; accountKind: AccountKind; owed: boolean; placeholder: string }> = {
-  home: { label: "A home", accountKind: "property", owed: false, placeholder: "Our house" },
-  vehicle: { label: "A vehicle", accountKind: "property", owed: false, placeholder: "2019 Honda Civic" },
-  asset: { label: "Something else you own", accountKind: "property", owed: false, placeholder: "Grandma's ring" },
-  debt: { label: "Money you owe", accountKind: "loan", owed: true, placeholder: "Loan from Mom" },
+  home: { label: msg("A home"), accountKind: "property", owed: false, placeholder: msg("Our house") },
+  vehicle: { label: msg("A vehicle"), accountKind: "property", owed: false, placeholder: msg("2019 Honda Civic") },
+  asset: { label: msg("Something else you own"), accountKind: "property", owed: false, placeholder: msg("Grandma's ring") },
+  debt: { label: msg("Money you owe"), accountKind: "loan", owed: true, placeholder: msg("Loan from Mom") },
 };
 
 export const MAX_MANUAL_ITEMS = 30;
@@ -46,11 +48,25 @@ export const MANUAL_VALUE_MAX: Cents = 1_000_000_000_000;
 /** Two years of monthly values: Net worth shows 13 months; the rest is room for later charts. */
 const VALUES_KEPT = 24;
 export const MANUAL_INSTITUTION_ID = "manual";
+/** Where what a person added shows it's from, in English: a screen shows it with t(). */
+export const MANUAL_INSTITUTION_NAME = msg("Added by you");
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function isManualKind(x: unknown): x is ManualKind {
   return typeof x === "string" && Object.hasOwn(MANUAL_KINDS, x);
+}
+
+/** Net worth's card of everything a person can add, for a link that leaves the choice to them. */
+export const ADD_CARD_LINK = "/net-worth#add";
+
+/** A link that opens Net worth's add form with `kind` already chosen: from Connections, Overview, anywhere. */
+export const addLink = (kind: ManualKind) => `/net-worth#add-${kind}`;
+
+/** The kind such a link asks for ("#add-home"), or null for any other fragment. */
+export function addKindFromHash(hash: string): ManualKind | null {
+  const m = /^#add-([a-z]+)$/.exec(hash);
+  return m && isManualKind(m[1]) ? m[1] : null;
 }
 
 /** A name as a person would type it: trimmed, spaces collapsed, no control characters. Null if nothing is left or it's too long. */
@@ -115,7 +131,7 @@ export function manualAccount(item: ManualItem, today: ISODate, months = 13): Ac
 }
 
 export function manualInstitution(): Institution {
-  return { id: MANUAL_INSTITUTION_ID, name: "Added by you", health: "healthy", lastSyncedAt: null, source: "manual" };
+  return { id: MANUAL_INSTITUTION_ID, name: MANUAL_INSTITUTION_NAME, health: "healthy", lastSyncedAt: null, source: "manual" };
 }
 
 /** The item behind a Net worth row, by its account id. */

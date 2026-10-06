@@ -43,7 +43,7 @@ export function typicalSpendAfterDay(
     const key = monthKey(m);
     const cutoff = Math.min(day, daysInMonth(m));
     for (const t of txns) {
-      if (t.category !== category || monthKey(t.date) !== key) continue;
+      if (t.category !== category || t.excluded || monthKey(t.date) !== key) continue;
       if (dayOfMonth(t.date) > cutoff) total -= t.amount;
     }
   }

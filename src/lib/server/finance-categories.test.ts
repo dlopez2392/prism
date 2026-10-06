@@ -30,6 +30,7 @@ vi.mock("./account-store", () => ({
   loadAccount: async () => ({
     firstName: null,
     timeZone: "UTC",
+    language: "en",
     plan: { budgets: null, goals: null },
     // "Blue Bottle is food, not shopping" — and one bank transfer the person says is really rent.
     categories: { v: 1, merchants: { "blue bottle": "food" }, transactions: { "t-rent": "housing" } },
@@ -61,6 +62,7 @@ vi.mock("./account-store", () => ({
   }),
   liveCoinbaseToken: vi.fn(),
   saveAccountPlaidSync: vi.fn(),
+  saveAccountLanguage: vi.fn(async () => undefined),
   saveAccountTimeZone: vi.fn(),
   saveFeedSnapshot: vi.fn(),
 }));
