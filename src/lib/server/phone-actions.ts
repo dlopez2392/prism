@@ -17,6 +17,8 @@ import { refresh } from "next/cache";
 import { DEVICE_NAMES, deviceKind } from "@/lib/alerts/devices";
 import { alertsConfig } from "@/lib/alerts/send";
 import { PUSH_SUBJECT, sendPush, validSubscription, vapidKeys, type PushMessage } from "@/lib/alerts/webpush";
+import { plusNeeds } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { BRAND } from "@/lib/brand";
 import { getT } from "@/lib/i18n/server";
 import { msg } from "@/lib/i18n/t";
@@ -48,6 +50,7 @@ export async function turnOnDevice(subscription: unknown, touch: boolean): Promi
   if (!account) return failed(t(SIGNED_OUT));
   const env = ready();
   if (!env) return failed(t(UNAVAILABLE));
+  if (!(await plusFor(account)).plus) return failed(plusNeeds("alerts", t));
   const sub = validSubscription(subscription);
   if (!sub) return failed(t("This browser's notification service isn't one {product} can use. Try Safari on an iPhone or Chrome on Android.", { product: BRAND.product }));
   const device = deviceKind((await headers()).get("user-agent"), touch === true);

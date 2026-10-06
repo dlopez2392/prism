@@ -30,6 +30,8 @@ import { applyP2pNotes, NO_P2P_NOTES, type P2pNotes } from "@/lib/finance/p2p";
 import { valuationDue, type HomeValuation } from "@/lib/finance/home-value";
 import { monthKey } from "@/lib/finance/dates";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
+import { pausedBeyondFree } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { walletMoney, walletsInstitution, type Wallet } from "@/lib/crypto/wallets";
 import { readWallets, refreshWholeWallets, type Fresh } from "./wallets";
 import { refreshDueHomeValues } from "./home-values";
@@ -176,8 +178,8 @@ export type Sources = {
   /** They share Coinbase with their household: the value last copied for it, and when. A device never does. */
   coinbaseShared: AccountSources["coinbaseShared"];
   items: VaultItem[];
-  /** A live Coinbase access token — or null for a dead link — fetched on demand. */
-  coinbase: { config: CoinbaseConfig; token: () => Promise<string | null> } | null;
+  /** A live Coinbase access token — or null for a dead link — fetched on demand; never asked while it rests (`paused`, Prism Plus ended). */
+  coinbase: { config: CoinbaseConfig; token: () => Promise<string | null>; paused?: true } | null;
   feedUpdatedAt: string | null;
   /** The zone the account last saw the person in. */
   timeZone: string | null;
@@ -237,11 +239,13 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
   if (account) {
     // Stored bank copies are loaded (and opened) only for what draws money — never for a plan edit.
     // Imports are loaded even for a plan edit: without them, someone whose only money is imported would read as the demo.
-    const a = await loadAccount(account, key, { withSync, withImports: true });
+    const [a, plus] = await Promise.all([loadAccount(account, key, { withSync, withImports: true }), plusFor(account)]);
+    // Once Prism Plus ends, the free plan's first connection keeps updating; the rest show as last read, and Coinbase rests.
+    const paused = plus.plus ? new Set<string>() : pausedBeyondFree(a.items);
     // Seals an older vault key made move to the current one, after the response (vault.ts, "Keyring").
     if (a.reseal) after(a.reseal);
     // A home due this month's estimate gets it after the response, on a visit that draws money (never a plan edit).
-    if (withSync && key && homeValuesEnabled() && a.homeValues.length) {
+    if (withSync && key && plus.plus && homeValuesEnabled() && a.homeValues.length) {
       const today = todayIn(jar.get("prism-tz")?.value);
       if (a.manual.some((i) => valuationDue(i, a.homeValues.find((h) => h.itemId === i.id), monthKey(today)))) {
         // The next visit draws the new value: pages are rendered fresh each time.
@@ -283,8 +287,8 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       lockedImports: a.lockedImports,
       inHousehold: a.inHousehold,
       coinbaseShared: a.coinbaseShared,
-      items: plaid ? a.items : [],
-      coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key) } : null,
+      items: plaid ? a.items.map((i) => (paused.has(i.itemId) ? { ...i, paused: true as const } : i)) : [],
+      coinbase: cb && key && record ? { config: cb, token: () => liveCoinbaseToken(account, record, cb, key), ...(plus.plus ? {} : { paused: true as const }) } : null,
       feedUpdatedAt: a.feedUpdatedAt,
       timeZone: a.timeZone,
       language: a.language,
@@ -384,7 +388,11 @@ async function moneyFor(src: Money, today: ISODate, coinbaseLapsed?: string): Pr
   if (!isLive(src)) return { money: { ...buildDemoData(today), notice: null, plaidReady: config !== null }, wallets: [] };
   const [banks, crypto, read] = await Promise.all([
     config && src.items.length ? loadPlaid(config, src.items, today, src.plaidSync, src.categories) : Promise.resolve(emptyLive(today, config !== null)),
-    src.coinbase ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed)) : Promise.resolve(null),
+    src.coinbase?.paused
+      ? Promise.resolve(pausedCoinbase())
+      : src.coinbase
+        ? src.coinbase.token().then((t) => loadCoinbase(src.coinbase!.config, t, coinbaseLapsed))
+        : Promise.resolve(null),
     src.wallets.offline ? Promise.resolve({ wallets: src.wallets.list, fresh: new Map() as Fresh, later: [] as Wallet[] }) : readWallets(src.wallets.list),
   ]);
   if (read.fresh.size) src.wallets.save?.(read.fresh);
@@ -493,6 +501,8 @@ export const getFinance = cache(async (): Promise<Loaded> => {
   // One load of the person's own money per request, whichever of the two a layout and its page ask for.
   const { loaded, base, shared, src, today } = await ownMoney();
   if ((await cookies()).get(VIEW_COOKIE)?.value !== "household" || !src.account || !src.inHousehold) return loaded;
+  // The shared view is part of Prism Plus: someone in the household has to have it (the switch says so).
+  if (!(await plusFor(src.account)).householdView) return loaded;
   try {
     // After the calendar's refresh in ownMoney: the feed is only ever the person's own bills.
     return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household", splitRules: [], hiddenAccounts: [], hiddenHoldings: [] };
@@ -786,6 +796,11 @@ async function loadCoinbase(config: CoinbaseConfig, accessToken: string | null, 
   }
 }
 
+/** Coinbase while it rests: still listed, so it can be disconnected, but asked nothing and counted nowhere. */
+function pausedCoinbase(): CoinbaseLoad {
+  return { institution: { ...coinbaseNeedsSignIn(false), health: "healthy", paused: true }, account: null, holdings: [], problem: null };
+}
+
 function withCoinbase(base: Live, cb: CoinbaseLoad): Live {
   const notice = [base.notice, cb.problem].filter(Boolean).join(" ") || null;
   return {
@@ -827,6 +842,10 @@ async function bankFor(
   const stored = sync?.stored.get(item.itemId) ?? null;
   const copy = stored?.state ?? null;
   const kept = copy?.liabilities?.list ?? [];
+  // A paused connection is never asked: its last copy, or nothing.
+  if (item.paused) {
+    return { accounts: copy?.accounts ?? [], transactions: copy?.transactions ?? [], liabilities: kept, ready: true, syncedAt: stored?.syncedAt ?? "", fromCopy: false, signInAgain: false, answered: false };
+  }
   if (copy?.accounts && !needsSync(stored)) {
     return { accounts: copy.accounts, transactions: copy.transactions, liabilities: kept, ready: copy.ready, syncedAt: stored!.syncedAt!, fromCopy: false, signInAgain: false, answered: false };
   }
@@ -896,14 +915,17 @@ async function loadPlaid(config: PlaidConfig, items: VaultItem[], today: ISODate
         const signIn = bank.signInAgain || warning?.state === "sign-in" || warning?.state === "revoked";
         const disconnectsAt = !signIn && warning?.state === "disconnecting" ? warning.disconnectAt : null;
         institutions.push(
-          signIn
-            ? { id: item.itemId, name, health: "needs_attention", signInAgain: true, lastSyncedAt: bank.syncedAt, source: "plaid" }
-            : { id: item.itemId, name, health: bank.ready ? "healthy" : "syncing", lastSyncedAt: bank.syncedAt, source: "plaid", ...(disconnectsAt ? { disconnectsAt } : {}) },
+          item.paused
+            ? { id: item.itemId, name, health: "healthy", paused: true, lastSyncedAt: bank.syncedAt || null, source: "plaid" }
+            : signIn
+              ? { id: item.itemId, name, health: "needs_attention", signInAgain: true, lastSyncedAt: bank.syncedAt, source: "plaid" }
+              : { id: item.itemId, name, health: bank.ready ? "healthy" : "syncing", lastSyncedAt: bank.syncedAt, source: "plaid", ...(disconnectsAt ? { disconnectsAt } : {}) },
         );
-        if (signIn) problems.push(`${name} needs you to sign in again — showing it as of the last sync.`);
+        // A paused bank is no problem to fix: Connections says why, and what brings it back.
+        if (signIn && !item.paused) problems.push(`${name} needs you to sign in again — showing it as of the last sync.`);
         else if (bank.fromCopy) problems.push(`${name} couldn't be updated just now — showing it as of the last sync.`);
         // Holdings aren't kept in the copy, and a bank waiting on a sign-in would only refuse again.
-        if (!signIn && !sync?.minimal && bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
+        if (!signIn && !item.paused && !sync?.minimal && bank.accounts.some((a) => a.type === "investment" || a.type === "brokerage")) {
           try {
             const h = await getHoldings(config, item.accessToken);
             holdings.push(...mapHoldings(h.holdings, h.securities));

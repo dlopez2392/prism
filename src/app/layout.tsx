@@ -13,7 +13,8 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { LocaleProvider, ScreenLanguage } from "@/components/locale";
 import { getLocale } from "@/lib/i18n/server";
 import { messagesFor, translator } from "@/lib/i18n/translator";
-import { awaitingSecondStep } from "@/lib/supabase/server";
+import { plusFor } from "@/lib/billing/plus";
+import { awaitingSecondStep, currentAccount } from "@/lib/supabase/server";
 import { TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import "./globals.css";
@@ -48,6 +49,9 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const data = await getFinance();
+  // The household's shared view is part of Prism Plus: someone in the household has to have it.
+  const plus = await plusFor(await currentAccount());
+  const householdLocked = data.inHousehold && !plus.householdView;
   const locale = await getLocale();
   const t = translator(locale);
   const halfway = data.accountsEnabled && !data.account && (await awaitingSecondStep()) !== null;
@@ -66,7 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={`${jakarta.variable} font-sans`}>
         <LocaleProvider locale={locale} messages={messagesFor(locale)}>
           <div className="mx-auto flex max-w-[1480px]">
-            <Sidebar householdName={data.household.name} sourceLabel={sourceLabel} account={accountNav} />
+            <Sidebar householdName={data.household.name} sourceLabel={sourceLabel} account={accountNav} offerPlus={plus.billing && !plus.plus && data.account !== null} />
             <div className="min-w-0 flex-1">
               <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-line bg-surface-0/75 px-4 backdrop-blur-xl sm:px-6 lg:px-8 print:hidden">
                 <Link href="/" className="flex items-center gap-2 lg:hidden">
@@ -94,7 +98,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <div className="flex items-center gap-2">
                   {data.inHousehold ? (
                     <div className="hidden sm:block">
-                      <ViewSwitch view={data.view} />
+                      <ViewSwitch view={data.view} locked={householdLocked} />
                     </div>
                   ) : null}
                   <ConnectBank label={t("Connect")} signInFirst={accountNav?.signedIn === false} className="sm:hidden" />
@@ -122,7 +126,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {/* On a phone the header has no room for the switch; it sits just under it. */}
               {data.inHousehold ? (
                 <div className="px-4 pt-3 sm:hidden">
-                  <ViewSwitch view={data.view} />
+                  <ViewSwitch view={data.view} locked={householdLocked} />
                 </div>
               ) : null}
               {halfway ? <HalfwayBanner /> : null}

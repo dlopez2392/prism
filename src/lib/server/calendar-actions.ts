@@ -7,6 +7,8 @@
 // off. Creating or resetting also writes a fresh snapshot, so the calendar is
 // right from its first fetch.
 
+import { plusNeeds } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { getT } from "@/lib/i18n/server";
 import { currentAccount } from "@/lib/supabase/server";
 import { accountFeedToken, removeAccountFeed, saveFeedSnapshot } from "./account-store";
@@ -34,6 +36,8 @@ export async function calendarFeed(prev: FeedState, form: FormData): Promise<Fee
       await removeAccountFeed(account);
       return { path: null };
     }
+    // A calendar that keeps itself up to date is part of Prism Plus; the one-time download isn't.
+    if (!(await plusFor(account)).plus) return { path: prev.path, error: plusNeeds("calendar", t) };
     const token = await accountFeedToken(account, key, { create: true, reset: intent === "reset" });
     const data = await getFinance();
     // Nothing real linked yet: publish an empty calendar, never the demo household's bills.

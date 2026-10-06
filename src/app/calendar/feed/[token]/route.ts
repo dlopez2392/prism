@@ -9,8 +9,11 @@
 // The snapshot is stored sealed, so only this server, with the vault key,
 // can read it: the database never holds the bills themselves. It names the
 // language the person's visits were in, and the calendar is written in it.
+// With billing on, the feed is part of Prism Plus: its owner's plan is asked
+// by the same secret (calendar_feed_plus), and without Plus it's empty.
 
 import { createClient } from "@supabase/supabase-js";
+import { billingConfig } from "@/lib/billing/plus";
 import { validDue, type CalendarOptions } from "@/lib/finance/calendar";
 import { feedTokenHash, openFeedSnapshot } from "@/lib/server/feed-token";
 import { vaultKey, type VaultKey } from "@/lib/server/vault";
@@ -29,7 +32,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   if (!env || !/^[A-Za-z0-9_-]{43}$/.test(token)) return notFound();
 
   const db = createClient(env.url, env.key, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data, error } = await db.rpc("calendar_feed_snapshot", { p_token_hash: feedTokenHash(token) });
+  const billing = billingConfig();
+  const [{ data, error }, plus] = await Promise.all([
+    db.rpc("calendar_feed_snapshot", { p_token_hash: feedTokenHash(token) }),
+    // A calendar that keeps itself up to date is part of Prism Plus. Can't be asked: it errs toward the person.
+    billing ? db.rpc("calendar_feed_plus", { p_token_hash: feedTokenHash(token), p_livemode: billing.livemode }) : Promise.resolve({ data: true, error: null }),
+  ]);
   let key: VaultKey | null = null;
   try {
     key = vaultKey();
@@ -38,6 +46,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   }
   const snap = (key && !error ? openFeedSnapshot(data, key) : null) as Snapshot | null;
   if (error || !snap || snap.v !== 1 || !Array.isArray(snap.streams) || !Array.isArray(snap.accounts)) return notFound();
+  const lang = translator(isLocale(snap.lang) ? snap.lang : "en");
+  // Prism Plus has ended: the calendar stays subscribed but empty, rather than showing bills that stopped being checked.
+  // It fills again on its own once Plus is back.
+  if (plus.data === false) {
+    return calendarResponse(req, { streams: [], accounts: [], dues: [], today: new Date().toISOString().slice(0, 10) }, {
+      feed: true,
+      filename: "prism-bills.ics",
+      cacheControl: "private, max-age=900",
+      demo: false,
+      t: lang,
+    });
+  }
 
   return calendarResponse(
     req,
@@ -45,6 +65,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     { streams: snap.streams, accounts: snap.accounts, dues: Array.isArray(snap.dues) ? snap.dues.filter(validDue) : [], today: new Date().toISOString().slice(0, 10) },
     // Private: the URL is a secret, so no shared cache may keep a copy.
     // A snapshot from before languages has none, and was English.
-    { feed: true, filename: "prism-bills.ics", cacheControl: "private, max-age=900", demo: false, t: translator(isLocale(snap.lang) ? snap.lang : "en") },
+    { feed: true, filename: "prism-bills.ics", cacheControl: "private, max-age=900", demo: false, t: lang },
   );
 }

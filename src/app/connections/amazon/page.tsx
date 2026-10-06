@@ -8,9 +8,12 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Package } from "lucide-react";
 import { AmazonOrders } from "@/components/amazon-orders";
+import { PlusCard } from "@/components/plus";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
 import { isAmazon, type BankLine } from "@/lib/finance/orders";
+import { plusFor } from "@/lib/billing/plus";
 import { getPersonalFinance } from "@/lib/server/finance";
+import { currentAccount } from "@/lib/supabase/server";
 import { getT } from "@/lib/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -59,10 +62,13 @@ export default async function AmazonPage() {
     );
   }
 
+  // Matching is part of Prism Plus. Without it the orders already kept stay, and can still be removed.
+  const plus = await plusFor(await currentAccount());
   return (
     <div className="space-y-5">
       {header}
-      <AmazonOrders lines={lines} noted={noted} />
+      {plus.plus ? null : <PlusCard feature="matching" trial={plus.trial} t={t} />}
+      {plus.plus || noted > 0 ? <AmazonOrders lines={lines} noted={noted} /> : null}
     </div>
   );
 }

@@ -9,10 +9,12 @@
 
 import { startTransition, useActionState, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Check, Copy, House, Link2, LogOut, Share2, UserPlus, X } from "lucide-react";
 import clsx from "clsx";
 import { buttonGhost, buttonPrimary, buttonSmall, Dialog, TextInput } from "@/components/dialog";
 import { StatusPill } from "@/components/ui";
+import { plusNeeds, pricingFor } from "@/lib/billing/plans";
 import { cancelHouseholdInvite, inviteToHousehold, leaveTheHousehold, setAccountShared, setHouseholdView, type InviteState } from "@/lib/server/household-actions";
 import type { Household } from "@/lib/server/household-store";
 import { useT } from "@/components/locale";
@@ -27,7 +29,8 @@ function untilDay(at: string, locale: Locale): string {
   return shortDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`, locale);
 }
 
-export function HouseholdCard({ household }: { household: Household | null }) {
+/** `needsPlus`: nobody in it has Prism Plus (or there's no household yet and they don't), so inviting goes to the pricing page. */
+export function HouseholdCard({ household, needsPlus = false }: { household: Household | null; needsPlus?: boolean }) {
   const t = useT();
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -97,7 +100,15 @@ export function HouseholdCard({ household }: { household: Household | null }) {
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {seats < MAX ? (
+        {seats < MAX && needsPlus ? (
+          <span className="flex flex-wrap items-center gap-3">
+            <Link href={pricingFor("household")} className={clsx(household ? buttonGhost : buttonPrimary)}>
+              <UserPlus aria-hidden className="size-4" />
+              {t("Invite someone")}
+            </Link>
+            <span className="text-sm text-ink-3">{plusNeeds("household", t)}</span>
+          </span>
+        ) : seats < MAX ? (
           <button type="button" onClick={openInvite} className={clsx(household ? buttonGhost : buttonPrimary)}>
             <UserPlus aria-hidden className="size-4" />
             {t("Invite someone")}
@@ -298,16 +309,18 @@ export function ShareAccounts({ accounts, shared }: { accounts: ShareableAccount
   );
 }
 
-/** Me / Household, in the top bar, for someone in a household. */
-export function ViewSwitch({ view }: { view: "me" | "household" }) {
+/** Me / Household, in the top bar, for someone in a household. `locked`: nobody in it has Prism Plus, so Household goes to the pricing page. */
+export function ViewSwitch({ view, locked = false }: { view: "me" | "household"; locked?: boolean }) {
   const t = useT();
   const router = useRouter();
   const [pending, start] = useTransition();
   const choose = (v: "me" | "household") =>
-    start(async () => {
-      await setHouseholdView(v);
-      router.refresh();
-    });
+    v === "household" && locked
+      ? router.push(pricingFor("household"))
+      : start(async () => {
+          await setHouseholdView(v);
+          router.refresh();
+        });
   return (
     <div role="group" aria-label={t("Whose money")} className="inline-flex h-9 items-center rounded-pill border border-line bg-surface-2 p-0.5 text-xs font-semibold">
       {(["me", "household"] as const).map((v) => (

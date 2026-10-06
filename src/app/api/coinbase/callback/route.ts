@@ -11,6 +11,8 @@
 // them into the account, but this route never writes a new one.
 
 import { NextResponse, type NextRequest } from "next/server";
+import { pricingFor } from "@/lib/billing/plans";
+import { connectionNeedsPlus } from "@/lib/billing/plus";
 import { coinbaseConfig, exchangeCode, revokeToken } from "@/lib/coinbase/client";
 import { COINBASE_OAUTH_COOKIE, finishSignIn } from "@/lib/server/coinbase-store";
 import { vaultKey, type VaultKey } from "@/lib/server/vault";
@@ -50,6 +52,7 @@ export async function GET(req: NextRequest) {
   const account = await currentAccount();
   const refusal = linkingRefusal({ accountsEnabled: supabaseEnv() !== null, signedIn: account !== null, realMoney: true, kind: "coinbase" });
   if (refusal || !account) return refusal?.error === "accounts_required" ? back("accounts_required") : leave(signInToConnect("coinbase", "/connections"));
+  if (await connectionNeedsPlus(account, "coinbase")) return leave(pricingFor("coinbase"));
 
   let tokens;
   try {

@@ -23,11 +23,16 @@
 // With `kind="investments"` it connects an investment account instead (a
 // brokerage such as Robinhood or Webull), which a bank link can't show: see
 // LinkKind in src/lib/plaid/client.ts.
+//
+// With billing on, a second bank or an investment account needs Prism Plus:
+// a page that knows it sends the button to the pricing page (`plusFirst`),
+// and the server's `plus_required` does the same if the page didn't know.
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Landmark, Lock, Plus, RotateCw, X } from "lucide-react";
 import clsx from "clsx";
+import { isPlusFeature, pricingFor, type PlusFeature } from "@/lib/billing/plans";
 import { signInToConnect } from "@/lib/linking";
 import { loadLink, saveBank } from "@/lib/plaid/link";
 import { bankSignedInAgain } from "@/lib/server/bank-actions";
@@ -44,6 +49,7 @@ export function ConnectBank({
   reconnect,
   size = "md",
   kind = "bank",
+  plusFirst,
 }: {
   /** "hero" is the white button that sits on the --gradient-prism card; "hero-ghost" is its outlined second. */
   variant?: "primary" | "ghost" | "hero" | "hero-ghost";
@@ -59,6 +65,8 @@ export function ConnectBank({
   size?: "md" | "sm";
   /** A bank, or an investment account on its own. Ignored with `reconnect`: signing in again keeps what the connection is. */
   kind?: "bank" | "investments";
+  /** This needs Prism Plus they don't have: go to the pricing page, saying why, instead of opening Link. */
+  plusFirst?: PlusFeature;
 }) {
   const router = useRouter();
   const t = useT();
@@ -71,6 +79,10 @@ export function ConnectBank({
       window.location.assign(signInToConnect(kind, from));
       return;
     }
+    if (plusFirst && !reconnect) {
+      window.location.assign(pricingFor(plusFirst));
+      return;
+    }
     setState({ kind: "busy", label: t("Opening secure link…") });
     try {
       const res = await fetch("/api/plaid/link-token", {
@@ -78,9 +90,13 @@ export function ConnectBank({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(reconnect ? { from, itemId: reconnect } : kind === "investments" ? { from, kind } : { from }),
       });
-      const json = (await res.json().catch(() => ({}))) as { linkToken?: string; error?: string; message?: string };
+      const json = (await res.json().catch(() => ({}))) as { linkToken?: string; error?: string; message?: string; need?: unknown };
       if (res.status === 401 && json.error === "sign_in_required") {
         window.location.assign(signInToConnect(kind, from));
+        return;
+      }
+      if (res.status === 402 && json.error === "plus_required" && isPlusFeature(json.need)) {
+        window.location.assign(pricingFor(json.need));
         return;
       }
       if (res.status === 503 && json.error === "not_configured") {
@@ -107,6 +123,11 @@ export function ConnectBank({
           if (!saved.ok && saved.signIn) {
             handler.destroy();
             window.location.assign(signInToConnect(kind, from));
+            return;
+          }
+          if (!saved.ok && saved.plus) {
+            handler.destroy();
+            window.location.assign(pricingFor(kind === "investments" ? "investments" : "banks"));
             return;
           }
           if (!saved.ok) {

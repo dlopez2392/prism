@@ -24,6 +24,8 @@ import { cleanManualName, isManualKind, MANUAL_KINDS, MANUAL_VALUE_MAX, MAX_MANU
 import { money0 } from "@/lib/finance/format";
 import { parseDollars, type FieldErrors, type PlanFormState } from "@/lib/finance/plan";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
+import { plusNeeds } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/t";
 import { currentAccount, type Account } from "@/lib/supabase/server";
@@ -89,8 +91,12 @@ export async function saveManualItem(_prev: PlanFormState, form: FormData): Prom
   // The home's address: a new one gets a new key, so moving house is a new home to the lookup limit.
   const prior = homes.find((h) => h.itemId === itemId);
   let home: HomeValuation | null = estimating && address ? (prior && prior.address === address ? prior : { itemId, address, key: randomUUID(), estimate: null }) : null;
+  // Keeping a home's value up to date is part of Prism Plus. A home already kept up to date stays set up, so it carries on once Plus is back.
+  const plus = home ? (await plusFor(who.account)).plus : true;
+  if (home && !plus && (!prior || prior.address !== home.address)) return failed(plusNeeds("home-values", t), { address: plusNeeds("home-values", t) });
+  if (home && !plus && value === null && item.values.length === 0) return failed(t("Check the highlighted fields."), { value: t("Enter what it's worth today, for now.") });
   let note: string | null = null;
-  if (home && value === null && !item.values.some((v) => v.month === month && v.estimated)) {
+  if (home && plus && value === null && !item.values.some((v) => v.month === month && v.estimated)) {
     const r = await lookUpHomeValue(who.account, home);
     if (r.ok) {
       item = withValue(item, month, r.estimate.value, true);

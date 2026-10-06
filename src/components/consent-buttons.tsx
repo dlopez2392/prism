@@ -7,10 +7,20 @@ import { buttonGhost, buttonPrimary } from "@/components/dialog";
 import { useT } from "@/components/locale";
 
 /** `appName` is null when the app's name is too long for a button: it says "Allow it" then. */
-export function ConsentButtons({ appName }: { appName: string | null }) {
+export function ConsentButtons({ appName, denyOnly = false }: { appName: string | null; denyOnly?: boolean }) {
   const t = useT();
   const { pending, data } = useFormStatus();
   const choosing = pending ? data?.get("decision") : null;
+  // Without Prism Plus there's nothing to allow yet: only saying no, so the app isn't left waiting.
+  if (denyOnly) {
+    return (
+      <div className="mt-3 grid">
+        <button type="submit" name="decision" value="deny" disabled={pending} className={buttonGhost}>
+          {choosing === "deny" ? t("Saying no…") : t("Don't allow")}
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="mt-6 grid gap-2 sm:grid-cols-2">
       {/* The primary button comes first, so Enter allows — the page is here because the person asked to connect. */}

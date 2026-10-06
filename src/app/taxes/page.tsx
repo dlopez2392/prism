@@ -14,13 +14,16 @@ import Link from "next/link";
 import clsx from "clsx";
 import { ChevronRight, Download, FileCheck2, ReceiptText } from "lucide-react";
 import { buttonGhost } from "@/components/dialog";
+import { PlusCard } from "@/components/plus";
 import { PrintButton } from "@/components/print-button";
 import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill } from "@/components/ui";
 import { dayDate, money, shortDate } from "@/lib/finance/format";
 import { p2pLabel } from "@/lib/finance/p2p";
 import { defaultTaxYear, GIFT_RECEIPT_FROM, TAX_SECTIONS, taxSummary, taxYears, type TaxSection } from "@/lib/finance/taxes";
 import type { Account, Transaction } from "@/lib/finance/types";
+import { plusFor } from "@/lib/billing/plus";
 import { getFinance } from "@/lib/server/finance";
+import { currentAccount } from "@/lib/supabase/server";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/t";
 
@@ -101,8 +104,17 @@ function Section({ s, accounts, t }: { s: TaxSection; accounts: Map<string, Acco
 }
 
 export default async function TaxesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const [data, t] = await Promise.all([getFinance(), getT()]);
+  const [data, t, plus] = await Promise.all([getFinance(), getT(), currentAccount().then(plusFor)]);
   const { locale } = t;
+  // Someone's own year is part of Prism Plus; the example household shows anyone what it does.
+  if (data.source !== "demo" && !plus.plus) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title={t("Taxes")} subtitle={t("One year of your money, sorted into what a tax return asks about.")} />
+        <PlusCard feature="taxes" trial={plus.trial} t={t} />
+      </div>
+    );
+  }
   const years = taxYears(data);
   const raw = (await searchParams).y;
   const asked = typeof raw === "string" && /^\d{4}$/.test(raw) ? Number(raw) : null;

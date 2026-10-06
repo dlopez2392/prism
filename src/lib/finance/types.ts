@@ -51,6 +51,8 @@ export type Institution = {
   signInAgain?: true;
   /** When the bank stops updating unless its owner signs in again (Plaid's week-ahead warning), as an ISO time. */
   disconnectsAt?: string;
+  /** Not updating: beyond what the free plan keeps up to date, so shown as last read until Prism Plus is back. */
+  paused?: true;
   lastSyncedAt: string | null;
   source: DataSource;
 };

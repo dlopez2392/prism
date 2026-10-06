@@ -29,6 +29,7 @@ import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/t";
 import { accountFeedToken } from "@/lib/server/account-store";
 import { getFinance } from "@/lib/server/finance";
+import { plusFor } from "@/lib/billing/plus";
 import { vaultKey, type VaultKey } from "@/lib/server/vault";
 import { currentAccount } from "@/lib/supabase/server";
 
@@ -40,7 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
 const PAST_DAYS = 30;
 
 export default async function FuturePage() {
-  const [data, t] = await Promise.all([getFinance(), getT()]);
+  const [data, t, plus] = await Promise.all([getFinance(), getT(), currentAccount().then(plusFor)]);
   const { locale } = t;
   const a = analyze(data, t);
   const { forecast, safe, checking } = a;
@@ -191,7 +192,7 @@ export default async function FuturePage() {
             subtitle={t("Paydays, bills and transfers we found repeating")}
             action={
               reminders > 0 ? (
-                <AddToCalendar demo={data.source === "demo"} count={reminders} personal={personal} signIn={data.accountsEnabled && !data.account} />
+                <AddToCalendar demo={data.source === "demo"} count={reminders} personal={personal} signIn={data.accountsEnabled && !data.account} plusFirst={!plus.plus} />
               ) : undefined
             }
           />

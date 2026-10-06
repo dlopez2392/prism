@@ -10,6 +10,9 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { billingConfig, plusFor } from "@/lib/billing/plus";
+import { deleteCustomer } from "@/lib/billing/stripe";
+import { BRAND } from "@/lib/brand";
 import { coinbaseConfig, revokeToken } from "@/lib/coinbase/client";
 import { plaidConfig, removeItem } from "@/lib/plaid/client";
 import { landingAfterSignIn, NEXT_COOKIE, safeNext } from "@/lib/profile";
@@ -108,6 +111,19 @@ export async function deleteAccount(_prev: DeleteState, form: FormData): Promise
     .trim()
     .toLowerCase();
   if (!account.email || typed !== account.email.toLowerCase()) return { error: t("Type your email address exactly to confirm.") };
+
+  // Prism Plus ends first, and nothing else goes unless it has: an account must never be gone while its card is still charged.
+  const billing = billingConfig();
+  if (billing) {
+    const plus = await plusFor(account);
+    if (!plus.checked) return { error: t("We couldn't delete the account just now. Nothing was removed — try again in a minute.") };
+    try {
+      if (plus.customerId) await deleteCustomer(billing, plus.customerId);
+    } catch (e) {
+      console.error("Prism Plus: a subscription wasn't cancelled for a deleted account:", e instanceof Error ? e.message : "unknown error");
+      return { error: t("We couldn't cancel your {plus} just now, so nothing was removed. Try again in a minute.", { plus: BRAND.plus }) };
+    }
+  }
 
   let key: VaultKey | null = null;
   try {

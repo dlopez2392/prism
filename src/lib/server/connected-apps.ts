@@ -10,6 +10,8 @@
 // refuses it every write.
 
 import "server-only";
+import { PlusRequired } from "@/lib/billing/plans";
+import { plusFor } from "@/lib/billing/plus";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { OAuthError, OAuthErrorCode, type AuthInfo, type OAuthTokenVerifier } from "@modelcontextprotocol/server";
 import type { AgentData } from "@/lib/agent/tools";
@@ -89,7 +91,8 @@ export function agentDataFor(env: SupabaseEnv, auth: AuthInfo, now = Date.now())
   const account = accountFor(env, auth);
   const hit = recent.get(account.userId);
   if (hit && now - hit.at < FRESH_MS) return hit.data;
-  const data = agentFinance(account);
+  // Connected apps are part of Prism Plus: someone without it gets that answer, not their money.
+  const data = plusFor(account).then((p) => (p.plus ? agentFinance(account) : Promise.reject(new PlusRequired("apps"))));
   const entry = { at: now, data };
   recent.set(account.userId, entry);
   // A failed load is never served again — and only this load is dropped, never a newer one.

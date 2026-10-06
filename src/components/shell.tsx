@@ -21,6 +21,7 @@ import {
   PiggyBank,
   PlugZap,
   ReceiptText,
+  Sparkles,
   Target,
   Telescope,
   UserRound,
@@ -91,7 +92,7 @@ function accountItem(account: AccountNav): NavItem | null {
   return account.signedIn ? { href: "/account", label: msg("Account"), icon: UserRound } : { href: "/sign-in", label: msg("Sign in"), icon: UserRound };
 }
 
-export function Sidebar({ householdName, sourceLabel, account }: { householdName: string; sourceLabel: string; account: AccountNav }) {
+export function Sidebar({ householdName, sourceLabel, account, offerPlus = false }: { householdName: string; sourceLabel: string; account: AccountNav; offerPlus?: boolean }) {
   const pathname = usePathname();
   const t = useT();
   const link = (item: NavItem) => {
@@ -133,7 +134,11 @@ export function Sidebar({ householdName, sourceLabel, account }: { householdName
           </div>
         ))}
       </nav>
-      <ul className="border-t border-line pt-3">{link(CONNECTIONS)}</ul>
+      <ul className="border-t border-line pt-3">
+        {link(CONNECTIONS)}
+        {/* Billing is on and they're on the free plan: one quiet way to see what Plus adds. */}
+        {offerPlus ? link({ href: "/pricing", label: BRAND.plus, icon: Sparkles }) : null}
+      </ul>
       {account?.signedIn ? (
         <Link href="/account" className="mt-3 flex items-center gap-3 rounded-ctl bg-surface-2 p-3 transition-colors duration-150 hover:bg-surface-3">
           <div className="bg-prism grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold text-[var(--on-hero)]">{householdName.slice(0, 1)}</div>

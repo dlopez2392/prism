@@ -58,6 +58,8 @@ export type JobReport = {
   forgotten: number;
   later: number;
   stopped: boolean;
+  /** People with alert emails on but without Prism Plus, left out while billing is on. */
+  withoutPlus?: number;
 };
 
 type DeviceRow = { user_id: string; id: string; sealed: string };
@@ -109,6 +111,20 @@ async function languagesOf(db: JobDb, config: AlertsConfig): Promise<Map<string,
 }
 
 /** Everyone's devices, listed once a run, on its first sent email; none when the database won't say. */
+/**
+ * Who among the people with alert emails on has Prism Plus (alerts_plus, by
+ * the database's one rule), or null when it can't say: then everyone due is
+ * sent to, since someone who pays must never miss a warning over a hiccup.
+ */
+async function plusOf(db: JobDb, config: AlertsConfig, livemode: boolean): Promise<Set<string> | null> {
+  const { data, error } = await db.rpc("alerts_plus", { p_secret: config.secret, p_livemode: livemode });
+  if (error || !Array.isArray(data)) {
+    console.error("Prism: the alert job couldn't ask who has Prism Plus, so it sends to everyone due.");
+    return null;
+  }
+  return new Set((data as { user_id: unknown }[]).map((r) => r.user_id).filter((id): id is string => typeof id === "string"));
+}
+
 async function devicesOf(db: JobDb, config: AlertsConfig): Promise<Map<string, DeviceRow[]>> {
   const byPerson = new Map<string, DeviceRow[]>();
   const { data, error } = await db.rpc("push_due", { p_secret: config.secret });
@@ -167,11 +183,19 @@ export async function runAlertJob(
   db: JobDb,
   config: AlertsConfig,
   key: VaultKey,
-  { now = new Date(), deadline = Date.now() + 45_000, fetchImpl = fetch }: { now?: Date; deadline?: number; fetchImpl?: typeof fetch } = {},
+  {
+    now = new Date(),
+    deadline = Date.now() + 45_000,
+    fetchImpl = fetch,
+    billing = null,
+  }: { now?: Date; deadline?: number; fetchImpl?: typeof fetch; billing?: { livemode: boolean } | null } = {},
 ): Promise<JobReport> {
   const { data, error } = await db.rpc("alerts_due", { p_secret: config.secret });
   if (error || !Array.isArray(data)) throw new Error("The database didn't say who is due an alert email.");
-  const rows = data as DueRow[];
+  const due = data as DueRow[];
+  // With billing on, alerts are part of Prism Plus: only the people who have it, as the database counts it.
+  const plus = billing ? await plusOf(db, config, billing.livemode) : null;
+  const rows = plus ? due.filter((r) => plus.has(r.user_id)) : due;
   const report: JobReport = {
     due: rows.length,
     sent: 0,
@@ -186,6 +210,7 @@ export async function runAlertJob(
     forgotten: 0,
     later: 0,
     stopped: false,
+    ...(plus ? { withoutPlus: due.length - rows.length } : {}),
   };
   const languages = await languagesOf(db, config);
   // Asked for only once there's news to send, so a quiet morning makes no extra call.
