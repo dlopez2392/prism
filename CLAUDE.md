@@ -433,6 +433,29 @@
   token's `amr` from the last five minutes, then clears the record BEFORE
   unenrolling. Only a code Supabase compared and refused may be called
   "didn't match"; a failed connection must say so.
+- Prism Plus (`src/lib/billing/*`, migration `billing`, owner-approved
+  2026-10-06; README "Prism Plus"): Free keeps one bank connection; Plus is
+  $5.99/mo or $49/yr, or $8.99/$79 for a household. Billing is OFF unless
+  `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `CRON_SECRET` and accounts are
+  all set, and off means everything is open to everyone, as before Plus.
+  Every gate asks `plusFor` (never the table or Stripe) and sits where the
+  cost or the value is: the Plaid and Coinbase link routes, the actions, the
+  alert job (`alerts_plus`), the calendar feed (`calendar_feed_plus`), `/mcp`
+  (`PlusRequired`); screens only reflect it. Who has Plus is ONE SQL rule
+  (`billing_counts`/`billing_plus`), never re-derived in TypeScript. The
+  `billing` table is written ONLY by `billing_record` (the job secret) with
+  what the server just read from Stripe: never trust a webhook's body (read
+  the subscription back), never let a person write the table, never give the
+  webhook any other door. The price shown is the price charged: `PRICES` and
+  the lookup keys in `plans.ts` are checked against Stripe before Checkout
+  (`priceProblem`); never move a lookup key to another price. Deleting an
+  account deletes the Stripe customer FIRST and refuses otherwise. A failed
+  plan read opens the gates (`checked: false`): no paywall from an outage.
+  When Plus ends nothing is deleted; the first connection keeps updating
+  (`pausedBeyondFree`), the rest pause without a Plaid call. The Terms' cost
+  section and the policy's Stripe lines follow the billing switch, in both
+  languages; live keys wait for the lawyer's approval of that text and notice
+  to existing accounts. No ads, data sales or affiliate offers, ever.
 - Privacy policy (`/privacy`, facts in `src/lib/privacy.ts`): it states what
   the code does, so keep them in step. When a change collects, stores or
   shares something new, or adds a service provider, update the page in the

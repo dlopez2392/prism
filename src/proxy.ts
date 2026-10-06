@@ -79,7 +79,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/((?!api/|_next/static|_next/image|icon.svg|apple-icon.png|icons/|sw.js|manifest.webmanifest|calendar/demo.ics|calendar/feed/).*)",
+      source: "/((?!api/|_next/static|_next/image|icon.svg|favicon.ico|apple-icon.png|icons/|sw.js|manifest.webmanifest|calendar/demo.ics|calendar/feed/).*)",
       has: [{ type: "cookie", key: "prism-auth" }],
       missing: [
         { type: "header", key: "next-router-prefetch" },

@@ -14,17 +14,18 @@ import { TerminosDelServicio } from "@/app/terms/terms-es";
 import { ENGLISH_ONLY } from "@/lib/i18n/locale";
 import { listEs, longDateEs, PRIVACY_LISTS_ES } from "./legal-es";
 import { approvedFor, LEGAL_PATHS, SPANISH_TRANSLATED_FROM, spanishPublished, type LegalPage } from "./legal-languages";
-import { ALCHEMY, MEMPOOL, POLICY_UPDATED, PROVIDERS, PUSH_SERVICES, RENTCAST, RESEND_WITH_ALERTS, STORED_ON_DEVICE, type PrivacySwitches } from "./privacy";
+import { ALCHEMY, MEMPOOL, POLICY_UPDATED, PROVIDERS, PUSH_SERVICES, RENTCAST, RESEND_WITH_ALERTS, STORED_ON_DEVICE, STRIPE, type PrivacySwitches } from "./privacy";
 import { TERMS_UPDATED } from "./terms";
 
 vi.mock("server-only", () => ({}));
 
 /** Every combination of the switches the policy's words follow. */
-const SWITCHES: PrivacySwitches[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((n) => ({
+const SWITCHES: PrivacySwitches[] = Array.from({ length: 32 }, (_, n) => ({
   liabilities: (n & 1) > 0,
   homeValues: (n & 2) > 0,
   alchemy: (n & 4) > 0,
   alerts: (n & 8) > 0,
+  billing: (n & 16) > 0,
 }));
 
 /** A page's shape: each section's anchor, with how many paragraphs and list items it has and where its links go. */
@@ -66,14 +67,17 @@ describe("the Spanish legal pages", () => {
       expect(shape(es), JSON.stringify(s)).toEqual(shape(en));
       expect(shape(en).length).toBeGreaterThan(8);
     }
-    expect(shape(renderToStaticMarkup(TerminosDelServicio()))).toEqual(shape(renderToStaticMarkup(TermsOfService())));
+    for (const billing of [false, true]) {
+      expect(shape(renderToStaticMarkup(TerminosDelServicio({ billing }))), `billing ${billing}`).toEqual(shape(renderToStaticMarkup(TermsOfService({ billing }))));
+    }
   });
 
   it("are Spanish all through, say the English governs, and date themselves by the English they translate", () => {
     const pages = [
       { html: renderToStaticMarkup(PoliticaDePrivacidad(SWITCHES.at(-1)!)), date: POLICY_UPDATED },
       { html: renderToStaticMarkup(PoliticaDePrivacidad(SWITCHES[0]!)), date: POLICY_UPDATED },
-      { html: renderToStaticMarkup(TerminosDelServicio()), date: TERMS_UPDATED },
+      { html: renderToStaticMarkup(TerminosDelServicio({ billing: false })), date: TERMS_UPDATED },
+      { html: renderToStaticMarkup(TerminosDelServicio({ billing: true })), date: TERMS_UPDATED },
     ];
     for (const { html, date } of pages) {
       expect(html).toContain('id="translation"');
@@ -87,7 +91,7 @@ describe("the Spanish legal pages", () => {
   it("have every line the policy keeps as data in Spanish, and nothing left over", () => {
     const english = new Set([
       ...STORED_ON_DEVICE.flatMap((c) => [c.what, c.lasts, c.kind]),
-      ...[...PROVIDERS, RENTCAST, MEMPOOL, ALCHEMY, RESEND_WITH_ALERTS, ...PUSH_SERVICES].map((p) => p.does),
+      ...[...PROVIDERS, RENTCAST, MEMPOOL, ALCHEMY, RESEND_WITH_ALERTS, STRIPE, ...PUSH_SERVICES].map((p) => p.does),
     ]);
     expect([...english].filter((line) => !Object.hasOwn(PRIVACY_LISTS_ES, line))).toEqual([]);
     expect(Object.keys(PRIVACY_LISTS_ES).filter((line) => !english.has(line))).toEqual([]);

@@ -57,8 +57,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
         <p>
           {t("Prices are in US dollars, plus sales tax where it applies. A plan renews by itself until you cancel, and you can cancel any time on your Account page; you keep it until the end of the time you've paid for.")}
         </p>
-        <p className="inline-flex items-center gap-1.5">
-          <ShieldCheck aria-hidden className="size-3.5" />
+        <p>
+          <ShieldCheck aria-hidden className="mr-1 inline size-3.5 align-[-2px]" />
           {t("Payments are handled by Stripe. {product} never sees your card.", { product: BRAND.product })}{" "}
           <Link href="/terms#cost" className="font-semibold text-ink-2 hover:underline">
             {t("Terms of Service")}

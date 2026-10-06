@@ -17,7 +17,8 @@ import { Info, KeyRound, Lock, ShieldCheck, Trash2, type LucideIcon } from "luci
 import { Bullets, legalLink as link, Section, ShortVersion } from "@/components/legal";
 import { Card, PageHeader } from "@/components/ui";
 import { BRAND } from "@/lib/brand";
-import { LIABILITY_FLOOR_USD, MINIMUM_AGE, SECURITY_POLICY_URL, SHUTDOWN_NOTICE_DAYS, TERMS_CONTACT, TERMS_UPDATED } from "@/lib/terms";
+import { TRIAL_DAYS } from "@/lib/billing/plans";
+import { LIABILITY_FLOOR_USD, MINIMUM_AGE, PRICE_NOTICE_DAYS, SECURITY_POLICY_URL, SHUTDOWN_NOTICE_DAYS, TERMS_CONTACT, TERMS_UPDATED, type TermsSwitches } from "@/lib/terms";
 
 const SHORT_VERSION: { icon: LucideIcon; text: string }[] = [
   { icon: Lock, text: "Prism shows you your money. It can read your accounts but can never move money." },
@@ -27,8 +28,8 @@ const SHORT_VERSION: { icon: LucideIcon; text: string }[] = [
   { icon: Trash2, text: "Leave any time. Deleting your account disconnects everything, then erases your data." },
 ];
 
-/** The English Terms of Service, the ones that govern. */
-export function TermsOfService() {
+/** The English Terms of Service, the ones that govern, as the operator's switches have them. */
+export function TermsOfService({ billing }: TermsSwitches) {
   const mail = (
     <a href={`mailto:${TERMS_CONTACT}`} className={link}>
       {TERMS_CONTACT}
@@ -44,6 +45,12 @@ export function TermsOfService() {
       Account
     </Link>
   );
+  const pricing = (
+    <Link href="/pricing" className={link}>
+      pricing
+    </Link>
+  );
+  const term = (words: string) => <span className="font-semibold text-ink-1">{words}</span>;
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader eyebrow="Legal" title="Terms of Service" subtitle={`Last updated ${TERMS_UPDATED}. The agreement for using ${BRAND.product}, in plain words.`} />
@@ -182,10 +189,47 @@ export function TermsOfService() {
         </Section>
 
         <Section id="cost" title="What it costs">
-          <p>
-            {BRAND.product} doesn&apos;t charge you anything today. If we ever offer paid features, we&apos;ll show you the price first, and you&apos;ll only pay if
-            you choose to.
-          </p>
+          {billing ? (
+            <>
+              <p>
+                {BRAND.product} has a free plan, and a paid one, {BRAND.plus}, for one person or for everyone in a household. What each includes and costs is on
+                the {pricing} page, and the price is shown to you again before you pay. Prices are in US dollars, plus sales tax where it applies.
+              </p>
+              <Bullets>
+                <li>
+                  {term("Paying.")} Stripe takes your payment on its own page; {BRAND.product} never sees your card. A first subscription starts with{" "}
+                  {TRIAL_DAYS} days free, and if you cancel before they end, you aren&apos;t charged.
+                </li>
+                <li>
+                  {term("Renewing.")} {BRAND.plus} renews by itself every month or every year, as you chose, and your card is charged at the start of each
+                  period, until you cancel. You can cancel any time, online, on the {account} page: you keep {BRAND.plus} until the end of the time you&apos;ve
+                  paid for, and you aren&apos;t charged again.
+                </li>
+                <li>
+                  {term("Refunds.")} Except where the law says otherwise, payments aren&apos;t refunded, including for part of a period. If something went wrong,
+                  email {mail} and we&apos;ll look at it.
+                </li>
+                <li>
+                  {term("Price changes.")} If we change a price, we&apos;ll tell you at least {PRICE_NOTICE_DAYS} days before it applies to you, and you can cancel
+                  before then. A founding-member price stays yours for as long as your subscription carries on without a break.
+                </li>
+                <li>
+                  {term("A payment that fails.")} Stripe tries again for a while. If the payment still doesn&apos;t go through, {BRAND.plus} ends and your account
+                  goes back to the free plan.
+                </li>
+                <li>
+                  {term(`When ${BRAND.plus} ends.`)} Nothing you&apos;ve added is deleted. The free plan keeps your first connection up to date; the others, and
+                  Coinbase, pause and show what they last said until you subscribe again or disconnect them, and alert emails, your calendar link and
+                  connected AI apps stop. A Household plan covers the people in its subscriber&apos;s household, while they&apos;re in it.
+                </li>
+              </Bullets>
+            </>
+          ) : (
+            <p>
+              {BRAND.product} doesn&apos;t charge you anything today. If we ever offer paid features, we&apos;ll show you the price first, and you&apos;ll only pay
+              if you choose to.
+            </p>
+          )}
         </Section>
 
         <Section id="ours" title="Prism itself">
@@ -215,8 +259,10 @@ export function TermsOfService() {
 
         <Section id="ending" title="Ending your account">
           <p>
-            You can delete your account any time on the {account} page. We disconnect every bank and Coinbase link first, then erase your account and everything
-            in it.
+            You can delete your account any time on the {account} page.{" "}
+            {billing
+              ? `We cancel ${BRAND.plus} first, so you aren't charged again, then disconnect every bank and Coinbase link and erase your account and everything in it.`
+              : "We disconnect every bank and Coinbase link first, then erase your account and everything in it."}
           </p>
           <p>
             We may suspend or close an account that breaks these terms, puts other people or {BRAND.product} at risk, or when the law requires it. We&apos;ll tell

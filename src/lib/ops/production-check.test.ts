@@ -20,6 +20,7 @@ const healthy: Record<string, Reply> = {
   "GET /sign-in": { status: 200 },
   "GET /year": { status: 200 },
   "GET /taxes": { status: 200 },
+  "GET /pricing": { status: 200 },
   "GET /manifest.webmanifest": { status: 200, body: { name: "Prism" } },
   "GET /sw.js": { status: 200, headers: { "cache-control": "no-cache, no-store, must-revalidate", "content-security-policy": "default-src 'self'; script-src 'self'" } },
   "GET /api/cron/alerts": { status: 401 },
@@ -56,8 +57,10 @@ describe("the production check", () => {
       "Page /sign-in",
       "Page /year",
       "Page /taxes",
+      "Page /pricing",
       "Installable app",
       "Alert job locked to its secret",
+      "Payments webhook locked to its signature",
       "Downloads need sign-in",
       "AI connector asks for sign-in",
       "Database answers",
@@ -70,6 +73,13 @@ describe("the production check", () => {
   it("fails a home page that lost a protective header, or a page that's down", async () => {
     expect(failing(await run({ "GET /": { status: 200, headers: { "x-content-type-options": "nosniff" } } }))).toEqual(["Home page, with its protections"]);
     expect(failing(await run({ "GET /year": { status: 500 }, "GET /terms": null }))).toEqual(["Page /terms", "Page /year"]);
+  });
+
+  it("passes a payments webhook that's off or refuses an unsigned event, and treats one that takes it as serious", async () => {
+    expect(failing(await run({ "POST /api/stripe/webhook": { status: 401 } }))).toEqual([]);
+    const open = await run({ "POST /api/stripe/webhook": { status: 200 } });
+    expect(failing(open)).toEqual(["Payments webhook locked to its signature"]);
+    expect(open.find((c) => c.name === "Payments webhook locked to its signature")).toMatchObject({ sensitive: true, fix: expect.stringMatching(/roll back/) });
   });
 
   it("treats an open door as serious: a job anyone can run, or a download without sign-in", async () => {
@@ -118,11 +128,11 @@ describe("the report", () => {
   it("leads with how many fail, lists every check with its words, and says what to do", async () => {
     const checks = await run({ "GET /api/cron/alerts": { status: 404 } });
     const text = report(checks, { base: BASE, commit: "61ce9173d1", at: NOW });
-    expect(text).toMatch(/^## Production check: 1 of 13 failing/);
+    expect(text).toMatch(/^## Production check: 1 of 15 failing/);
     expect(text).toContain("release 61ce917");
     expect(text).toContain("| ❌ Fail | Alert job locked to its secret | answered 404 |");
     expect(text).toMatch(/### What to do\n\n- \*\*Alert job locked to its secret:\*\* The job isn't configured/);
-    expect(report(await run(), { base: BASE, at: NOW })).toMatch(/^## Production check: all 13 passing/);
+    expect(report(await run(), { base: BASE, at: NOW })).toMatch(/^## Production check: all 15 passing/);
   });
 });
 

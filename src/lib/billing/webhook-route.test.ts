@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LOOKUP_KEYS } from "./plans";
 
 vi.mock("server-only", () => ({}));
-const rpc = vi.fn(async (..._args: unknown[]) => ({ data: "recorded" as unknown, error: null as { code: string } | null }));
+const rpc = vi.fn<(name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code: string } | null }>>(async () => ({ data: "recorded", error: null }));
 vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({ rpc }) }));
 
 const { POST } = await import("@/app/api/stripe/webhook/route");

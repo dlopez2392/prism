@@ -144,7 +144,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 "A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and short summaries: on Mondays, and early each month for the month before. Bills and figures are as of your last visit, or this morning's check of your banks if you allow it, and each email says which. No tracking, and one click stops them.",
               )}
             />
-            {plus.plus ? <AlertEmails settings={alerts} email={email} /> : <PlusNeeded feature="alerts" trial={plus.trial} t={t} />}
+            {plus.plus ? <AlertEmails settings={alerts} email={email} /> : <PlusNeeded feature="alerts" trial={plus.trial} t={t} quiet />}
           </Card>
         </section>
       ) : null}
@@ -197,7 +197,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             title={t("Ask AI about your money")}
             subtitle={t("Connect Claude or ChatGPT, then ask things like “What did I spend on eating out last month?” Connected apps can read — never move money or change anything.")}
           />
-          {plus.plus ? null : <PlusNeeded feature="apps" trial={plus.trial} t={t} />}
+          {plus.plus ? null : <PlusNeeded feature="apps" trial={plus.trial} t={t} quiet />}
           {/* Without Plus, an app already connected is still listed, so it can be disconnected. */}
           {plus.plus || apps?.length ? <ConnectedApps endpoint={endpoint} enabled={enabled} apps={apps} /> : null}
         </Card>

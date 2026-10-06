@@ -20,15 +20,19 @@ export function plusStartLine(trial: boolean, t: T): string {
     : t("{price} a month, or less by the year. Cancel any time.", { price });
 }
 
-/** The offer, inside a card the screen already has (an empty state's place). */
-export function PlusNeeded({ feature, trial, t, action }: { feature: PlusFeature; trial: boolean; t: T; action?: string }) {
+/**
+ * The offer, inside a card the screen already has (an empty state's place).
+ * `quiet` makes its button a ghost, for a screen whose one primary is
+ * elsewhere (the Account page's own plan card).
+ */
+export function PlusNeeded({ feature, trial, t, action, quiet = false }: { feature: PlusFeature; trial: boolean; t: T; action?: string; quiet?: boolean }) {
   return (
     <EmptyState
       icon={Sparkles}
       title={plusNeeds(feature, t)}
       body={plusStartLine(trial, t)}
       action={
-        <ButtonLink href={pricingFor(feature)} variant="primary">
+        <ButtonLink href={pricingFor(feature)} variant={quiet ? "ghost" : "primary"}>
           {action ?? t("See {plus}", { plus: BRAND.plus })}
         </ButtonLink>
       }
