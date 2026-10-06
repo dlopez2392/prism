@@ -1358,3 +1358,143 @@ describe("whether the scheduled jobs ran", () => {
     }
   });
 });
+
+describe("Prism Plus", () => {
+  const [P, Q, R, S, T] = ["b1000000-0000-4000-8000-0000000000b1", "b1000000-0000-4000-8000-0000000000b2", "b1000000-0000-4000-8000-0000000000b3", "b1000000-0000-4000-8000-0000000000b4", "b1000000-0000-4000-8000-0000000000b5"];
+  const SECRET = "p".repeat(44);
+  const days = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
+  type Reading = { user: string; live: boolean; customer: string; sub: string; created: string; plan: string; interval: string; status: string; periodEnd: string | null; trialEnd: string | null; endsAt: string | null; at: string };
+  const reading = (over: Partial<Reading> = {}): Reading => ({
+    user: P,
+    live: true,
+    customer: "cus_P",
+    sub: "sub_P1",
+    created: days(-30),
+    plan: "plus",
+    interval: "month",
+    status: "active",
+    periodEnd: days(10),
+    trialEnd: null,
+    endsAt: null,
+    at: new Date().toISOString(),
+    ...over,
+  });
+  const record = async (over: Partial<Reading> = {}, secret = SECRET) => {
+    const r = reading(over);
+    const [row] = await as("anon", null, () =>
+      rows(`select public.billing_record($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) as outcome`, [secret, r.user, r.live, r.customer, r.sub, r.created, r.plan, r.interval, r.status, r.periodEnd, r.trialEnd, r.endsAt, r.at]),
+    );
+    return row!.outcome as string;
+  };
+  const planOf = async (who: string, live = true, claims: Record<string, unknown> = {}) => (await as("authenticated", who, () => rows(`select * from public.my_plan($1)`, [live]), claims))[0]!;
+
+  beforeAll(async () => {
+    await rows(`insert into auth.users (id, email) values ($1, 'p@plus.test'), ($2, 'q@plus.test'), ($3, 'r@plus.test'), ($4, 's@plus.test'), ($5, 't@plus.test')`, [P, Q, R, S, T]);
+    await rows(`insert into public.job_keys (name, sha256) values ('alerts', $1) on conflict (name) do update set sha256 = excluded.sha256`, [createHash("sha256").update(SECRET).digest("hex")]);
+  });
+
+  it("can't be written by anyone over the API, not even by its own person, who may read their own", async () => {
+    expect(await record()).toBe("recorded");
+    for (const sql of [
+      `insert into public.billing (user_id, livemode, customer_id, subscription_id, subscription_created, plan, billing_interval, status, stripe_at) values ('${Q}', true, 'cus_Q', 'sub_Q', now(), 'plus', 'month', 'active', now())`,
+      `update public.billing set status = 'active', period_end = now() + interval '10 years'`,
+      `delete from public.billing`,
+    ]) {
+      expect(await as("authenticated", Q, () => refused(sql))).toBe(true);
+      expect(await as("authenticated", P, () => rows(sql).then((r) => r.length, () => -1))).toBeLessThanOrEqual(0);
+    }
+    expect(await rows(`select status from public.billing where user_id = $1`, [P])).toEqual([{ status: "active" }]);
+    expect(await as("authenticated", P, () => rows(`select user_id from public.billing`))).toEqual([{ user_id: P }]);
+    expect(await as("authenticated", Q, () => rows(`select user_id from public.billing`))).toEqual([]);
+    expect(await as("anon", null, () => refused(`select * from public.billing`))).toBe(true);
+  });
+
+  it("is recorded only with the job's secret, and never an older reading over a newer one, nor an older subscription over a newer", async () => {
+    expect(await as("anon", null, () => refused(`select public.billing_record($1, $2, true, 'cus_P', 'sub_P1', now(), 'plus', 'month', 'active', null, null, null, now())`, ["x".repeat(44), P]))).toBe(true);
+    // A signed-in person can't call it at all, secret or not.
+    expect(await as("authenticated", P, () => refused(`select public.billing_record($1, $2, true, 'cus_P', 'sub_P1', now(), 'plus', 'month', 'active', null, null, null, now())`, [SECRET, P]))).toBe(true);
+    // A reading from before the one kept changes nothing.
+    expect(await record({ status: "canceled", at: days(-1) })).toBe("older");
+    expect(await rows(`select status from public.billing where user_id = $1`, [P])).toEqual([{ status: "active" }]);
+    // A reading from the future isn't a reading.
+    expect(await record({ at: days(1) }).then(() => false, () => true)).toBe(true);
+    // A new subscription replaces the old; late news of the old one then changes nothing.
+    expect(await record({ sub: "sub_P2", created: days(-1), plan: "household", interval: "year" })).toBe("recorded");
+    expect(await record({ sub: "sub_P1", created: days(-30), status: "canceled" })).toBe("older");
+    expect(await rows(`select subscription_id, plan, status from public.billing where user_id = $1`, [P])).toEqual([{ subscription_id: "sub_P2", plan: "household", status: "active" }]);
+    // Someone who deleted their account meanwhile is simply gone.
+    expect(await record({ user: "b1000000-0000-4000-8000-0000000000ff", customer: "cus_gone", sub: "sub_gone" })).toBe("no-person");
+    // Only what Stripe can say: a plan, interval and status Prism knows, ids shaped like Stripe's.
+    for (const bad of [{ plan: "gold" }, { interval: "week" }, { status: "frozen" }, { customer: "cus" }, { sub: "subscription" }]) {
+      expect(await record({ user: R, customer: "cus_R", sub: "sub_R", ...bad }).then(() => false, () => true), JSON.stringify(bad)).toBe(true);
+    }
+  });
+
+  it("gives Plus to its owner, and to everyone in their household for a Household plan; another plan opens only the household's view", async () => {
+    // P (Household plan) and Q share a household; S (Plus on their own) and T share another; R is on their own, with nothing.
+    const [h1] = await rows(`insert into public.households default values returning id`);
+    const [h2] = await rows(`insert into public.households default values returning id`);
+    await rows(`insert into public.household_members (household_id, user_id) values ($1, $2), ($1, $3), ($4, $5), ($4, $6)`, [h1!.id, P, Q, h2!.id, S, T]);
+    expect(await record({ user: S, customer: "cus_S", sub: "sub_S", plan: "plus" })).toBe("recorded");
+
+    expect(await planOf(P)).toMatchObject({ plan: "household", own_plus: true, household_plan: true, household_plus: true, subscribed_before: true, customer_id: "cus_P" });
+    expect(await planOf(Q)).toMatchObject({ plan: null, own_plus: false, household_plan: true, household_plus: true, subscribed_before: false, customer_id: null });
+    expect(await planOf(S)).toMatchObject({ own_plus: true, household_plan: false });
+    expect(await planOf(T)).toMatchObject({ own_plus: false, household_plan: false, household_plus: true });
+    expect(await planOf(R)).toMatchObject({ own_plus: false, household_plan: false, household_plus: false, subscribed_before: false });
+    // Test-mode subscriptions never count once the live keys are in, and the other way round.
+    expect(await planOf(P, false)).toMatchObject({ own_plus: false, household_plan: false, subscribed_before: false });
+    // A connected app may ask (connecting one is part of Plus); nobody signed out can.
+    expect(await planOf(P, true, CONNECTED_APP)).toMatchObject({ own_plus: true });
+    expect(await as("anon", null, () => refused(`select * from public.my_plan(true)`))).toBe(true);
+  });
+
+  it("counts while trialing, paid or being retried, until a week past the end of what was paid for", async () => {
+    for (const [status, periodEnd, counts] of [
+      ["trialing", days(14), true],
+      ["past_due", days(-2), true],
+      ["active", days(-6), true],
+      ["active", days(-8), false],
+      ["canceled", days(5), false],
+      ["unpaid", days(5), false],
+      ["incomplete", days(5), false],
+    ] as const) {
+      expect(await record({ user: R, customer: "cus_R", sub: "sub_R", status, periodEnd, at: new Date().toISOString() })).toBe("recorded");
+      expect((await planOf(R)).own_plus, `${status} ${periodEnd}`).toBe(counts);
+    }
+  });
+
+  it("tells the alert job which people with emails on have Plus, ids only, and only for its secret", async () => {
+    for (const who of [P, Q, R, T]) await as("authenticated", who, () => rows(`update public.profiles set alert_email = true where user_id = $1`, [who]));
+    const plus = await as("anon", null, () => rows(`select * from public.alerts_plus($1, true)`, [SECRET]));
+    expect(plus.map((r) => r.user_id).sort()).toEqual([P, Q].sort());
+    expect(Object.keys(plus[0]!)).toEqual(["user_id"]);
+    expect(await as("anon", null, () => rows(`select * from public.alerts_plus($1, false)`, [SECRET]))).toEqual([]);
+    expect(await as("anon", null, () => refused(`select * from public.alerts_plus($1, true)`, ["x".repeat(44)]))).toBe(true);
+    expect(await as("authenticated", P, () => refused(`select * from public.alerts_plus($1, true)`, [SECRET]))).toBe(true);
+  });
+
+  it("tells a calendar app whether its feed's owner has Plus, for the exact hash of its secret and nothing else", async () => {
+    const hashP = createHash("sha256").update("feed-p").digest("hex");
+    const hashR = createHash("sha256").update("feed-r").digest("hex");
+    await rows(`insert into public.calendar_feeds (user_id, token_hash, sealed_token) values ($1, $2, $4), ($3, $5, $4)`, [P, hashP, R, SEALED, hashR]);
+    const ask = (hash: string, live = true) => as("anon", null, () => rows(`select public.calendar_feed_plus($1, $2) as plus`, [hash, live]));
+    expect(await ask(hashP)).toEqual([{ plus: true }]);
+    expect(await ask(hashR)).toEqual([{ plus: false }]);
+    expect(await ask(hashP, false)).toEqual([{ plus: false }]);
+    expect(await ask("0".repeat(64))).toEqual([{ plus: false }]);
+    expect(await ask("not a hash")).toEqual([{ plus: false }]);
+    expect(await as("authenticated", P, () => refused(`select public.calendar_feed_plus($1, true)`, [hashP]))).toBe(true);
+  });
+
+  it("keeps its rule to itself, and goes with the person's account", async () => {
+    for (const fn of ["billing_counts('active', now())", `billing_plus('${P}', true)`]) {
+      expect(await as("authenticated", P, () => refused(`select public.${fn}`))).toBe(true);
+      expect(await as("anon", null, () => refused(`select public.${fn}`))).toBe(true);
+    }
+    await rows(`delete from auth.users where id = $1`, [P]);
+    expect(await rows(`select count(*)::int as n from public.billing where user_id = $1`, [P])).toEqual([{ n: 0 }]);
+    // Q's cover came from P's Household plan, so it went with it.
+    expect(await planOf(Q)).toMatchObject({ household_plan: false });
+  });
+});

@@ -60,13 +60,14 @@ const row = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function fakeDb(due: unknown[], { failRecord = false, devices = [] as unknown[] | null, languages = [] as unknown[] | null } = {}) {
+function fakeDb(due: unknown[], { failRecord = false, devices = [] as unknown[] | null, languages = [] as unknown[] | null, plus = [] as unknown[] | null } = {}) {
   const calls: [string, Record<string, unknown>][] = [];
   return {
     calls,
     rpc: async (fn: string, args: Record<string, unknown>) => {
       calls.push([fn, args]);
       if (fn === "alerts_due") return { data: due, error: null };
+      if (fn === "alerts_plus") return plus ? { data: plus, error: null } : { data: null, error: { message: "no" } };
       if (fn === "alerts_languages") return languages ? { data: languages, error: null } : { data: null, error: { message: "no" } };
       if (fn === "push_due") return devices ? { data: devices, error: null } : { data: null, error: { message: "no" } };
       return { data: null, error: failRecord ? { message: "no" } : null };
@@ -93,6 +94,27 @@ describe("the alert email job", () => {
       ["alerts_sent", { p_secret: config.secret, p_user_id: U, p_fingerprints: [fingerprint(U, "price-rise:s1:1599")] }],
       ["push_due", { p_secret: config.secret }],
     ]);
+  });
+
+  it("with billing on, writes only to people with Prism Plus, as the database counts them, in the Stripe mode in use", async () => {
+    const db = fakeDb([row(), row({ user_id: V, email: "b@x.test" })], { plus: [{ user_id: V }] });
+    const fetchImpl = resend();
+    const report = await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl, billing: { livemode: true } });
+    expect(report).toMatchObject({ due: 1, sent: 1, withoutPlus: 1 });
+    expect(JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body)).to).toEqual(["b@x.test"]);
+    expect(db.calls).toContainEqual(["alerts_plus", { p_secret: config.secret, p_livemode: true }]);
+    // Billing off: nobody is asked about, and everyone due is written to, as before Prism Plus.
+    const off = fakeDb([row(), row({ user_id: V, email: "b@x.test" })]);
+    expect(await runAlertJob(off, config, key, { now: TUESDAY, fetchImpl: resend() })).toMatchObject({ due: 2, sent: 2 });
+    expect(off.calls.some(([fn]) => fn === "alerts_plus")).toBe(false);
+  });
+
+  it("writes to everyone due when it can't ask who has Prism Plus: someone who pays never misses a warning over a hiccup", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = fakeDb([row(), row({ user_id: V, email: "b@x.test" })], { plus: null });
+    expect(await runAlertJob(db, config, key, { now: TUESDAY, fetchImpl: resend(), billing: { livemode: true } })).toMatchObject({ due: 2, sent: 2 });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it("records nothing that didn't go, so it's tried again tomorrow", async () => {
