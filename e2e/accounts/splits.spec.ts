@@ -76,9 +76,11 @@ test("a split that follows a shop reaches its other purchases, and Remove has an
 
   await page.reload();
   await expect(page.getByText("Every Fresh Market purchase", { exact: true })).toBeVisible();
-  // Every Fresh Market purchase is split now, not only the one opened.
-  const shown = await page.getByRole("button", { name: /^Open Fresh Market,/ }).count();
-  await expect(page.getByRole("button", { name: /^Open Fresh Market, .*part 2 of 2/ })).toHaveCount(shown / 2);
+  // Every Fresh Market purchase is split now, not only the one opened: none shows unsplit. (Counting rows
+  // and halving them broke on dates when the list's last row was a purchase's first part, its second cut off.)
+  await expect(page.getByRole("button", { name: /^Open Fresh Market, .*part 2 of 2/ }).first()).toBeVisible();
+  expect(await page.getByRole("button", { name: /^Open Fresh Market, .*part 2 of 2/ }).count()).toBeGreaterThan(1);
+  await expect(page.getByRole("button", { name: /^Open Fresh Market,(?!.* part [12] of 2\.)/ })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Stop splitting Fresh Market purchases" }).click();
   await expect(page.getByText("Every Fresh Market purchase", { exact: true })).toHaveCount(0);
