@@ -473,7 +473,7 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealJson({ token: "t" }, ring(newKey)),
       JSON.stringify({ v: 2, sealed: sealJson({ bills: [] }, ring(newKey)) }),
     ]);
-    await rows(`update public.profiles set sealed_category_rules = $2, sealed_manual_items = $3, sealed_home_values = $4, sealed_wallets = $5, sealed_p2p_notes = $6, sealed_txn_details = $7, sealed_order_notes = $8 where user_id = $1`, [
+    await rows(`update public.profiles set sealed_category_rules = $2, sealed_manual_items = $3, sealed_home_values = $4, sealed_wallets = $5, sealed_p2p_notes = $6, sealed_txn_details = $7, sealed_order_notes = $8, sealed_vehicle_values = $9 where user_id = $1`, [
       D,
       sealPacked({ v: 1, merchants: {}, transactions: {} }, ring(oldKey)),
       sealPacked([], ring(newKey)),
@@ -482,6 +482,7 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       sealPacked({ v: 1, notes: {} }, ring(oldKey)),
       sealPacked({ v: 1, lines: {} }, ring(newKey)),
       sealPacked({ v: 1, notes: {} }, ring(newKey)),
+      sealPacked({ v: 1, vehicles: [] }, ring(oldKey)),
     ]);
     await rows(`insert into public.imported_history (user_id, import_id, part, sealed) values ($1, gen_random_uuid(), 0, $2)`, [D, sealPacked({ v: 1, transactions: [] }, ring(oldKey))]);
     // A device is kept only while alerts are on.
@@ -500,19 +501,20 @@ describe("the vault key census (README, \"Replacing the vault key\")", () => {
       delta("category fixes", o),
       delta("added by hand", n),
       delta("home addresses", o),
+      delta("vehicle VINs", o),
       delta("wallets", n),
       delta("payment notes", o),
       delta("amazon orders", n),
       delta("splits and tags", n),
       delta("imported history", o),
       delta("phone notifications", n),
-    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    ]).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
     for (const id of after.keys()) expect(id).toMatch(/ ([A-Za-z0-9_-]{8}|unnamed)$/);
     await rows(`delete from auth.users where id = $1`, [D]);
   });
 });
 
-describe.each(["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets", "sealed_p2p_notes", "sealed_txn_details", "sealed_order_notes"])("a person's %s", (column) => {
+describe.each(["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_vehicle_values", "sealed_wallets", "sealed_p2p_notes", "sealed_txn_details", "sealed_order_notes"])("a person's %s", (column) => {
   const E = "e0e0e0e0-0000-4000-8000-00000000f1c5";
   const fixes = "z1." + "c".repeat(40);
 
@@ -1007,7 +1009,7 @@ describe("home values from RentCast, inside the cap", () => {
   it("keeps every address out of what a household is sent", async () => {
     const [shape] = await rows(`select pg_get_function_result('public.household_shared_money()'::regprocedure) as r`);
     expect(String(shape!.r)).toMatch(/sealed_manual_items/);
-    expect(String(shape!.r)).not.toMatch(/home|wallet/);
+    expect(String(shape!.r)).not.toMatch(/home|vehicle|wallet/);
     // Nor who a person's payments were for, nor what they bought: those stay theirs alone.
     expect(String(shape!.r)).not.toMatch(/p2p|order_notes/);
   });
@@ -1019,6 +1021,53 @@ describe("home values from RentCast, inside the cap", () => {
     await rows(`delete from public.app_limits where name = 'home_value_lookups_31_days'`);
     expect(await claim(people[4]!, key(30))).toBe("limit");
     await rows(`insert into public.app_limits (name, value) values ('home_value_lookups_31_days', 45)`);
+  });
+});
+
+describe("vehicle values from VinAudit, inside the cap", () => {
+  const people = Array.from({ length: 5 }, (_, i) => `5c000000-0000-4000-8000-00000000000${i}`);
+  const key = (n: number) => `5d000000-0000-4000-8000-0000000000${String(n).padStart(2, "0")}`;
+  const claim = (who: string | null, vehicle: string, claims: Record<string, unknown> = {}) =>
+    as(who ? "authenticated" : "anon", who, () => rows(`select public.claim_vehicle_value_lookup($1) as r`, [vehicle]).then((r) => r[0]!.r as string), claims);
+  const setLimit = (name: string, value: number) => rows(`update public.app_limits set value = $2 where name = $1`, [name, value]);
+
+  beforeAll(async () => {
+    for (const [i, id] of people.entries()) await rows(`insert into auth.users (id, email) values ($1, $2)`, [id, `vv${i}@x.test`]);
+  });
+
+  it("answers only the person themselves, and none of its bookkeeping is anyone else's to read or write", async () => {
+    const P = people[0]!;
+    expect(await as("anon", null, () => refused(`select public.claim_vehicle_value_lookup($1)`, [key(1)]))).toBe(true);
+    expect(await claim(P, key(1), CONNECTED_APP)).toBe("refused");
+    for (const table of ["vehicle_value_calls", "vehicle_value_lookups"]) {
+      expect(await as("authenticated", P, () => refused(`select * from public.${table}`))).toBe(true);
+      expect(await as("anon", null, () => refused(`select * from public.${table}`))).toBe(true);
+    }
+    expect(await as("authenticated", P, () => refused(`delete from public.vehicle_value_calls`))).toBe(true);
+  });
+
+  it("looks each vehicle up once a month, and a person's vehicles at most three times in 31 days, apart from their homes", async () => {
+    const P = people[1]!;
+    expect(await claim(P, key(10))).toBe("ok");
+    expect(await claim(P, key(10))).toBe("already");
+    expect(await claim(P, key(11))).toBe("ok");
+    expect(await claim(P, key(12))).toBe("ok");
+    expect(await claim(P, key(13))).toBe("person-limit");
+    // Homes keep their own count.
+    expect(await as("authenticated", P, () => rows(`select public.claim_home_value_lookup($1) as r`, [key(14)]).then((r) => r[0]!.r))).toBe("ok");
+  });
+
+  it("never lets everyone together past the cap in any 31 days, and fails closed when a limit is missing", async () => {
+    const before = (await rows(`select count(*)::int as n from public.vehicle_value_calls where at > now() - interval '31 days'`))[0]!.n as number;
+    await setLimit("vehicle_value_lookups_31_days", before + 1);
+    expect(await claim(people[2]!, key(20))).toBe("ok");
+    expect(await claim(people[3]!, key(21))).toBe("limit");
+    await rows(`update public.vehicle_value_calls set at = now() - interval '32 days'`);
+    expect(await claim(people[3]!, key(21))).toBe("ok");
+    await setLimit("vehicle_value_lookups_31_days", 90);
+    await rows(`delete from public.app_limits where name = 'vehicle_value_lookups_31_days'`);
+    expect(await claim(people[4]!, key(30))).toBe("limit");
+    await rows(`insert into public.app_limits (name, value) values ('vehicle_value_lookups_31_days', 90)`);
   });
 });
 

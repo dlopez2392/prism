@@ -34,6 +34,7 @@ vi.mock("./account-store", () => ({
     categories: { v: 1, merchants: {}, transactions: {} },
     manual: [],
     homeValues: [],
+    vehicleValues: [],
     imports: [],
     lockedImports: [],
     wallets: [],

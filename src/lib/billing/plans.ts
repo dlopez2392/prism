@@ -79,7 +79,7 @@ export function yearlySaving(plan: PlanId): number {
 }
 
 /** The parts of Prism Plus that a free account reaches and is told about. */
-export type PlusFeature = "banks" | "investments" | "coinbase" | "alerts" | "household" | "apps" | "taxes" | "calendar" | "home-values" | "matching";
+export type PlusFeature = "banks" | "investments" | "coinbase" | "alerts" | "household" | "apps" | "taxes" | "calendar" | "home-values" | "vehicle-values" | "matching";
 
 /** For each, the sentence shown where someone on the free plan reaches it. */
 export const PLUS_NEEDS: Readonly<Record<PlusFeature, string>> = {
@@ -92,6 +92,7 @@ export const PLUS_NEEDS: Readonly<Record<PlusFeature, string>> = {
   taxes: msg("Your tax year comes with {plus}."),
   calendar: msg("A calendar that keeps itself up to date comes with {plus}."),
   "home-values": msg("Keeping your home's value up to date comes with {plus}."),
+  "vehicle-values": msg("Keeping your vehicle's value up to date comes with {plus}."),
   matching: msg("Matching orders and payments to your bank comes with {plus}."),
 };
 
@@ -127,7 +128,7 @@ export const PLUS_LINES: readonly string[] = [
   msg("Ask Claude or ChatGPT about your money"),
   msg("Your tax year, sorted into what a return asks about"),
   msg("Your bills in your own calendar, kept up to date"),
-  msg("Your home's value, estimated each month"),
+  msg("Your home's and your car's value, estimated each month"),
   msg("Amazon orders and Venmo, PayPal and Cash App payments matched to your bank"),
 ];
 

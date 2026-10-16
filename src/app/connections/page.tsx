@@ -25,6 +25,7 @@ import { FREE_CONNECTIONS, pricingFor } from "@/lib/billing/plans";
 import { plusFor } from "@/lib/billing/plus";
 import { BRAND } from "@/lib/brand";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
+import { vehicleValuesEnabled } from "@/lib/carvalue/vinaudit";
 import { signInToConnect } from "@/lib/linking";
 import type { Institution } from "@/lib/finance/types";
 import { getPersonalFinance } from "@/lib/server/finance";
@@ -450,7 +451,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 <ul className="mt-4 space-y-4">
                   {g.items.map((it) => {
                     // Coinbase is live wherever this deployment has its keys; due dates wherever reading them is switched on.
-                    const status: IntegrationStatus = (it.id === "coinbase" && cbReady) || (it.id === "due-dates" && liabilitiesEnabled()) || (it.id === "home" && homeValuesEnabled()) ? "live" : it.status;
+                    const status: IntegrationStatus = (it.id === "coinbase" && cbReady) || (it.id === "due-dates" && liabilitiesEnabled()) || (it.id === "home" && homeValuesEnabled()) || (it.id === "vehicle" && vehicleValuesEnabled()) ? "live" : it.status;
                     // Wallets are live for Bitcoin everywhere; Ethereum and Solana only where Alchemy is switched on, and the copy says so.
                     const { adds, how } = it.id === "wallets" && !walletChains.ethereum ? BITCOIN_WALLETS_ONLY : it;
                     return (

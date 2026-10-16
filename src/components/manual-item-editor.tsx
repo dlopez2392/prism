@@ -9,7 +9,8 @@
 // Removing asks once, because an item's history can't be brought back.
 // A home can have RentCast keep its value up to date (`estimates`, when the
 // operator has switched it on): the person ticks it and gives the address,
-// told first exactly what is sent, to whom, and how often.
+// told first exactly what is sent, to whom, and how often. A vehicle can have
+// VinAudit do the same (`carEstimates`), from its VIN and mileage.
 //
 // The way in is `AddWhatYouOwn`, a card of one tile per kind on Net worth
 // (each opens the form with its kind chosen), which a link ending
@@ -24,6 +25,7 @@ import { useT } from "@/components/locale";
 import { Card, CardHeader } from "@/components/ui";
 import { money0, shortDate } from "@/lib/finance/format";
 import { ADDRESS_MAX, type HomeValuation } from "@/lib/finance/home-value";
+import { VIN_LENGTH, type VehicleValuation } from "@/lib/finance/vehicle-value";
 import { addKindFromHash, MANUAL_KINDS, MANUAL_NAME_MAX, type ManualItem, type ManualKind } from "@/lib/finance/manual";
 import { dollarsInput, IDLE, type PlanFormState } from "@/lib/finance/plan";
 import { deleteManualItem, saveManualItem } from "@/lib/server/manual-actions";
@@ -33,7 +35,7 @@ const ICONS: Record<ManualKind, LucideIcon> = { home: House, vehicle: Car, asset
 const KINDS = Object.keys(MANUAL_KINDS) as ManualKind[];
 
 /** The "Add" button, with its dialog and the line that says what was saved. */
-export function AddManualItem({ estimates = false }: { estimates?: boolean }) {
+export function AddManualItem({ estimates = false, carEstimates = false }: { estimates?: boolean; carEstimates?: boolean }) {
   const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
@@ -61,15 +63,15 @@ export function AddManualItem({ estimates = false }: { estimates?: boolean }) {
         <Plus aria-hidden className="size-4" />
         {t("Add")}
       </button>
-      <ManualDialog dialogRef={dialog} session={session} estimates={estimates} onDone={setNotice} />
+      <ManualDialog dialogRef={dialog} session={session} estimates={estimates} carEstimates={carEstimates} onDone={setNotice} />
     </div>
   );
 }
 
-/** Each tile, in the order people think of them: what it adds, in a few words (and, for a home, what it says when RentCast is on). */
+/** Each tile, in the order people think of them: what it adds, in a few words (and, for a home or a vehicle, what it says when its estimates are on). */
 const TILES: { kind: ManualKind; label: string; hint: string; estimatedHint?: string }[] = [
   { kind: "home", label: msg("Add your home"), hint: msg("Update its value whenever it changes"), estimatedHint: msg("Its value kept up to date by RentCast") },
-  { kind: "vehicle", label: msg("Add a vehicle"), hint: msg("A car, truck or motorcycle") },
+  { kind: "vehicle", label: msg("Add a vehicle"), hint: msg("A car, truck or motorcycle"), estimatedHint: msg("Its value kept up to date by VinAudit") },
   { kind: "debt", label: msg("Add money you owe"), hint: msg("A loan from family, or one your bank doesn't show") },
   { kind: "asset", label: msg("Add something else"), hint: msg("Jewelry, art, a share in a business") },
 ];
@@ -80,7 +82,7 @@ const TILES: { kind: ManualKind; label: string; hint: string; estimatedHint?: st
  * arrival. `added` is how many the person has already, which changes only
  * what the card says.
  */
-export function AddWhatYouOwn({ estimates = false, added = 0 }: { estimates?: boolean; added?: number }) {
+export function AddWhatYouOwn({ estimates = false, carEstimates = false, added = 0 }: { estimates?: boolean; carEstimates?: boolean; added?: number }) {
   const t = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
@@ -145,13 +147,13 @@ export function AddWhatYouOwn({ estimates = false, added = 0 }: { estimates?: bo
                   <Icon aria-hidden className="size-[18px]" />
                 </span>
                 <span className="text-sm font-bold text-ink-1">{t(tile.label)}</span>
-                <span className="text-xs text-ink-3">{estimates && tile.estimatedHint ? t(tile.estimatedHint) : t(tile.hint)}</span>
+                <span className="text-xs text-ink-3">{(tile.kind === "vehicle" ? carEstimates : estimates) && tile.estimatedHint ? t(tile.estimatedHint) : t(tile.hint)}</span>
               </button>
             </li>
           );
         })}
       </ul>
-      <ManualDialog dialogRef={dialog} session={session} kind={kind} estimates={estimates} onDone={setNotice} />
+      <ManualDialog dialogRef={dialog} session={session} kind={kind} estimates={estimates} carEstimates={carEstimates} onDone={setNotice} />
     </Card>
   );
 }
@@ -162,13 +164,17 @@ export function ManualItemRow({
   label,
   children,
   estimates = false,
+  carEstimates = false,
   valuation,
+  carValuation,
 }: {
   item: ManualItem;
   label: string;
   children: ReactNode;
   estimates?: boolean;
+  carEstimates?: boolean;
   valuation?: HomeValuation;
+  carValuation?: VehicleValuation;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState(0);
@@ -191,7 +197,7 @@ export function ManualItemRow({
       <span role="status" className="sr-only">
         {notice}
       </span>
-      <ManualDialog dialogRef={dialog} session={session} item={item} estimates={estimates} valuation={valuation} onDone={setNotice} />
+      <ManualDialog dialogRef={dialog} session={session} item={item} estimates={estimates} carEstimates={carEstimates} valuation={valuation} carValuation={carValuation} onDone={setNotice} />
     </>
   );
 }
@@ -202,7 +208,9 @@ function ManualDialog({
   item,
   kind,
   estimates,
+  carEstimates,
   valuation,
+  carValuation,
   onDone,
 }: {
   dialogRef: React.RefObject<HTMLDialogElement | null>;
@@ -211,7 +219,9 @@ function ManualDialog({
   /** The kind chosen to start with, for something new. */
   kind?: ManualKind;
   estimates: boolean;
+  carEstimates: boolean;
   valuation?: HomeValuation;
+  carValuation?: VehicleValuation;
   onDone: (message: string) => void;
 }) {
   const t = useT();
@@ -229,7 +239,9 @@ function ManualDialog({
         item={item}
         initialKind={kind}
         estimates={estimates}
+        carEstimates={carEstimates}
         valuation={valuation}
+        carValuation={carValuation}
         onDone={(message) => {
           onDone(message);
           dialogRef.current?.close();
@@ -244,14 +256,18 @@ function ManualForm({
   item,
   initialKind,
   estimates,
+  carEstimates,
   valuation,
+  carValuation,
   onDone,
   onCancel,
 }: {
   item?: ManualItem;
   initialKind?: ManualKind;
   estimates: boolean;
+  carEstimates: boolean;
   valuation?: HomeValuation;
+  carValuation?: VehicleValuation;
   onDone: (message: string) => void;
   onCancel: () => void;
 }) {
@@ -263,11 +279,14 @@ function ManualForm({
   }, IDLE);
   const [kind, setKind] = useState<ManualKind>(item?.kind ?? initialKind ?? "home");
   const [confirming, setConfirming] = useState(false);
-  const [estimate, setEstimate] = useState(valuation !== undefined);
+  const [estimate, setEstimate] = useState(valuation !== undefined || carValuation !== undefined);
   const errors = state.status === "error" ? (state.fields ?? {}) : {};
   const meta = MANUAL_KINDS[kind];
   const offersEstimate = estimates && kind === "home";
-  const estimating = offersEstimate && estimate;
+  const offersCarEstimate = carEstimates && kind === "vehicle";
+  // Whose estimate fills a blank value: RentCast's for a home, VinAudit's for a vehicle.
+  const estimating = (offersEstimate || offersCarEstimate) && estimate;
+  const estimator = offersCarEstimate ? "VinAudit" : "RentCast";
 
   // By hand, not <form action>: React resets a form after its action, which
   // would throw away everything typed whenever a save needs a correction.
@@ -312,7 +331,11 @@ function ManualForm({
           defaultValue={item?.name ?? ""}
           maxLength={MANUAL_NAME_MAX}
           error={errors.name}
-          hint={t("For example, “{name}”.", { name: t(meta.placeholder) })}
+          hint={
+            offersCarEstimate && estimate
+              ? t("Leave it blank to use VinAudit's name for it, like “{name}”.", { name: t(meta.placeholder) })
+              : t("For example, “{name}”.", { name: t(meta.placeholder) })
+          }
         />
         {offersEstimate ? (
           <div className="rounded-ctl border border-line bg-surface-2 p-3">
@@ -351,16 +374,64 @@ function ManualForm({
             ) : null}
           </div>
         ) : null}
+        {offersCarEstimate ? (
+          <div className="rounded-ctl border border-line bg-surface-2 p-3">
+            <label className="flex items-start gap-2.5 text-sm text-ink-1">
+              <input type="checkbox" name="estimate" checked={estimate} onChange={(e) => setEstimate(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-button" />
+              <span>
+                <span className="font-semibold">{t("Keep its value up to date with VinAudit")}</span>
+                <span className="mt-0.5 block text-xs text-ink-2">
+                  {t(
+                    "Once a month Prism sends the VIN and mileage, and nothing else about you, to VinAudit, a vehicle-data company, for an estimate of what the vehicle is worth. The VIN is kept encrypted in your account and never shared with your household.",
+                  )}
+                </span>
+              </span>
+            </label>
+            {estimate ? (
+              <div className="mt-3 grid gap-3">
+                <TextInput
+                  name="vin"
+                  label={t("VIN")}
+                  defaultValue={carValuation?.vin ?? ""}
+                  maxLength={VIN_LENGTH + 4}
+                  code
+                  error={errors.vin}
+                  hint={t("17 characters, on your registration, your insurance card, or the dashboard by the windshield.")}
+                />
+                <TextInput
+                  name="miles"
+                  label={t("Miles on the odometer (optional)")}
+                  defaultValue={carValuation?.mileage ? carValuation.mileage.miles.toLocaleString("en-US") : ""}
+                  maxLength={9}
+                  inputMode="numeric"
+                  error={errors.miles}
+                  hint={t("Prism adds the average miles driven each month until you update it. Left blank, VinAudit assumes average miles for its age.")}
+                />
+                {carValuation?.estimate ? (
+                  <p className="text-xs text-ink-3">
+                    {t("Last estimate, {date}: between {low} and {high}.", {
+                      date: shortDate(carValuation.estimate.on, t.locale),
+                      low: money0(carValuation.estimate.low),
+                      high: money0(carValuation.estimate.high),
+                    })}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <MoneyInput
           key={estimating ? "estimating" : "own"}
           name="value"
           label={meta.owed ? t("How much you owe today") : t("What it's worth today")}
           defaultValue={item && !estimating ? dollarsInput(item.values.at(-1)!.value) : ""}
-          placeholder={estimating ? t("RentCast's estimate") : meta.owed ? "5,000" : "350,000"}
+          placeholder={estimating ? (estimator === "VinAudit" ? t("VinAudit's estimate") : t("RentCast's estimate")) : meta.owed ? "5,000" : "350,000"}
           error={errors.value}
           hint={
             estimating
-              ? t("Leave it blank to use RentCast's estimate, or enter your own for this month.")
+              ? estimator === "VinAudit"
+                ? t("Leave it blank to use VinAudit's estimate, or enter your own for this month.")
+                : t("Leave it blank to use RentCast's estimate, or enter your own for this month.")
               : item
                 ? t("Saved as this month's value; earlier months keep theirs.")
                 : undefined

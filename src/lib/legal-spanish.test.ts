@@ -14,18 +14,19 @@ import { TerminosDelServicio } from "@/app/terms/terms-es";
 import { ENGLISH_ONLY } from "@/lib/i18n/locale";
 import { listEs, longDateEs, PRIVACY_LISTS_ES } from "./legal-es";
 import { approvedFor, LEGAL_PATHS, SPANISH_TRANSLATED_FROM, spanishPublished, type LegalPage } from "./legal-languages";
-import { ALCHEMY, MEMPOOL, POLICY_UPDATED, PROVIDERS, PUSH_SERVICES, RENTCAST, RESEND_WITH_ALERTS, STORED_ON_DEVICE, STRIPE, type PrivacySwitches } from "./privacy";
+import { ALCHEMY, MEMPOOL, POLICY_UPDATED, PROVIDERS, PUSH_SERVICES, RENTCAST, RESEND_WITH_ALERTS, STORED_ON_DEVICE, STRIPE, VINAUDIT, type PrivacySwitches } from "./privacy";
 import { TERMS_UPDATED } from "./terms";
 
 vi.mock("server-only", () => ({}));
 
 /** Every combination of the switches the policy's words follow. */
-const SWITCHES: PrivacySwitches[] = Array.from({ length: 32 }, (_, n) => ({
+const SWITCHES: PrivacySwitches[] = Array.from({ length: 64 }, (_, n) => ({
   liabilities: (n & 1) > 0,
   homeValues: (n & 2) > 0,
   alchemy: (n & 4) > 0,
   alerts: (n & 8) > 0,
   billing: (n & 16) > 0,
+  vehicleValues: (n & 32) > 0,
 }));
 
 /** A page's shape: each section's anchor, with how many paragraphs and list items it has and where its links go. */
@@ -91,7 +92,7 @@ describe("the Spanish legal pages", () => {
   it("have every line the policy keeps as data in Spanish, and nothing left over", () => {
     const english = new Set([
       ...STORED_ON_DEVICE.flatMap((c) => [c.what, c.lasts, c.kind]),
-      ...[...PROVIDERS, RENTCAST, MEMPOOL, ALCHEMY, RESEND_WITH_ALERTS, STRIPE, ...PUSH_SERVICES].map((p) => p.does),
+      ...[...PROVIDERS, RENTCAST, VINAUDIT, MEMPOOL, ALCHEMY, RESEND_WITH_ALERTS, STRIPE, ...PUSH_SERVICES].map((p) => p.does),
     ]);
     expect([...english].filter((line) => !Object.hasOwn(PRIVACY_LISTS_ES, line))).toEqual([]);
     expect(Object.keys(PRIVACY_LISTS_ES).filter((line) => !english.has(line))).toEqual([]);

@@ -89,6 +89,8 @@ export const PRIVACY_LISTS_ES: Record<string, string> = {
   "Sends your sign-in codes by email.": "Envía por correo tus códigos para iniciar sesión.",
   "Sends your sign-in codes by email, and your alert emails if you turn them on. For an alert it receives your email address and the email itself, which can name a bank or a shop and, if you allow it, amounts.":
     "Envía por correo tus códigos para iniciar sesión, y tus correos de alertas si los activas. Para una alerta recibe tu dirección de correo y el correo mismo, que puede nombrar un banco o un comercio y, si lo permites, montos.",
+  "Estimates the value of a vehicle you ask Prism to keep up to date. It receives the vehicle's VIN and mileage, and nothing else about you, about once a month.":
+    "Estima el valor de un vehículo que le pides a Prism mantener al día. Recibe el VIN y el millaje del vehículo, y nada más sobre ti, más o menos una vez al mes.",
   "Estimates the value of a home you ask Prism to keep up to date. It receives the home's address, and nothing else about you, about once a month, and is asked not to keep it in its logs.":
     "Estima el valor de una vivienda cuyo valor le pides a Prism mantener al día. Recibe la dirección de la vivienda, y nada más sobre ti, más o menos una vez al mes, y se le pide no guardarla en sus registros.",
   "Reads the balance of a Bitcoin wallet you add. It receives the wallet's public address, and nothing else about you, about every 15 minutes while you use Prism. For a whole wallet it receives each of the wallet's addresses, which Prism works out itself, never the extended public key, about every 30 minutes.":

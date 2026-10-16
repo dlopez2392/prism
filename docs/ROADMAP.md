@@ -372,3 +372,19 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     the lawyer's review of the paid Terms, notice to existing accounts, live
     keys. After that: a credit union and employer channel (white-label, per
     member per month), which needs per-tenant branding.
+
+31. **A car's value from its VIN (VinAudit).** **Built, off until the owner
+    sets `VINAUDIT_API_KEY` (2026-10-16):** a vehicle on Net worth can keep its
+    value up to date from its VIN and, if the person likes, its mileage, which
+    then grows by the US average each month until they update it. VinAudit's
+    market value (comparable sales, retail) becomes that month's value with its
+    usual range; a figure the person types stays theirs. Left unnamed, the
+    vehicle takes VinAudit's name for it ("2019 Honda Civic LX"). The VIN is
+    sealed apart from what a household is sent, and a hard cap in the
+    database (90 lookups in any 31 days to start, inside the free trial's
+    100; three vehicles a person; once a vehicle a month) keeps VinAudit from
+    billing past what the owner agreed. Part of Prism Plus. Kelley Blue Book
+    has no public API (licensed through Cox Automotive under contract), so
+    VinAudit, which the September research already named, is the self-serve
+    path; KBB or J.D. Power can follow under a business agreement. Next: the
+    loan beside it, as equity ("you owe $3,200 more than it's worth").

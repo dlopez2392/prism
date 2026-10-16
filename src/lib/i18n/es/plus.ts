@@ -47,6 +47,7 @@ export const PLUS: Record<string, string> = {
   "Investment accounts and Coinbase": "Cuentas de inversión y Coinbase",
   "Keep it up to date": "Mantenerla al día",
   "Keeping your home's value up to date comes with {plus}.": "Mantener al día el valor de tu vivienda viene con {plus}.",
+  "Keeping your vehicle's value up to date comes with {plus}.": "Mantener al día el valor de tu vehículo viene con {plus}.",
   "Loading the plans": "Cargando los planes",
   "Manage your plan": "Administrar tu plan",
   "Matching orders and payments to your bank comes with {plus}.": "Unir pedidos y pagos a tu banco viene con {plus}.",
@@ -83,7 +84,7 @@ export const PLUS: Record<string, string> = {
   "Your bills in your own calendar, kept up to date": "Tus facturas en tu propio calendario, siempre al día",
   "Your first {n} days are free: cancel before they end, on your Account page in {product}, and you won't be charged.":
     "Tus primeros {n} días son gratis: cancela antes de que terminen, en tu página de Cuenta en {product}, y no se te cobrará.",
-  "Your home's value, estimated each month": "El valor de tu vivienda, estimado cada mes",
+  "Your home's and your car's value, estimated each month": "El valor de tu vivienda y de tu auto, estimado cada mes",
   "Your home, car and anything else, added by hand": "Tu vivienda, tu auto y lo que quieras, agregados a mano",
   "Your household's plan already gives you {plus}.": "El plan de tu hogar ya te da {plus}.",
   "Your household's plan gives you {plus}.": "El plan de tu hogar te da {plus}.",

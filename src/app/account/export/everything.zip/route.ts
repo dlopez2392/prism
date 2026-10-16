@@ -18,6 +18,7 @@ export async function GET(req: Request) {
     wallets: data.wallets.map((w) => ({ name: w.name, chain: w.chain, address: w.address })),
     manual: data.manual,
     homes: data.homeValues.map((h) => ({ address: h.address, estimate: h.estimate })),
+    vehicles: data.vehicleValues.map((v) => ({ vin: v.vin, mileage: v.mileage, estimate: v.estimate })),
   };
   const json = everythingJson(data, extras, { email: own.email, firstName: data.account?.firstName ?? null }, new Date().toISOString());
   const body = zip([

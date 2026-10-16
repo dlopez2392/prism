@@ -205,4 +205,29 @@ export const NET_WORTH: Record<string, string> = {
   "RentCast already estimated it this month. The next estimate comes next month.": "RentCast ya la estimó este mes. El próximo estimado llega el mes que viene.",
   "RentCast couldn't find that address. Check it, or enter a value yourself.": "RentCast no encontró esa dirección. Revísala, o escribe tú un valor.",
   "RentCast didn't answer. Enter a value for now; Prism tries again next month.": "RentCast no respondió. Por ahora escribe un valor; Prism lo intenta de nuevo el mes que viene.",
+  // A vehicle's value from VinAudit (vehicle-values.ts, manual-actions.ts, the editor).
+  "17 characters, on your registration, your insurance card, or the dashboard by the windshield.":
+    "17 caracteres, en tu registro vehicular, tu tarjeta del seguro o el tablero junto al parabrisas.",
+  "Enter the 17-character VIN from your registration or insurance card.": "Escribe el VIN de 17 caracteres de tu registro vehicular o tu tarjeta del seguro.",
+  "Enter the miles on the odometer, like 48,250.": "Escribe las millas del odómetro, como 48,250.",
+  "Its value kept up to date by VinAudit": "VinAudit mantiene su valor al día",
+  "Keep its value up to date with VinAudit": "Mantener su valor al día con VinAudit",
+  "Leave it blank to use VinAudit's estimate, or enter your own for this month.": "Déjalo en blanco para usar el estimado de VinAudit, o escribe el tuyo para este mes.",
+  "Leave it blank to use VinAudit's name for it, like “{name}”.": "Déjalo en blanco para usar el nombre que le da VinAudit, como “{name}”.",
+  "Miles on the odometer (optional)": "Millas del odómetro (opcional)",
+  "Once a month Prism sends the VIN and mileage, and nothing else about you, to VinAudit, a vehicle-data company, for an estimate of what the vehicle is worth. The VIN is kept encrypted in your account and never shared with your household.":
+    "Una vez al mes, Prism envía el VIN y las millas, y nada más sobre ti, a VinAudit, una empresa de datos de vehículos, para estimar cuánto vale el vehículo. El VIN se guarda cifrado en tu cuenta y nunca se comparte con tu hogar.",
+  "Prism adds the average miles driven each month until you update it. Left blank, VinAudit assumes average miles for its age.":
+    "Prism suma las millas que se manejan en promedio cada mes hasta que lo actualices. Si lo dejas en blanco, VinAudit supone las millas promedio para su antigüedad.",
+  "Prism estimates up to three vehicles a month for you. Enter this one's value yourself for now.": "Prism estima hasta tres vehículos al mes para ti. Por ahora, escribe tú el valor de este.",
+  "Prism's vehicle estimates are used up for now. Enter a value yourself; VinAudit takes over again next month.":
+    "Por ahora se acabaron los estimados de vehículos de Prism. Escribe tú un valor; VinAudit vuelve a encargarse el mes que viene.",
+  VIN: "VIN",
+  "VinAudit already estimated it this month. The next estimate comes next month.": "VinAudit ya lo estimó este mes. El próximo estimado llega el mes que viene.",
+  "VinAudit didn't answer. Enter a value for now; Prism tries again next month.": "VinAudit no respondió. Por ahora escribe un valor; Prism lo intenta de nuevo el mes que viene.",
+  "VinAudit doesn't have enough sales of that vehicle to value it. Check the VIN, or enter a value yourself.":
+    "VinAudit no tiene suficientes ventas de ese vehículo para valuarlo. Revisa el VIN, o escribe tú un valor.",
+  "VinAudit estimate {month}": "estimado de VinAudit, {month}",
+  "VinAudit estimates {amount} (between {low} and {high}).": "VinAudit estima {amount} (entre {low} y {high}).",
+  "VinAudit's estimate": "Estimado de VinAudit",
 };

@@ -63,7 +63,7 @@ export const STORED_ON_DEVICE: StoredOnDevice[] = [
 ];
 
 /** What the operator has switched on that the policy's words follow (app/privacy/page.tsx). */
-export type PrivacySwitches = { liabilities: boolean; homeValues: boolean; alchemy: boolean; alerts: boolean; billing: boolean };
+export type PrivacySwitches = { liabilities: boolean; homeValues: boolean; alchemy: boolean; alerts: boolean; billing: boolean; vehicleValues: boolean };
 
 export type Provider = { name: string; does: string; policy: string };
 
@@ -85,6 +85,13 @@ export const RENTCAST: Provider = {
   name: "RentCast",
   does: "Estimates the value of a home you ask Prism to keep up to date. It receives the home's address, and nothing else about you, about once a month, and is asked not to keep it in its logs.",
   policy: "https://www.rentcast.io/privacy",
+};
+
+/** Listed only while the operator has vehicle estimates switched on (VINAUDIT_API_KEY), in the same deploy. */
+export const VINAUDIT: Provider = {
+  name: "VinAudit",
+  does: "Estimates the value of a vehicle you ask Prism to keep up to date. It receives the vehicle's VIN and mileage, and nothing else about you, about once a month.",
+  policy: "https://www.vinaudit.com/privacy-policy",
 };
 
 /** Reads the balance of a Bitcoin wallet a person adds. Listed always: Bitcoin wallets need no key. */
@@ -115,9 +122,9 @@ export const STRIPE: Provider = {
   policy: "https://stripe.com/privacy",
 };
 
-export function providers(homeValues: boolean, alchemy = false, alerts = false, billing = false): Provider[] {
+export function providers(homeValues: boolean, alchemy = false, alerts = false, billing = false, vehicleValues = false): Provider[] {
   const base = alerts ? PROVIDERS.map((p) => (p.name === RESEND_WITH_ALERTS.name ? RESEND_WITH_ALERTS : p)) : PROVIDERS;
-  return [...base, ...(billing ? [STRIPE] : []), MEMPOOL, ...(alchemy ? [ALCHEMY] : []), ...(homeValues ? [RENTCAST] : [])];
+  return [...base, ...(billing ? [STRIPE] : []), MEMPOOL, ...(alchemy ? [ALCHEMY] : []), ...(homeValues ? [RENTCAST] : []), ...(vehicleValues ? [VINAUDIT] : [])];
 }
 
 /**

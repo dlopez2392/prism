@@ -72,6 +72,24 @@ or before the second step. Raise the cap only with the plan
 for the $74 plan's 1,000). A value the person types for a month is theirs; the
 estimate fills months they didn't.
 
+**Car values from VinAudit are off until you set `VINAUDIT_API_KEY`**
+(Sensitive, in Vercel). Once set, a vehicle on Net worth offers "Keep its
+value up to date with VinAudit": the person gives its VIN and, if they like,
+its mileage, told first that both go to VinAudit once a month and nothing else
+about them does. VinAudit takes its key in the query string, so the request's
+address is never logged. The VIN and mileage are sealed in a column of their
+own (`profiles.sealed_vehicle_values`), never in what a household is sent. A
+mileage reading grows by the US average (1,125 miles a month) until the person
+gives a new one. VinAudit bills every request, so **the database decides**
+(`claim_vehicle_value_lookup`): at most `vehicle_value_lookups_31_days`
+lookups in any 31 days across everyone (90 to start, inside the free trial's
+100), three a person, each vehicle once a month, never for a connected app or
+before the second step. On the paid plan ($100 a month, $0.10 a lookup) raise
+it with `update app_limits set value = 900 where name =
+'vehicle_value_lookups_31_days'`, never past what the plan covers. Kelley Blue
+Book has no public API; its values are licensed through Cox Automotive under
+contract.
+
 **Card and loan due dates (Plaid Liabilities) are off until you set
 `PLAID_LIABILITIES=on`.** People already consent to them when they link a bank
 (Link asks for Liabilities as consent only), but Plaid bills per bank from the
@@ -851,6 +869,8 @@ select what, key_id, count(*) from (
   select 'added by hand', case when sealed_manual_items like 'z2.%' then substr(sealed_manual_items, 4, 8) else 'unnamed' end from profiles where sealed_manual_items is not null
   union all
   select 'home addresses', case when sealed_home_values like 'z2.%' then substr(sealed_home_values, 4, 8) else 'unnamed' end from profiles where sealed_home_values is not null
+  union all
+  select 'vehicle VINs', case when sealed_vehicle_values like 'z2.%' then substr(sealed_vehicle_values, 4, 8) else 'unnamed' end from profiles where sealed_vehicle_values is not null
   union all
   select 'wallets', case when sealed_wallets like 'z2.%' then substr(sealed_wallets, 4, 8) else 'unnamed' end from profiles where sealed_wallets is not null
   union all
