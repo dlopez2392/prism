@@ -27,7 +27,7 @@ const EN_RESUMEN: { icon: LucideIcon; text: string }[] = [
 ];
 
 /** The Spanish privacy policy, as the operator's switches have it: the same switches as the English. */
-export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts, billing }: PrivacySwitches) {
+export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts, billing, vehicleValues }: PrivacySwitches) {
   const p = BRAND.product;
   const mail = <a href={`mailto:${PRIVACY_CONTACT}`} className={link}>{PRIVACY_CONTACT}</a>;
   return (
@@ -104,6 +104,12 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
               <li>
                 Si le pides a {p} que mantenga al día el valor de una vivienda, su dirección, guardada cifrada y nunca compartida con tu hogar, y las
                 estimaciones mensuales de RentCast sobre su valor.
+              </li>
+            ) : null}
+            {vehicleValues ? (
+              <li>
+                Si le pides a {p} que mantenga al día el valor de un vehículo, su VIN y su millaje, guardados cifrados y nunca compartidos con tu hogar, y
+                las estimaciones mensuales de VinAudit sobre su valor.
               </li>
             ) : null}
             <li>
@@ -190,7 +196,7 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
         <Section id="share" title="Quién más lo ve">
           <p>Solo las empresas que operan {p} por nosotros, y solo lo que cada una necesita:</p>
           <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-ctl border border-line">
-            {providers(homeValues, alchemy, alerts, billing).map((c) => (
+            {providers(homeValues, alchemy, alerts, billing, vehicleValues).map((c) => (
               <li key={c.name} className="flex flex-col gap-1 bg-surface-2 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
                 <span className="w-24 shrink-0 font-semibold text-ink-1">{c.name}</span>
                 <span className="min-w-0 flex-1">
@@ -273,6 +279,7 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
             <li>Las transacciones de tu banco de hace más de unos dos años salen de la copia que guarda {p}.</li>
             <li>El historial que importas se queda hasta que lo quitas en Conexiones o borras tu cuenta.</li>
             {homeValues ? <li>La dirección de una vivienda se queda hasta que desactivas sus estimaciones, quitas la vivienda o borras tu cuenta.</li> : null}
+            {vehicleValues ? <li>El VIN y el millaje de un vehículo se quedan hasta que desactivas sus estimaciones, quitas el vehículo o borras tu cuenta.</li> : null}
             <li>La dirección o la clave pública extendida de una billetera se queda hasta que quitas la billetera en Conexiones o borras tu cuenta.</li>
             {alerts ? (
               <li>

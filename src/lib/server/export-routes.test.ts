@@ -35,6 +35,7 @@ function setOwn(over: Record<string, unknown> = {}) {
     wallets: [{ id: "w1", chain: "bitcoin", address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", name: "Cold storage", reading: null }],
     manual: [],
     homeValues: [],
+    vehicleValues: [],
     ...over,
   };
 }

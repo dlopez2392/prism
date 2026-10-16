@@ -145,6 +145,7 @@ describe("everything.json", () => {
     wallets: [{ name: "Cold storage", chain: "bitcoin", address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4" }],
     manual: [{ id: "m1", kind: "debt" as const, name: "Loan from Mom", values: [{ month: "2026-09", value: 50_000 }] }],
     homes: [{ address: "1 Main St, Austin, TX", estimate: { low: 30_000_000, high: 34_000_000, on: "2026-09-01" } }],
+    vehicles: [{ vin: "1HGCM82633A004352", mileage: { miles: 48_250, on: "2026-09-01" }, estimate: { low: 900_000, high: 1_300_000, on: "2026-09-01" } }],
   };
   const doc = everythingJson(data, extras, { email: "sam@example.com", firstName: "Sam" }, "2026-10-01T12:00:00.000Z");
 
@@ -155,6 +156,7 @@ describe("everything.json", () => {
     expect(doc.transactions.find((x) => x.id === t.id)!.amount).toBe(Number(dollars(t.amount)));
     expect(doc.added_by_you[0]!.month_values).toEqual([{ month: "2026-09", value: -500 }]);
     expect(doc.wallets[0]!.public_address).toBe(extras.wallets[0]!.address);
+    expect(doc.vehicles).toEqual([{ vin: "1HGCM82633A004352", mileage: { miles: 48_250, on: "2026-09-01" }, latest_estimate: { low: 9000, high: 13_000, on: "2026-09-01" } }]);
   });
 
   it("carries nothing that opens anything", () => {

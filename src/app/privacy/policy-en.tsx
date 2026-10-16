@@ -27,7 +27,7 @@ const SHORT_VERSION: { icon: LucideIcon; text: string }[] = [
 ];
 
 /** The English privacy policy, the one that governs, as the operator's switches have it. */
-export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billing }: PrivacySwitches) {
+export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billing, vehicleValues }: PrivacySwitches) {
   const mail = <a href={`mailto:${PRIVACY_CONTACT}`} className={link}>{PRIVACY_CONTACT}</a>;
   return (
     <div className="mx-auto max-w-3xl">
@@ -93,6 +93,13 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
               <li>
                 If you ask {BRAND.product} to keep a home&apos;s value up to date, its address, stored encrypted and never shared with your household, and
                 RentCast&apos;s monthly estimates of its value.
+              </li>
+            ) : null}
+            {/* Vehicle estimates are switched on by the operator (VINAUDIT_API_KEY); this sentence changes with it, in the same deploy. */}
+            {vehicleValues ? (
+              <li>
+                If you ask {BRAND.product} to keep a vehicle&apos;s value up to date, its VIN and mileage, stored encrypted and never shared with your
+                household, and VinAudit&apos;s monthly estimates of its value.
               </li>
             ) : null}
             <li>
@@ -176,7 +183,7 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
         <Section id="share" title="Who else sees it">
           <p>Only the companies that run {BRAND.product} for us, and only what each one needs:</p>
           <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-ctl border border-line">
-            {providers(homeValues, alchemy, alerts, billing).map((p) => (
+            {providers(homeValues, alchemy, alerts, billing, vehicleValues).map((p) => (
               <li key={p.name} className="flex flex-col gap-1 bg-surface-2 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
                 <span className="w-24 shrink-0 font-semibold text-ink-1">{p.name}</span>
                 <span className="min-w-0 flex-1">
@@ -256,6 +263,7 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
             <li>Transactions from your bank older than about two years drop out of {BRAND.product}&apos;s copy of them.</li>
             <li>History you import stays until you remove it on Connections, or delete your account.</li>
             {homeValues ? <li>A home&apos;s address stays until you turn off its estimates, remove the home, or delete your account.</li> : null}
+            {vehicleValues ? <li>A vehicle&apos;s VIN and mileage stay until you turn off its estimates, remove the vehicle, or delete your account.</li> : null}
             <li>A wallet&apos;s address or extended public key stays until you remove the wallet on Connections, or delete your account.</li>
             {alerts ? (
               <li>

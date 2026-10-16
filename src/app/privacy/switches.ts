@@ -6,9 +6,10 @@ import { alertsConfig } from "@/lib/alerts/send";
 import { billingConfig } from "@/lib/billing/plus";
 import { chainEnabled } from "@/lib/crypto/balances";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
+import { vehicleValuesEnabled } from "@/lib/carvalue/vinaudit";
 import { liabilitiesEnabled } from "@/lib/plaid/liabilities";
 import type { PrivacySwitches } from "@/lib/privacy";
 
 export function privacySwitches(): PrivacySwitches {
-  return { liabilities: liabilitiesEnabled(), homeValues: homeValuesEnabled(), alchemy: chainEnabled("ethereum"), alerts: alertsConfig() !== null, billing: billingConfig() !== null };
+  return { liabilities: liabilitiesEnabled(), homeValues: homeValuesEnabled(), alchemy: chainEnabled("ethereum"), alerts: alertsConfig() !== null, billing: billingConfig() !== null, vehicleValues: vehicleValuesEnabled() };
 }

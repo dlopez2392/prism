@@ -224,8 +224,8 @@ export const CONNECTIONS: Record<string, string> = {
     "Transacciones de Mint, Monarch o una hoja de cálculo. Se guardan cifradas en tu cuenta y nunca se comparten con tu hogar.",
   "Type {name} to confirm": "Escribe {name} para confirmar",
   "Updated by you": "Actualizado por ti",
-  "VIN-based valuation (VinAudit). Until then, add your car on Net worth and update its value whenever you like.":
-    "Valuación a partir del VIN (VinAudit). Mientras tanto, agrega tu auto en Patrimonio neto y actualiza su valor cuando quieras.",
+  "VinAudit's market value, about once a month, for a vehicle you add on Net worth with its VIN.":
+    "El valor de mercado de VinAudit, más o menos una vez al mes, para un vehículo que agregues en Patrimonio neto con su VIN.",
   "Venmo, PayPal and Cash App": "Venmo, PayPal y Cash App",
   "Wallets stay yours alone: an address shows everything it has ever held.": "Las billeteras son solo tuyas: una dirección muestra todo lo que ha tenido.",
   "Wallets you hold yourself, by public address, or for Bitcoin the whole wallet by its extended public key. Prism can see what they hold and can never move it, and they stay yours alone.":

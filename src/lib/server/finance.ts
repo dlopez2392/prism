@@ -35,6 +35,9 @@ import { plusFor } from "@/lib/billing/plus";
 import { walletMoney, walletsInstitution, type Wallet } from "@/lib/crypto/wallets";
 import { readWallets, refreshWholeWallets, type Fresh } from "./wallets";
 import { refreshDueHomeValues } from "./home-values";
+import { refreshDueVehicleValues } from "./vehicle-values";
+import { vehicleValuationDue, type VehicleValuation } from "@/lib/finance/vehicle-value";
+import { vehicleValuesEnabled } from "@/lib/carvalue/vinaudit";
 import { householdData, narrowTo, type MemberMoney } from "@/lib/finance/household";
 import { CoinbaseError, coinbaseConfig, listAccounts, usdRates, type CoinbaseConfig } from "@/lib/coinbase/client";
 import { coinbaseNeedsSignIn, mapCoinbase, sharedCoinbase, validCoinbaseValue } from "@/lib/coinbase/map";
@@ -84,6 +87,8 @@ export type Loaded = FinanceData & {
   manual: ManualItem[];
   /** Their homes RentCast keeps up to date: the address and last range, for the editor. Never the household's. */
   homeValues: HomeValuation[];
+  /** Their vehicles VinAudit keeps up to date: the VIN, mileage and last range, for the editor. Never the household's. */
+  vehicleValues: VehicleValuation[];
   /** Their crypto wallets, as read on this visit, for Connections. Never the household's. */
   wallets: Wallet[];
   /** The history they imported, for Connections: what each import is, never its rows. */
@@ -161,6 +166,8 @@ export type Sources = {
   manual: ManualItem[];
   /** Where their homes are, for RentCast. A device keeps none. */
   homeValues: HomeValuation[];
+  /** Their vehicles' VINs and mileage, for VinAudit. A device keeps none. */
+  vehicleValues: VehicleValuation[];
   /** Their wallets, and where new readings go (never for a connected app). A device keeps none. */
   wallets: WalletSource;
   /** History they imported from a file. A device keeps none. */
@@ -244,17 +251,20 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     const paused = plus.plus ? new Set<string>() : pausedBeyondFree(a.items);
     // Seals an older vault key made move to the current one, after the response (vault.ts, "Keyring").
     if (a.reseal) after(a.reseal);
-    // A home due this month's estimate gets it after the response, on a visit that draws money (never a plan edit).
-    if (withSync && key && plus.plus && homeValuesEnabled() && a.homeValues.length) {
+    // A home or vehicle due this month's estimate gets it after the response, on a visit that draws money (never a plan edit).
+    if (withSync && key && plus.plus) {
       const today = todayIn(jar.get("prism-tz")?.value);
-      if (a.manual.some((i) => valuationDue(i, a.homeValues.find((h) => h.itemId === i.id), monthKey(today)))) {
+      const month = monthKey(today);
+      const homesDue = homeValuesEnabled() && a.manual.some((i) => valuationDue(i, a.homeValues.find((h) => h.itemId === i.id), month));
+      const carsDue = vehicleValuesEnabled() && a.manual.some((i) => vehicleValuationDue(i, a.vehicleValues.find((v) => v.itemId === i.id), month));
+      if (homesDue || carsDue) {
         // The next visit draws the new value: pages are rendered fresh each time.
-        after(() =>
-          refreshDueHomeValues(account, key, today).catch((e: unknown) =>
-            // No address or amount in the message: only that an estimate waits for next time.
-            console.error("Prism: a home's estimate wasn't saved:", e instanceof Error ? e.name : "unknown error"),
-          ),
-        );
+        // One after the other: each saves over a fresh read of the same profile.
+        // No address, VIN or amount in a message: only that an estimate waits for next time.
+        after(async () => {
+          if (homesDue) await refreshDueHomeValues(account, key, today).catch((e: unknown) => console.error("Prism: a home's estimate wasn't saved:", e instanceof Error ? e.name : "unknown error"));
+          if (carsDue) await refreshDueVehicleValues(account, key, today).catch((e: unknown) => console.error("Prism: a vehicle's estimate wasn't saved:", e instanceof Error ? e.name : "unknown error"));
+        });
       }
     }
     const record = a.coinbase;
@@ -265,6 +275,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
       categories: a.categories,
       manual: a.manual,
       homeValues: a.homeValues,
+      vehicleValues: a.vehicleValues,
       wallets: {
         list: a.wallets,
         // After the response: this visit already shows the new reading; the kept one spares the next visit a wait.
@@ -326,6 +337,7 @@ export async function readSources({ withSync = false }: { withSync?: boolean } =
     categories: NO_RULES,
     manual: [],
     homeValues: [],
+    vehicleValues: [],
     wallets: { list: [], save: null, scan: null },
     imports: [],
     p2p: NO_P2P_NOTES,
@@ -376,7 +388,7 @@ function carryoverOf(jar: Jar, signedIn: boolean): Carryover[] {
   return out;
 }
 
-type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "homeValues" | "wallets" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan" | "splitRules">;
+type Live = Omit<Loaded, "localHour" | "planEdited" | "accountsEnabled" | "account" | "carryover" | "manual" | "homeValues" | "vehicleValues" | "wallets" | "imports" | "lockedImports" | "view" | "inHousehold" | "householdPlan" | "splitRules">;
 
 /**
  * The money itself: the demo household when nothing real is linked (real and
@@ -546,6 +558,7 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
     carryover: carryoverOf(jar, src.account !== null),
     manual: src.manual,
     homeValues: src.homeValues,
+    vehicleValues: src.vehicleValues,
     wallets: own.wallets,
     imports: src.imports.map(summarize),
     lockedImports: src.lockedImports,

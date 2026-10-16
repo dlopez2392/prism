@@ -166,11 +166,12 @@ export function holdingsCsv(data: Pick<FinanceData, "holdings" | "accounts">): s
   );
 }
 
-/** What the person keeps in Prism beyond what a bank reports: wallets, things added by hand, homes. Their own, never the household's. */
+/** What the person keeps in Prism beyond what a bank reports: wallets, things added by hand, homes, vehicles. Their own, never the household's. */
 export type Extras = {
   wallets: { name: string; chain: string; address: string }[];
   manual: ManualItem[];
   homes: { address: string; estimate: { low: Cents; high: Cents; on: ISODate } | null }[];
+  vehicles?: { vin: string; mileage: { miles: number; on: ISODate } | null; estimate: { low: Cents; high: Cents; on: ISODate } | null }[];
 };
 
 export type Profile = { email: string | null; firstName: string | null };
@@ -249,6 +250,11 @@ export function everythingJson(data: FinanceData, extras: Extras, profile: Profi
       address: h.address,
       latest_estimate: h.estimate ? { low: money(h.estimate.low), high: money(h.estimate.high), on: h.estimate.on } : null,
     })),
+    vehicles: (extras.vehicles ?? []).map((v) => ({
+      vin: v.vin,
+      mileage: v.mileage ? { miles: v.mileage.miles, on: v.mileage.on } : null,
+      latest_estimate: v.estimate ? { low: money(v.estimate.low), high: money(v.estimate.high), on: v.estimate.on } : null,
+    })),
     credit_score: data.credit ? { score: data.credit.score, from: data.credit.provider } : null,
   };
 }
@@ -265,7 +271,7 @@ export const EXPORT_README = (productName: string, today: ISODate) =>
     "budgets.csv       Your monthly budgets.",
     "goals.csv         Your savings goals.",
     "holdings.csv      What your investment accounts hold, when your bank reports it.",
-    "everything.json   All of the above, and the wallets, homes and things you added by hand, in one file.",
+    "everything.json   All of the above, and the wallets, homes, vehicles and things you added by hand, in one file.",
     "",
     "What's not here: your bank sign-ins (Prism never has them), the keys that let Prism read your banks,",
     "and anything of anyone else's in your household. Categories are the ones you chose; where you changed",

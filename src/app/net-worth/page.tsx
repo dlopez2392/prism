@@ -18,6 +18,7 @@ import { DebtPlanner } from "@/components/debt-planner";
 import { AddManualItem, AddWhatYouOwn, ManualItemRow } from "@/components/manual-item-editor";
 import { CountedAccounts, type CountedAccount } from "@/components/counted-accounts";
 import { homeValuesEnabled } from "@/lib/homevalue/rentcast";
+import { vehicleValuesEnabled } from "@/lib/carvalue/vinaudit";
 import { Card, CardHeader, Change, EmptyState, PageHeader, StatusPill, type Status } from "@/components/ui";
 import { usualMonthlyKept } from "@/lib/finance/afford";
 import { monthlyCashFlow } from "@/lib/finance/cashflow";
@@ -62,11 +63,12 @@ export default async function NetWorthPage() {
   // What a person adds by hand lives in their account; the example household's is only for show.
   // In the Household view, everyone's things are shown, and each person edits their own from Me.
   const canAdd = data.account !== null && data.view === "me";
-  // RentCast can keep a home's value up to date once the operator has switched it on.
+  // RentCast can keep a home's value up to date, and VinAudit a vehicle's, once the operator has switched each on.
   const estimates = homeValuesEnabled();
+  const carEstimates = vehicleValuesEnabled();
   const editable = new Map(canAdd && data.source !== "demo" ? data.manual.map((i) => [`manual-${i.id}`, i]) : []);
   // The way in to a home, a car or a loan: high on the page until the person has added one, then below their accounts.
-  const addCard = canAdd ? <AddWhatYouOwn estimates={estimates} added={editable.size} /> : null;
+  const addCard = canAdd ? <AddWhatYouOwn estimates={estimates} carEstimates={carEstimates} added={editable.size} /> : null;
   const institutions = new Map(data.institutions.map((i) => [i.id, i.name]));
   // A bank's name is its own; "Added by you" is Prism's, in the person's language.
   const institutionName = (id: string) => {
@@ -224,7 +226,7 @@ export default async function NetWorthPage() {
           <CardHeader
             title={t("Accounts")}
             subtitle={accountsAcross(data.accounts.length, data.institutions.length, t)}
-            action={canAdd ? <AddManualItem estimates={estimates} /> : undefined}
+            action={canAdd ? <AddManualItem estimates={estimates} carEstimates={carEstimates} /> : undefined}
           />
           <div className="mt-3 space-y-5">
             {groups.map((g) => (
@@ -253,7 +255,9 @@ export default async function NetWorthPage() {
                             {mine
                               ? ` · ${
                                   mine.values.at(-1)!.estimated
-                                    ? t("RentCast estimate {month}", { month: monthYear(`${mine.values.at(-1)!.month}-01`, locale) })
+                                    ? mine.kind === "vehicle"
+                                      ? t("VinAudit estimate {month}", { month: monthYear(`${mine.values.at(-1)!.month}-01`, locale) })
+                                      : t("RentCast estimate {month}", { month: monthYear(`${mine.values.at(-1)!.month}-01`, locale) })
                                     : t("updated {month}", { month: monthYear(`${mine.values.at(-1)!.month}-01`, locale) })
                                 }`
                               : ""}
@@ -281,7 +285,7 @@ export default async function NetWorthPage() {
                     );
                     return mine ? (
                       <li key={acc.id}>
-                        <ManualItemRow item={mine} label={t("Edit {name}, {amount}", { name: acc.name, amount: money0(acc.balance) })} estimates={estimates} valuation={data.homeValues.find((h) => h.itemId === mine.id)}>
+                        <ManualItemRow item={mine} label={t("Edit {name}, {amount}", { name: acc.name, amount: money0(acc.balance) })} estimates={estimates} carEstimates={carEstimates} valuation={data.homeValues.find((h) => h.itemId === mine.id)} carValuation={data.vehicleValues.find((v) => v.itemId === mine.id)}>
                           {content}
                         </ManualItemRow>
                       </li>

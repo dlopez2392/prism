@@ -121,6 +121,8 @@ export function TextInput({
   hint,
   autoComplete = "off",
   autoFocus,
+  inputMode,
+  code = false,
 }: {
   name: string;
   defaultValue: string;
@@ -131,6 +133,9 @@ export function TextInput({
   hint?: string;
   autoComplete?: string;
   autoFocus?: boolean;
+  inputMode?: "numeric" | "text";
+  /** A code typed as printed (a VIN): capitals, never corrected or spell-checked. */
+  code?: boolean;
 }) {
   const id = useId();
   const note = error ?? hint;
@@ -146,9 +151,13 @@ export function TextInput({
         maxLength={maxLength}
         autoComplete={autoComplete}
         autoFocus={autoFocus}
+        inputMode={inputMode}
+        autoCapitalize={code ? "characters" : undefined}
+        autoCorrect={code ? "off" : undefined}
+        spellCheck={code ? false : undefined}
         aria-invalid={error ? true : undefined}
         aria-describedby={note ? `${id}-note` : undefined}
-        className={clsx(control, "border-line-strong px-3")}
+        className={clsx(control, "border-line-strong px-3", code && "num uppercase")}
       />
       {note ? (
         <p id={`${id}-note`} className={clsx("mt-1 text-xs", error ? "font-medium text-crit-ink" : "text-ink-3")}>

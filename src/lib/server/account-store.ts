@@ -12,6 +12,7 @@ import { validCoinbaseValue } from "@/lib/coinbase/map";
 import { hasRules, NO_RULES, validCategoryRules, type CategoryRules } from "@/lib/finance/category-rules";
 import { assembleImports, type ImportedHistory, type LockedImport } from "@/lib/finance/import";
 import { storedHomeValues, validHomeValues, type HomeValuation } from "@/lib/finance/home-value";
+import { storedVehicleValues, validVehicleValues, type VehicleValuation } from "@/lib/finance/vehicle-value";
 import { validManualItems, type ManualItem } from "@/lib/finance/manual";
 import { hasDetails, NO_DETAILS, validDetails, type TxnDetails } from "@/lib/finance/details";
 import { NO_P2P_NOTES, validP2pNotes, type P2pNotes } from "@/lib/finance/p2p";
@@ -36,6 +37,7 @@ type ProfileRow = {
   sealed_category_rules: string | null;
   sealed_manual_items: string | null;
   sealed_home_values: string | null;
+  sealed_vehicle_values?: string | null;
   sealed_wallets: string | null;
   sealed_p2p_notes?: string | null;
   sealed_txn_details?: string | null;
@@ -81,6 +83,8 @@ export type AccountSources = {
   manual: ManualItem[];
   /** Homes whose value RentCast keeps up to date: their addresses, never shared with a household. */
   homeValues: HomeValuation[];
+  /** Vehicles whose value VinAudit keeps up to date: their VINs and mileage, never shared with a household. */
+  vehicleValues: VehicleValuation[];
   /** Crypto wallets added by public address, with their last readings; never shared with a household. */
   wallets: Wallet[];
   /** Who their Venmo, PayPal and Cash App payments were for, by bank transaction; never shared with a household. */
@@ -133,7 +137,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const [profile, plaid, coinbase, feed, household, coinbaseShare, imported, alertSnapshot] = await Promise.all([
     db
       .from("profiles")
-      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_wallets, sealed_p2p_notes, sealed_txn_details, sealed_order_notes, alert_email, alert_kinds, alert_amounts, alert_refresh, language, updated_at")
+      .select("first_name, plan_budgets, plan_goals, time_zone, sealed_category_rules, sealed_manual_items, sealed_home_values, sealed_vehicle_values, sealed_wallets, sealed_p2p_notes, sealed_txn_details, sealed_order_notes, alert_email, alert_kinds, alert_amounts, alert_refresh, language, updated_at")
       .eq("user_id", account.userId)
       .maybeSingle<ProfileRow>(),
     db
@@ -182,6 +186,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
   const rawRules = key && profile.data?.sealed_category_rules ? openPacked(profile.data.sealed_category_rules, key) : null;
   const rawManual = key && profile.data?.sealed_manual_items ? openPacked(profile.data.sealed_manual_items, key) : null;
   const rawHomes = key && profile.data?.sealed_home_values ? openPacked(profile.data.sealed_home_values, key) : null;
+  const rawVehicles = key && profile.data?.sealed_vehicle_values ? openPacked(profile.data.sealed_vehicle_values, key) : null;
   const rawWallets = key && profile.data?.sealed_wallets ? openPacked(profile.data.sealed_wallets, key) : null;
   const rawP2p = key && profile.data?.sealed_p2p_notes ? openPacked(profile.data.sealed_p2p_notes, key) : null;
   const rawDetails = key && profile.data?.sealed_txn_details ? openPacked(profile.data.sealed_txn_details, key) : null;
@@ -191,6 +196,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
       sealed_category_rules: rawRules,
       sealed_manual_items: rawManual,
       sealed_home_values: rawHomes,
+      sealed_vehicle_values: rawVehicles,
       sealed_wallets: rawWallets,
       sealed_p2p_notes: rawP2p,
       sealed_txn_details: rawDetails,
@@ -213,6 +219,7 @@ export async function loadAccount(account: Account, key: VaultKey | null, { stri
     categories: rawRules === null ? NO_RULES : validCategoryRules(rawRules),
     manual: rawManual === null ? [] : validManualItems(rawManual),
     homeValues: rawHomes === null ? [] : validHomeValues(rawHomes),
+    vehicleValues: rawVehicles === null ? [] : validVehicleValues(rawVehicles),
     wallets: rawWallets === null ? [] : validWallets(rawWallets),
     p2pNotes: rawP2p === null ? NO_P2P_NOTES : validP2pNotes(rawP2p),
     orderNotes: rawOrders === null ? NO_ORDER_NOTES : validOrderNotes(rawOrders),
@@ -290,11 +297,11 @@ function staleSeals(account: Account, key: VaultKey | null) {
      */
     profile(
       row: ProfileRow,
-      opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values" | "sealed_wallets" | "sealed_p2p_notes" | "sealed_txn_details" | "sealed_order_notes">,
+      opened: Pick<Record<keyof ProfileRow, unknown>, "sealed_category_rules" | "sealed_manual_items" | "sealed_home_values" | "sealed_vehicle_values" | "sealed_wallets" | "sealed_p2p_notes" | "sealed_txn_details" | "sealed_order_notes">,
     ) {
       const k = key!;
       const patch: Record<string, string> = {};
-      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_wallets", "sealed_p2p_notes", "sealed_txn_details", "sealed_order_notes"] as const) {
+      for (const column of ["sealed_category_rules", "sealed_manual_items", "sealed_home_values", "sealed_vehicle_values", "sealed_wallets", "sealed_p2p_notes", "sealed_txn_details", "sealed_order_notes"] as const) {
         if (opened[column] !== null && due(row[column])) patch[column] = sealPacked(opened[column], k);
       }
       if (Object.keys(patch).length === 0) return;
@@ -454,17 +461,28 @@ export async function loadAccountHomeValues(account: Account, key: VaultKey): Pr
   return data?.sealed_home_values ? validHomeValues(openPacked(data.sealed_home_values, key)) : [];
 }
 
+/** Read strictly before a save, like the items: a failed read is an error, never "no vehicles" to write over. */
+export async function loadAccountVehicleValues(account: Account, key: VaultKey): Promise<VehicleValuation[]> {
+  const { data, error } = await account.supabase.from("profiles").select("sealed_vehicle_values").eq("user_id", account.userId).maybeSingle<Pick<ProfileRow, "sealed_vehicle_values">>();
+  if (error) throw new Error("Couldn't read your vehicles' details.");
+  return data?.sealed_vehicle_values ? validVehicleValues(openPacked(data.sealed_vehicle_values, key)) : [];
+}
+
 /**
- * What someone owns and where their homes are, in one write, so an item and
- * its address never disagree. Sealed: where someone lives. The addresses keep
- * a column of their own, so they never travel with what a person shares.
+ * What someone owns, where their homes are and which vehicles VinAudit
+ * values, in one write, so an item and its address or VIN never disagree.
+ * Sealed. The addresses and VINs keep columns of their own, so they never
+ * travel with what a person shares. Vehicles left out (undefined) are left
+ * as they are: only a save that read them writes them.
  */
-export function saveAccountManualItemsAndHomes(account: Account, items: ManualItem[], homes: HomeValuation[], key: VaultKey) {
-  // A home's address goes with the home: none is kept for an item that isn't there, or isn't a home.
+export function saveAccountManualItemsAndHomes(account: Account, items: ManualItem[], homes: HomeValuation[], key: VaultKey, vehicles?: VehicleValuation[]) {
+  // A home's address goes with the home, and a VIN with its vehicle: none is kept for an item that isn't there, or isn't that kind.
   const kept = homes.filter((h) => items.some((i) => i.id === h.itemId && i.kind === "home"));
+  const keptVehicles = vehicles?.filter((v) => items.some((i) => i.id === v.itemId && i.kind === "vehicle"));
   return upsertProfile(account, {
     sealed_manual_items: items.length ? sealPacked(items, key) : null,
     sealed_home_values: kept.length ? sealPacked(storedHomeValues(kept), key) : null,
+    ...(keptVehicles ? { sealed_vehicle_values: keptVehicles.length ? sealPacked(storedVehicleValues(keptVehicles), key) : null } : {}),
   });
 }
 
