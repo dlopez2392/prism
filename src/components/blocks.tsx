@@ -169,7 +169,7 @@ export function SeeAll({ href, children }: { href: string; children: ReactNode }
   );
 }
 
-const ALERT_ACTION: Record<Alert["kind"], string> = { bank: msg("Go to Connections"), "bill-short": msg("See the forecast"), "price-rise": msg("See your bills") };
+const ALERT_ACTION: Record<Alert["kind"], string> = { bank: msg("Go to Connections"), "bill-short": msg("See the forecast"), "price-rise": msg("See your subscriptions") };
 
 /**
  * What needs acting on now (alerts.ts): a bank that has stopped updating or

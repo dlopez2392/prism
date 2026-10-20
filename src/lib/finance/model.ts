@@ -13,6 +13,7 @@ import { incomeSummary } from "./income";
 import { generateInsights } from "./insights";
 import { netWorthSeries } from "./networth";
 import { detectRecurring } from "./recurring";
+import { subscriptionsFor } from "./subscriptions";
 import { EN, type T } from "@/lib/i18n/t";
 import type { FinanceData } from "./types";
 
@@ -28,6 +29,8 @@ export function analyze(data: FinanceData, t: T = EN) {
   // A card's or a loan's payment takes the lender's own date and amount when it states them.
   const streams = withLenderTerms(detectRecurring(txns, today), data.accounts, txns, today);
   const netWorth = netWorthSeries(data.accounts, today);
+  // Everything paid for again and again, with what the person said about it: one list for every screen and connector.
+  const subscriptions = subscriptionsFor(streams, txns, data.subscriptionNotes, today);
 
   const checking =
     data.accounts
@@ -62,12 +65,13 @@ export function analyze(data: FinanceData, t: T = EN) {
     budgets,
     budgetTotals: budgetTotals(budgets),
     streams,
+    subscriptions,
     income: incomeSummary(txns, streams, today),
     checking,
     forecast,
     safe,
     netWorth,
-    insights: generateInsights({ txns, today, budgets, streams, flows, t }),
+    insights: generateInsights({ txns, today, budgets, streams, flows, subscriptions, t }),
   };
 }
 

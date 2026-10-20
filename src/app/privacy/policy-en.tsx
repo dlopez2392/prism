@@ -126,7 +126,9 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
             <li>
               What you add to a transaction yourself: how you split it across categories (or every purchase at a shop, which names the shop), your tags,
               who owes you for it (the name you type and the amount), and which transactions and accounts you leave out of your totals, stored
-              encrypted in your account and never shown to your household. A
+              encrypted in your account and never shown to your household. What you tell {BRAND.product} about your subscriptions is kept the same way:
+              which repeating charges are or aren&apos;t one, the ones you cancelled and the day you did, and the ones you add yourself (a name, an
+              amount and how often). A
               reminder about what someone owes is written on your device and goes wherever you send it; {BRAND.product} never sends it.
             </li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>

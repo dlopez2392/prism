@@ -79,7 +79,19 @@ export function yearlySaving(plan: PlanId): number {
 }
 
 /** The parts of Prism Plus that a free account reaches and is told about. */
-export type PlusFeature = "banks" | "investments" | "coinbase" | "alerts" | "household" | "apps" | "taxes" | "calendar" | "home-values" | "vehicle-values" | "matching";
+export type PlusFeature =
+  | "banks"
+  | "investments"
+  | "coinbase"
+  | "alerts"
+  | "household"
+  | "apps"
+  | "taxes"
+  | "calendar"
+  | "home-values"
+  | "vehicle-values"
+  | "matching"
+  | "subscriptions";
 
 /** For each, the sentence shown where someone on the free plan reaches it. */
 export const PLUS_NEEDS: Readonly<Record<PlusFeature, string>> = {
@@ -94,6 +106,7 @@ export const PLUS_NEEDS: Readonly<Record<PlusFeature, string>> = {
   "home-values": msg("Keeping your home's value up to date comes with {plus}."),
   "vehicle-values": msg("Keeping your vehicle's value up to date comes with {plus}."),
   matching: msg("Matching orders and payments to your bank comes with {plus}."),
+  subscriptions: msg("Keeping watch on what you cancel comes with {plus}."),
 };
 
 /** The sentence for someone on the free plan who reached a Plus feature. */
@@ -130,11 +143,13 @@ export const PLUS_LINES: readonly string[] = [
   msg("Your bills in your own calendar, kept up to date"),
   msg("Your home's and your car's value, estimated each month"),
   msg("Amazon orders and Venmo, PayPal and Cash App payments matched to your bank"),
+  msg("A watch on every subscription you cancel, so a charge that shouldn't come is caught"),
 ];
 
 /** What the free plan always includes. */
 export const FREE_LINES: readonly string[] = [
   msg("Spending, cash flow, budgets and goals"),
+  msg("Every subscription you pay for, and where to cancel it"),
   msg("One bank connection"),
   msg("Your home, car and anything else, added by hand"),
   msg("History imported from Mint, Monarch or a spreadsheet"),

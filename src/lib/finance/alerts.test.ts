@@ -81,7 +81,7 @@ describe("alerts", () => {
   it("notices a recurring charge that just went up, and only while that's news", () => {
     const charges = (months: string[]) => monthly(months, 22, [-1_549, -1_549, -1_549, -1_549, -1_799, -1_799], "Streamflix", "fun");
     const [rise] = alerts(data([...pay(), ...charges(MONTHS)], { balance: 400_000 }));
-    expect(rise).toMatchObject({ kind: "price-rise", title: "Streamflix went up to $17.99", urgent: false, href: "/cash-flow" });
+    expect(rise).toMatchObject({ kind: "price-rise", title: "Streamflix went up to $17.99", urgent: false, href: "/subscriptions" });
     expect(rise!.detail).toBe("It was $15.49. That's $30 more a year, if you still use it.");
     expect(rise!.id).toMatch(/^price-rise:.+:1799$/);
     expect(`${rise!.quiet.title} ${rise!.quiet.detail}`).not.toContain("$");

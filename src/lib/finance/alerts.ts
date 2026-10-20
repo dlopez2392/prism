@@ -2,8 +2,15 @@
 //
 // What's worth interrupting someone for: a bank that has stopped updating, or
 // will within the week; a bill due before the next paycheck that the account
-// it comes out of won't cover; a recurring charge that just went up. Shown on
-// Overview, and (once email is switched on) sent by email.
+// it comes out of won't cover; a recurring charge that just went up; a
+// subscription that just started (or a free trial that just turned into one);
+// and one the person cancelled that charged them again. Shown on Overview,
+// and (once email is switched on) sent by email.
+//
+// The subscription news shares the price rise's kind ("price-rise", shown as
+// "A subscription changed"): which kinds someone can choose is a database
+// constraint (profiles.alert_kinds), and this is the same news, about the
+// same charges.
 //
 // Each alert has an id that names its occasion — this bank's sign-in, this
 // bill on this date, this price — so the same news is never sent twice, and
@@ -17,7 +24,8 @@ import { dayDate, money, money0, shortDate } from "./format";
 import type { Analysis } from "./model";
 import { normalizeMerchant, perYear } from "./recurring";
 import { EN, type T } from "@/lib/i18n/t";
-import type { ISODate } from "./types";
+import type { Cadence } from "./recurring";
+import type { Cents, ISODate } from "./types";
 
 export type AlertKind = "bank" | "bill-short" | "price-rise";
 
@@ -40,6 +48,10 @@ export type Alert = {
 const NO_PAYDAY_DAYS = 14;
 /** A price rise is news for this long after the first higher charge. */
 const PRICE_NEWS_DAYS = 35;
+/** A new subscription is news while its latest charge is this recent. */
+const NEW_NEWS_DAYS = 35;
+/** A charge after cancelling is news for this long. */
+const STILL_NEWS_DAYS = 60;
 
 const isoDay = (t: string): ISODate => t.slice(0, 10) as ISODate;
 
@@ -146,9 +158,75 @@ function priceRises(a: Analysis, t: T): Alert[] {
         detail: t("Its latest charge, on {date}, was higher than the one before.", { date: shortDate(change.date, t.locale) }),
       },
       on: change.date,
-      href: "/cash-flow",
+      href: "/subscriptions",
       urgent: false,
     });
+  }
+  return out;
+}
+
+/** What a subscription charges, and what that comes to in a year: a whole sentence for each rhythm. */
+export function chargesSentence(amount: Cents, cadence: Cadence, t: T): string {
+  const v = { amount: money(amount), yearly: money0(amount * perYear(cadence)) };
+  switch (cadence) {
+    case "weekly":
+      return t("It charges you {amount} a week, {yearly} a year.", v);
+    case "biweekly":
+      return t("It charges you {amount} every two weeks, {yearly} a year.", v);
+    case "semimonthly":
+      return t("It charges you {amount} twice a month, {yearly} a year.", v);
+    case "monthly":
+      return t("It charges you {amount} a month, {yearly} a year.", v);
+    case "quarterly":
+      return t("It charges you {amount} every three months, {yearly} a year.", v);
+    case "semiannual":
+      return t("It charges you {amount} every six months, {yearly} a year.", v);
+    case "annual":
+      return t("It charges you {amount} a year.", v);
+  }
+}
+
+/** A subscription that started lately, while its latest charge is recent: once per subscription. A free trial that turned into one says so. */
+function newSubscriptions(a: Analysis, t: T): Alert[] {
+  const out: Alert[] = [];
+  for (const r of a.subscriptions.active) {
+    if (!r.started || r.source === "added" || !r.lastDate || daysBetween(r.lastDate, a.today) > NEW_NEWS_DAYS) continue;
+    const vars = { name: r.name, date: shortDate(r.started, t.locale) };
+    const title = r.afterTrial ? t("Your free trial of {name} has ended", vars) : t("New subscription: {name}", vars);
+    out.push({
+      id: `subscription-new:${r.key}`,
+      kind: "price-rise",
+      title,
+      detail: `${chargesSentence(r.amount, r.cadence, t)} ${r.afterTrial ? t("Its first full charge was on {date}.", vars) : t("Its first charge was on {date}.", vars)}`,
+      quiet: { title, detail: r.afterTrial ? t("Its first full charge was on {date}.", vars) : t("Its first charge was on {date}.", vars) },
+      on: r.started,
+      href: "/subscriptions",
+      urgent: false,
+    });
+  }
+  return out;
+}
+
+/** A charge from a subscription the person said they cancelled, dated after it: once for each such charge, and worth acting on. */
+function chargedAfterCancelling(a: Analysis, t: T): Alert[] {
+  const out: Alert[] = [];
+  for (const c of a.subscriptions.cancelled) {
+    for (const charge of c.chargedSince) {
+      if (daysBetween(charge.date, a.today) > STILL_NEWS_DAYS) continue;
+      const vars = { name: c.name, amount: money(charge.amount), date: shortDate(charge.date, t.locale), cancelled: shortDate(c.on, t.locale) };
+      const title = t("{name} charged you after you cancelled", vars);
+      const fix = t("Check your account with them, and ask for a refund if it shouldn't have come.");
+      out.push({
+        id: `subscription-still:${c.key}:${charge.id}`,
+        kind: "price-rise",
+        title,
+        detail: `${t("{amount} on {date}. You said you cancelled it on {cancelled}.", vars)} ${fix}`,
+        quiet: { title, detail: `${t("A charge on {date} came after you said you cancelled it on {cancelled}.", vars)} ${fix}` },
+        on: charge.date,
+        href: "/subscriptions",
+        urgent: true,
+      });
+    }
   }
   return out;
 }
@@ -156,5 +234,7 @@ function priceRises(a: Analysis, t: T): Alert[] {
 /** Everything worth a heads-up, the urgent first, in the language of `t` (English unless asked). */
 export function alertsFor(a: Analysis, t: T = EN): Alert[] {
   const bill = shortBill(a, t);
-  return [...bankAlerts(a, t), ...(bill ? [bill] : []), ...priceRises(a, t)].sort((x, y) => Number(y.urgent) - Number(x.urgent));
+  return [...bankAlerts(a, t), ...(bill ? [bill] : []), ...chargedAfterCancelling(a, t), ...priceRises(a, t), ...newSubscriptions(a, t)].sort(
+    (x, y) => Number(y.urgent) - Number(x.urgent),
+  );
 }

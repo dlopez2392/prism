@@ -11,6 +11,8 @@
 // time or a zone, so a server in UTC and a phone in Honolulu agree on which
 // day a coffee was bought.
 
+import type { SubscriptionNotes } from "./details";
+
 export type ISODate = string;
 export type Cents = number;
 
@@ -200,4 +202,6 @@ export type FinanceData = {
   hiddenAccounts?: Account[];
   /** What those accounts hold, set aside with them: in a download of the person's data, never in a total. */
   hiddenHoldings?: Holding[];
+  /** What the person said about their subscriptions (finance/details.ts): their own view only, never the household's. */
+  subscriptionNotes?: SubscriptionNotes;
 };

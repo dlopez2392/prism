@@ -101,6 +101,14 @@ const SUBSCRIPTION_MAX: Cents = 10_000;
 const SMALL_BILL_MAX: Cents = 3_000;
 
 
+/** A dollar or less, going out: what a free trial charges to check a card. */
+const TRIAL_CHARGE_MAX: Cents = 100;
+
+/** A first charge of a dollar or less followed by one at least five times bigger: a trial, then the subscription. */
+function isTrialCharge(first: Transaction, next: Transaction): boolean {
+  return first.amount < 0 && -first.amount <= TRIAL_CHARGE_MAX && -next.amount >= -first.amount * 5;
+}
+
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
@@ -123,6 +131,8 @@ export function detectRecurring(txns: Transaction[], today: ISODate): RecurringS
   const streams: RecurringStream[] = [];
   for (const [key, all] of groups) {
     all.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    // A free trial that asked for a card (a dollar or less, then the real price) isn't the first charge of the rhythm.
+    if (all.length >= 2 && isTrialCharge(all[0]!, all[1]!)) all.shift();
     // Monthly and more often, from the last 200 days; only what isn't that is tried as a bill that comes less often.
     const recent = all.filter((t) => t.date >= since);
     const stream = (recent.length >= 3 ? frequentStream(key, recent, today) : null) ?? longStream(key, all, today);
@@ -244,10 +254,19 @@ export function amountPattern(
 function kindOf(t: Transaction, variable: boolean): StreamKind {
   if (t.category === "income") return "income";
   if (t.category === "transfer") return "transfer";
-  const size = Math.abs(t.amount);
-  if (!variable && SUBSCRIPTION_CATEGORIES.includes(t.category) && size <= SUBSCRIPTION_MAX) return "subscription";
-  if (!variable && t.category === "bills" && size <= SMALL_BILL_MAX) return "subscription";
-  return "bill";
+  return looksLikeSubscription(t.category, Math.abs(t.amount), variable) ? "subscription" : "bill";
+}
+
+/**
+ * Whether a fixed charge of this size, in this category, reads as a
+ * subscription rather than a bill: the one rule for streams that come every
+ * month or more often (their kind) and, on the Subscriptions page, for those
+ * that come less often (whose kind stays "bill", so set-aside never changes).
+ */
+export function looksLikeSubscription(category: CategoryId, size: Cents, variable: boolean): boolean {
+  if (variable) return false;
+  if (SUBSCRIPTION_CATEGORIES.includes(category) && size <= SUBSCRIPTION_MAX) return true;
+  return category === "bills" && size <= SMALL_BILL_MAX;
 }
 
 /** Every occurrence of `stream` from `from` through `to`, inclusive. */

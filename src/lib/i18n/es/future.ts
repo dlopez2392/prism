@@ -142,7 +142,6 @@ export const FUTURE: Record<string, string> = {
     "para tener un enlace privado de calendario que mantenga al día tus propios recordatorios.",
   "from {before} to {after}": "de {before} a {after}",
   "last three full months": "últimos tres meses completos",
-  monthly: "al mes",
   "needs three full months": "requiere tres meses completos",
   "{account} over the next {n} days — every payday and bill we can see, plus your usual day-to-day.":
     "{account} en los próximos {n} días: cada día de pago y cada factura que vemos, más tu gasto habitual del día a día.",

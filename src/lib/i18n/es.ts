@@ -17,6 +17,7 @@ import { HOUSEHOLD } from "./es/household";
 import { IMPORTS } from "./es/imports";
 import { NET_WORTH } from "./es/net-worth";
 import { PLUS } from "./es/plus";
+import { SUBSCRIPTIONS } from "./es/subscriptions";
 import { YEAR_TAXES } from "./es/year-taxes";
 
 /** Every part, by name: the test looks for a sentence given twice. */
@@ -33,6 +34,7 @@ export const ES_PARTS: Record<string, Record<string, string>> = {
   alerts: ALERTS,
   calendar: CALENDAR,
   plus: PLUS,
+  subscriptions: SUBSCRIPTIONS,
 };
 
 export const ES: Record<string, string> = Object.assign({}, ...Object.values(ES_PARTS));

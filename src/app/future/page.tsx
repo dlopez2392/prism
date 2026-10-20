@@ -14,7 +14,7 @@ import { ChartCard } from "@/components/chart-card";
 import { Legend } from "@/components/charts/core";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { CategoryIcon } from "@/components/category-icon";
-import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
+import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
 import { affordBase } from "@/lib/finance/afford";
 import { dueReminders, remindable } from "@/lib/finance/calendar";
 import { paymentsDue, rateText } from "@/lib/finance/debts";
@@ -39,6 +39,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 const PAST_DAYS = 30;
+/** The biggest few subscriptions here; the rest are a tap away on Subscriptions. */
+const SUBSCRIPTIONS_SHOWN = 6;
 
 export default async function FuturePage() {
   const [data, t, plus] = await Promise.all([getFinance(), getT(), currentAccount().then(plusFor)]);
@@ -75,8 +77,9 @@ export default async function FuturePage() {
   const next30 = forecast.events.filter((e) => e.date <= addDays(a.today, 30));
   const inflow = next30.filter((e) => e.amount > 0).reduce((s, e) => s + e.amount, 0);
   const outflow = next30.filter((e) => e.amount < 0).reduce((s, e) => s - e.amount, 0);
-  const subs = a.streams.filter((s) => s.kind === "subscription" && s.amount < 0).sort((x, y) => monthlyCost(y) - monthlyCost(x));
-  const subsMonthly = subs.reduce((s, x) => s + monthlyCost(x), 0);
+  // The Subscriptions page's own list and total, the biggest few here.
+  const subs = a.subscriptions.active.slice(0, SUBSCRIPTIONS_SHOWN);
+  const subsMonthly = a.subscriptions.monthly;
   // Bills that come every three, six or twelve months, and what they cost spread over the year.
   const lessOften = setAside(a.streams);
   const soon = lessOften.bills.filter((s) => s.accountId === checking.id && s.nextDate <= forecast.points.at(-1)!.date);
@@ -305,32 +308,38 @@ export default async function FuturePage() {
         <Card className="p-5 sm:p-6">
           <CardHeader
             title={t("Subscriptions")}
-            subtitle={subs.length ? t("{monthly} a month · {yearly} a year", { monthly: money0(subsMonthly), yearly: money0(subsMonthly * 12) }) : undefined}
+            subtitle={subs.length ? t("{monthly} a month · {yearly} a year", { monthly: money0(subsMonthly), yearly: money0(a.subscriptions.yearly) }) : undefined}
+            action={subs.length ? <ButtonLink href="/subscriptions">{t("See all")}</ButtonLink> : undefined}
           />
           {subs.length ? (
             <ul className="mt-3 divide-y divide-[var(--line)]">
               {subs.map((s) => (
-                <li key={s.id} className="flex items-center gap-3 py-2.5">
-                  <CategoryIcon category={s.category} />
+                <li key={`${s.source}:${s.streamId ?? s.key}`} className="flex items-center gap-3 py-2.5">
+                  <Repeat aria-hidden className="size-4 shrink-0 text-accent" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{s.merchant}</div>
+                    <div className="text-sm font-semibold text-ink-1 [overflow-wrap:anywhere] sm:truncate">{s.name}</div>
                     <div className="text-xs text-ink-3">{t("Next {date}", { date: shortDate(s.nextDate, locale) })}</div>
                   </div>
                   <div className="text-right">
-                    <div className="num text-sm font-bold text-ink-1">{money(Math.abs(s.amount))}</div>
-                    {s.priceChange ? (
+                    <div className="num text-sm font-bold text-ink-1">{money(s.amount)}</div>
+                    {s.priceChange && s.priceChange.to > s.priceChange.from ? (
                       <StatusPill status="warn" className="mt-1">
-                        {t("Up from {amount}", { amount: money(Math.abs(s.priceChange.from)) })}
+                        {t("Up from {amount}", { amount: money(s.priceChange.from) })}
                       </StatusPill>
                     ) : (
-                      <div className="text-xs text-ink-3">{t("monthly")}</div>
+                      <div className="text-xs text-ink-3">{scheduleText(s.cadence, undefined, t)}</div>
                     )}
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <EmptyState icon={Repeat} title={t("No subscriptions spotted")} body={t("Anything that charges you the same amount every month shows up here, with price rises flagged.")} />
+            <EmptyState
+              icon={Repeat}
+              title={t("No subscriptions spotted")}
+              body={t("Anything that charges you the same amount every month shows up here, with price rises flagged.")}
+              action={<ButtonLink href="/subscriptions">{t("Add one Prism can't see")}</ButtonLink>}
+            />
           )}
         </Card>
         </div>

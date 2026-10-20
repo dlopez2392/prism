@@ -417,7 +417,6 @@ export function upcomingBills(data: AgentData, args: { days?: number }) {
     )
     .sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
 
-  const subscriptions = a.streams.filter((s) => s.kind === "subscription");
   const lessOften = setAside(a.streams);
   const lowest = a.forecast?.lowest;
   return {
@@ -434,7 +433,8 @@ export function upcomingBills(data: AgentData, args: { days?: number }) {
       account: accountLabel(account),
       ...lenderTerms(liability),
     })),
-    subscriptions_per_month: usd(subscriptions.reduce((s, x) => s + monthlyCost(x), 0)),
+    // The Subscriptions page's own total, so the two never disagree.
+    subscriptions_per_month: usd(a.subscriptions.monthly),
     // Every three, six or twelve months: the whole list, however far off, so a yearly bill is never a surprise.
     bills_less_often_than_monthly: lessOften.bills.map((s) => ({
       name: s.merchant,
@@ -449,6 +449,52 @@ export function upcomingBills(data: AgentData, args: { days?: number }) {
     ...(lowest && a.checking && lowest.date <= to
       ? { lowest_expected_checking_balance: { amount: usd(lowest.balance), date: lowest.date, account: accountLabel(a.checking) } }
       : {}),
+  };
+}
+
+// — list_subscriptions ——————————————————————————————————————————
+
+/** Everything paid for again and again, as the Subscriptions page lists it: what each costs, when next, where to cancel, and what the person cancelled. */
+export function listSubscriptions(data: AgentData) {
+  const s = analyze(data).subscriptions;
+  const accounts = byId(data);
+  const txById = new Map(data.transactions.map((t) => [t.split?.of ?? t.id, t]));
+  const cite = (ids: string[], n: number) =>
+    ids
+      .map((id) => txById.get(id))
+      .filter((t): t is Transaction => Boolean(t))
+      .sort(newestFirst)
+      .slice(0, n)
+      .map((t) => citeable(t, accounts));
+  return {
+    ...frame(data),
+    per_month: usd(s.monthly),
+    per_year: usd(s.yearly),
+    subscriptions: s.active.map((r) => ({
+      name: r.name,
+      cost: usd(r.amount),
+      cadence: r.cadence,
+      per_month: usd(r.monthly),
+      next: r.nextDate,
+      // Found from repeating charges, marked one by the user, or added by the user (not in the bank, so nothing to cite).
+      source: r.source === "added" ? "added_by_user" : r.source === "marked" ? "marked_by_user" : "found",
+      ...(r.priceChange ? { price_changed: { from: usd(r.priceChange.from), to: usd(r.priceChange.to), on: r.priceChange.date } } : {}),
+      ...(r.started ? { started: r.started, ...(r.afterTrial ? { after_free_trial: true } : {}) } : {}),
+      ...(r.billedBy ? { billed_by: r.billedBy } : {}),
+      ...(r.cancel ? { where_to_cancel: r.cancel.url } : {}),
+      based_on: cite(r.transactionIds, 2),
+    })),
+    cancelled: s.cancelled.map((c) => ({
+      name: c.name,
+      cancelled_on: c.on,
+      saves_per_year: usd(c.yearly),
+      // Charges that came after the user said they cancelled it: each one shouldn't have.
+      charged_since: cite(
+        c.chargedSince.map((x) => x.id),
+        c.chargedSince.length,
+      ),
+    })),
+    billed_through_app_stores: s.appStores.map((x) => ({ store: x.store, charges_last_month: x.charges, total: usd(x.total) })),
   };
 }
 
