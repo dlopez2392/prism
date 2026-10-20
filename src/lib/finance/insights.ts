@@ -15,7 +15,8 @@ import type { BudgetStatus } from "./budgets";
 import { daysLeftInMonth } from "./budgets";
 import { addDays, monthKey, startOfMonth } from "./dates";
 import { money, money0, monthLong, percent } from "./format";
-import { monthlyCost, perYear, type RecurringStream } from "./recurring";
+import { perYear, type RecurringStream } from "./recurring";
+import { subscriptionsFor, type Subscriptions } from "./subscriptions";
 import type { ISODate, Transaction } from "./types";
 
 export type InsightTone = "heads_up" | "win" | "idea";
@@ -38,10 +39,12 @@ export function generateInsights(input: {
   budgets: BudgetStatus[];
   streams: RecurringStream[];
   flows: MonthFlow[];
+  /** The Subscriptions page's list (subscriptions.ts), so the two never disagree; without it, the streams that are subscriptions. */
+  subscriptions?: Subscriptions;
   /** The language to say it in; English unless asked. */
   t?: T;
 }): Insight[] {
-  const { txns, today, budgets, streams, flows, t = EN } = input;
+  const { txns, today, budgets, streams, flows, subscriptions, t = EN } = input;
   const { locale } = t;
   const inCategory = (n: number, label: string) =>
     n === 1 ? t("1 {category} transaction this month", { category: label.toLowerCase() }) : t("{n} {category} transactions this month", { n, category: label.toLowerCase() });
@@ -164,16 +167,15 @@ export function generateInsights(input: {
     }
   }
 
-  // 5. What subscriptions add up to.
-  const subs = streams.filter((s) => s.kind === "subscription" && s.amount < 0);
-  if (subs.length >= 3) {
-    const monthly = subs.reduce((s, x) => s + monthlyCost(x), 0);
+  // 5. What subscriptions add up to: the Subscriptions page's own figures.
+  const subs = subscriptions ?? subscriptionsFor(streams, txns, null, today);
+  if (subs.active.length >= 3) {
     out.push({
       id: "subscriptions",
       tone: "idea",
-      title: t("{n} subscriptions cost you {yearly} a year", { n: subs.length, yearly: money0(monthly * 12) }),
-      detail: t("That's {monthly} a month. See them all on the Future tab.", { monthly: money0(monthly) }),
-      evidence: subs.flatMap((s) => s.transactionIds.slice(-1)),
+      title: t("{n} subscriptions cost you {yearly} a year", { n: subs.active.length, yearly: money0(subs.yearly) }),
+      detail: t("That's {monthly} a month. See them all, and where to cancel, on Subscriptions.", { monthly: money0(subs.monthly) }),
+      evidence: subs.active.flatMap((s) => s.transactionIds.slice(-1)),
       evidenceLabel: t("The latest charge from each subscription"),
     });
   }

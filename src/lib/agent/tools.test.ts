@@ -10,6 +10,7 @@ import {
   goals,
   income,
   listAccounts,
+  listSubscriptions,
   netWorth,
   overview,
   searchTransactions,
@@ -430,5 +431,19 @@ describe("plan_debt_payoff", () => {
     const given = planDebtPayoff(bare, { debts: [{ account_id: "demo-student", apr: 5, monthly_payment: 210 }] });
     expect(given.plans!.highest_rate_first.order.map((o) => o.account)).toEqual(["Student loan ••6614"]);
     expect(planDebtPayoff({ ...data, accounts: data.accounts.filter((a) => a.balance >= 0) }, {})).toMatchObject({ debts: [], note: expect.stringMatching(/Nothing is owed/) });
+  });
+});
+
+describe("list_subscriptions", () => {
+  it("lists the example household's subscriptions with the page's own totals, each citing its charges", () => {
+    const data = demo();
+    const r = listSubscriptions(data);
+    const s = analyze(data).subscriptions;
+    expect(r.per_month).toBe(s.monthly / 100);
+    expect(r.subscriptions.map((x) => x.name)).toEqual(s.active.map((x) => x.name));
+    expect(r.subscriptions.length).toBeGreaterThan(0);
+    for (const sub of r.subscriptions) expect(sub.based_on.length).toBeGreaterThan(0);
+    // upcoming_bills says the same per month.
+    expect(upcomingBills(data, {}).subscriptions_per_month).toBe(r.per_month);
   });
 });

@@ -380,7 +380,6 @@ export const CORE: Record<string, string> = {
   "See the forecast": "Ver el pronóstico",
   "See where your money goes, what's coming next, and how far you've come — in one vivid picture. A {company} product.":
     "Mira a dónde va tu dinero, lo que viene y cuánto has avanzado, en una sola imagen. Un producto de {company}.",
-  "See your bills": "Ver tus facturas",
   "Select to open": "Selecciona para abrir",
   "Send a new code": "Enviar un código nuevo",
   "Sending…": "Enviando…",
@@ -468,7 +467,6 @@ export const CORE: Record<string, string> = {
   "That's a lot of codes in a short time. Wait a minute, then try again.": "Son muchos códigos en poco tiempo. Espera un minuto y vuelve a intentarlo.",
   "That's a lot of tries. Wait a minute, then enter the code showing now.": "Son muchos intentos. Espera un minuto y escribe el código que aparece ahora.",
   "That's more than $1,000,000 a month.": "Eso es más de $1,000,000 al mes.",
-  "That's {monthly} a month. See them all on the Future tab.": "Son {monthly} al mes. Míralas todas en Futuro.",
   "The connection was cancelled.": "Se canceló la conexión.",
   "The first part is whatever the others leave of {total}.": "La primera parte es lo que dejen las demás de {total}.",
   "The flow": "El flujo",

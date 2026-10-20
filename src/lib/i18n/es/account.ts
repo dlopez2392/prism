@@ -20,8 +20,6 @@ export const ACCOUNT: Record<string, string> = {
   "A current code, to turn it off": "Un código actual, para desactivarlo",
   "A heads-up when a bank needs you, a bill may not be covered or a subscription goes up, and short summaries: on Mondays, and early each month for the month before. Bills and figures are as of your last visit, or this morning's check of your banks if you allow it, and each email says which. No tracking, and one click stops them.":
     "Un aviso cuando un banco te necesita, cuando puede que no alcance para una factura o cuando sube una suscripción, y resúmenes cortos: los lunes, y a principios de cada mes sobre el mes anterior. Las facturas y las cifras son las de tu última visita, o las de la revisión de tus bancos de esta mañana si la permites, y cada correo dice cuál. Sin rastreo, y con un clic dejan de llegar.",
-  "A recurring charge came in higher than the one before.": "Un cargo recurrente llegó más alto que el anterior.",
-  "A subscription went up": "Subió una suscripción",
   "Add a code from an authenticator app on your phone to every sign-in, so your email alone can't open Prism.":
     "Agrega a cada inicio de sesión un código de una app de autenticación en tu teléfono, para que tu correo por sí solo no pueda abrir Prism.",
   "Address copied": "Dirección copiada",

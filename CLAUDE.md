@@ -374,6 +374,21 @@
   monthly set-aside comes only from `setAside`, so the screen and the
   connectors agree. Loosening any of these rules needs a test that a
   lookalike (a store visited twice a year apart) still isn't a bill.
+- Subscriptions (`/subscriptions`, `src/lib/finance/subscriptions.ts`,
+  `analyze().subscriptions`, `list_subscriptions`): ONE list and total for the
+  page, the Future card, the insight, the alerts and the connectors; never
+  re-derive "what counts" from `kind === "subscription"` elsewhere. A long
+  stream that `looksLikeSubscription` is LISTED as one but keeps its kind
+  "bill" (the set-aside rule above holds). What the person says rides in
+  `sealed_txn_details` (`subs` by `ruleKey`, `own` added by hand), reaches
+  their own view, the morning check and connected apps through
+  `withSubscriptionNotes`, and never the household or the example household.
+  Saying one was cancelled is Prism Plus (`cancelSubscription`); a charge
+  dated more than `CANCEL_GRACE_DAYS` later is urgent news. Subscription
+  alerts use the "price-rise" kind: a new alert kind is a migration with a
+  DROP, the owner's to run. Every cancel link is the service's own page,
+  checked by hand before it's added; Prism never cancels for anyone and
+  never takes a login to.
 - Paying off what you owe (`src/lib/finance/payoff.ts`, the card on Net
   worth, `plan_debt_payoff`): one arithmetic for the screen and the
   connectors. A rate or a payment is the lender's (`Account.liability`) or

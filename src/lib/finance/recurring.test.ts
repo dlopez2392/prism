@@ -298,3 +298,17 @@ describe("what a bill that comes once a year changes", () => {
     expect(safeToSpend(250_000, today, [...forecast.events, pay])).toMatchObject({ committed: 91_000, amount: 250_000 - 91_000 - 25_000 });
   });
 });
+
+describe("a free trial before a subscription", () => {
+  const today = "2026-09-25";
+  it("leaves the trial's dollar out of the rhythm, so the subscription stays fixed", () => {
+    const txns = [tx("2026-06-20", -100, "Tunecloud", "fun"), ...monthly(["2026-07", "2026-08", "2026-09"], 20, -1_299, "Tunecloud", "fun")];
+    const [s] = detectRecurring(txns, today);
+    expect(s).toMatchObject({ kind: "subscription", variable: false, amount: -1_299, occurrences: 3 });
+  });
+
+  it("keeps a subscription that really costs 99 cents", () => {
+    const [s] = detectRecurring(monthly(["2026-06", "2026-07", "2026-08", "2026-09"], 4, -99, "Cloudbox Storage", "bills"), today);
+    expect(s).toMatchObject({ kind: "subscription", amount: -99, occurrences: 4 });
+  });
+});

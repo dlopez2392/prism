@@ -28,11 +28,18 @@
 // shop's name as recurring.ts groups it, and splits each purchase there that
 // the person hasn't split, or kept whole, themselves; the cents left over by
 // rounding go to the parts that lost the most, so the parts always add up.
+//
+// The same record keeps what the person says about their SUBSCRIPTIONS
+// (finance/subscriptions.ts): that a shop's repeating charge is one, or isn't
+// (keyed like a shop's split), that they cancelled it and when, and the ones
+// they pay for that Prism can't see, added by hand. It names shops, so it's
+// sealed with the rest, and it stays out of the household like the rest.
 
 import { CATEGORIES, isSpendCategory } from "./categories";
 import { money, shortDate } from "./format";
 import { normalizeMerchant } from "./merchant";
 import { cleanText } from "./p2p";
+import type { Cadence } from "./recurring";
 import type { Account, Cents, FinanceData, Holding, ISODate, Owed, SpendCategoryId, Transaction } from "./types";
 import { EN, type T } from "@/lib/i18n/t";
 
@@ -44,8 +51,24 @@ export type TxnDetail = { split?: SplitPart[]; tags?: string[]; owed?: Owed; who
 export type SplitShare = { category: SpendCategoryId; share: number };
 /** Every purchase at one shop, split the same way. `name` is how the bank last wrote it. */
 export type SplitRule = { name: string; split: SplitShare[] };
-/** `rules` is keyed by the shop as normalizeMerchant writes it. `hidden`: the ids of accounts left out of every total. */
-export type TxnDetails = { v: 1; lines: Record<string, TxnDetail>; rules?: Record<string, SplitRule>; hidden?: string[] };
+/**
+ * What the person said about one shop's repeating charge. `is`: it is (true)
+ * or isn't (false) a subscription, whatever Prism made of it. `cancelled`:
+ * the day they said they cancelled it, and what it cost then (what they save).
+ */
+export type SubMark = { name: string; is?: boolean; cancelled?: { on: ISODate; amount: Cents; cadence: Cadence } };
+/** How often a subscription added by hand charges. */
+export type OwnCadence = "weekly" | "monthly" | "quarterly" | "semiannual" | "annual";
+/** A subscription Prism can't see (paid in cash, or on a card that isn't connected), added by hand. `next`: the next charge, as they gave it. */
+export type OwnSub = { id: string; name: string; amount: Cents; cadence: OwnCadence; next: ISODate };
+/** What the Subscriptions page keeps: marks by shop (as ruleKey writes it), and those added by hand. */
+export type SubscriptionNotes = { marks: Record<string, SubMark>; own: OwnSub[] };
+/**
+ * `rules` is keyed by the shop as normalizeMerchant writes it. `hidden`: the
+ * ids of accounts left out of every total. `subs` and `own`: the
+ * Subscriptions page's marks and the subscriptions added by hand.
+ */
+export type TxnDetails = { v: 1; lines: Record<string, TxnDetail>; rules?: Record<string, SplitRule>; hidden?: string[]; subs?: Record<string, SubMark>; own?: OwnSub[] };
 
 export const NO_DETAILS: TxnDetails = { v: 1, lines: {} };
 
@@ -63,7 +86,19 @@ export const DETAIL_LIMITS = {
   ruleName: 60,
   /** Accounts left out of totals. */
   hidden: 200,
+  /** Shops with a subscription mark. */
+  subs: 200,
+  /** Subscriptions added by hand. */
+  own: 50,
+  subName: 60,
+  /** The most a subscription added by hand may cost a time: $10,000. */
+  subAmount: 1_000_000,
 } as const;
+
+const CADENCES: readonly Cadence[] = ["weekly", "biweekly", "semimonthly", "monthly", "quarterly", "semiannual", "annual"];
+export const OWN_CADENCES: readonly OwnCadence[] = ["weekly", "monthly", "quarterly", "semiannual", "annual"];
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const OWN_ID = /^own-[a-z0-9]{6,24}$/;
 
 /** The longest account id kept: Plaid's are 37 characters; a household's or a wallet's a little longer. */
 const ACCOUNT_ID_MAX = 200;
@@ -182,6 +217,38 @@ export function partsByShare(total: Cents, split: SplitShare[]): SplitPart[] {
   return split.map((p, i) => ({ category: p.category, amount: amounts[i]! })).filter((p) => p.amount > 0);
 }
 
+/** A real calendar day, written as one. */
+function isDay(x: unknown): x is ISODate {
+  return typeof x === "string" && DAY.test(x) && new Date(`${x}T00:00:00Z`).toISOString().slice(0, 10) === x;
+}
+
+/** One shop's subscription mark as stored, or null when nothing in it reads. */
+export function validSubMark(x: unknown): SubMark | null {
+  if (!x || typeof x !== "object") return null;
+  const { name, is, cancelled } = x as Record<string, unknown>;
+  const label = typeof name === "string" ? cleanText(name, DETAIL_LIMITS.subName) : "";
+  if (!label) return null;
+  const c = cancelled as Record<string, unknown> | undefined;
+  const ended =
+    c && typeof c === "object" && isDay(c.on) && Number.isSafeInteger(c.amount) && (c.amount as number) > 0 && CADENCES.includes(c.cadence as Cadence)
+      ? { on: c.on, amount: c.amount as Cents, cadence: c.cadence as Cadence }
+      : null;
+  const said = typeof is === "boolean" ? is : null;
+  if (said === null && !ended) return null;
+  return { name: label, ...(said !== null ? { is: said } : {}), ...(ended ? { cancelled: ended } : {}) };
+}
+
+/** A subscription added by hand, as stored or as typed: a name, what it costs a time (up to $10,000), how often, and a real day for the next charge. */
+export function validOwnSub(x: unknown): OwnSub | null {
+  if (!x || typeof x !== "object") return null;
+  const { id, name, amount, cadence, next } = x as Record<string, unknown>;
+  const label = typeof name === "string" ? cleanText(name, DETAIL_LIMITS.subName) : "";
+  if (typeof id !== "string" || !OWN_ID.test(id) || !label) return null;
+  if (!Number.isSafeInteger(amount) || (amount as number) <= 0 || (amount as number) > DETAIL_LIMITS.subAmount) return null;
+  if (!OWN_CADENCES.includes(cadence as OwnCadence) || !isDay(next)) return null;
+  return { id, name: label, amount: amount as Cents, cadence: cadence as OwnCadence, next };
+}
+
 /** Everything stored, as it was kept: anything unreadable is dropped, never guessed at. */
 export function validDetails(x: unknown): TxnDetails {
   if (!x || typeof x !== "object" || (x as { v?: unknown }).v !== 1) return NO_DETAILS;
@@ -209,7 +276,35 @@ export function validDetails(x: unknown): TxnDetails {
   const hidden = Array.isArray(listed)
     ? [...new Set(listed.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= ACCOUNT_ID_MAX))].slice(0, DETAIL_LIMITS.hidden)
     : [];
-  return { v: 1, lines: Object.fromEntries(kept), ...(rules.length ? { rules: Object.fromEntries(rules) } : {}), ...(hidden.length ? { hidden } : {}) };
+  const marked = (x as { subs?: unknown }).subs;
+  const subs: [string, SubMark][] = [];
+  if (marked && typeof marked === "object" && !Array.isArray(marked)) {
+    for (const [key, value] of Object.entries(marked as Record<string, unknown>)) {
+      // Keyed like a shop's split, so a mark always finds the shop's charges.
+      if (ruleKey(key) !== key) continue;
+      const m = validSubMark(value);
+      if (m) subs.push([key, m]);
+      if (subs.length === DETAIL_LIMITS.subs) break;
+    }
+  }
+  const added = (x as { own?: unknown }).own;
+  const ids = new Set<string>();
+  const own: OwnSub[] = [];
+  for (const raw of Array.isArray(added) ? added : []) {
+    const o = validOwnSub(raw);
+    if (!o || ids.has(o.id)) continue;
+    ids.add(o.id);
+    own.push(o);
+    if (own.length === DETAIL_LIMITS.own) break;
+  }
+  return {
+    v: 1,
+    lines: Object.fromEntries(kept),
+    ...(rules.length ? { rules: Object.fromEntries(rules) } : {}),
+    ...(hidden.length ? { hidden } : {}),
+    ...(subs.length ? { subs: Object.fromEntries(subs) } : {}),
+    ...(own.length ? { own } : {}),
+  };
 }
 
 /**
@@ -244,9 +339,15 @@ export function checkDetail(t: Pick<Transaction, "amount" | "category">, x: unkn
 
 const dollars = (c: Cents) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Anything to keep: a line's own details, a shop's split with no line of its own (a split rule made from a plain purchase), or an account left out. */
+/** Anything to keep: a line's own details, a shop's split with no line of its own (a split rule made from a plain purchase), an account left out, or something about a subscription. */
 export function hasDetails(details: TxnDetails): boolean {
-  return Object.keys(details.lines).length > 0 || Object.keys(details.rules ?? {}).length > 0 || (details.hidden?.length ?? 0) > 0;
+  return (
+    Object.keys(details.lines).length > 0 ||
+    Object.keys(details.rules ?? {}).length > 0 ||
+    (details.hidden?.length ?? 0) > 0 ||
+    Object.keys(details.subs ?? {}).length > 0 ||
+    (details.own?.length ?? 0) > 0
+  );
 }
 
 /** The details with one transaction's set (or cleared, with null). */
@@ -269,6 +370,36 @@ export function withRule(old: TxnDetails, key: string, rule: SplitRule | null): 
 export function withHidden(old: TxnDetails, accountId: string, hidden: boolean): TxnDetails {
   const ids = (old.hidden ?? []).filter((id) => id !== accountId);
   return validDetails({ ...old, hidden: hidden ? [...ids, accountId] : ids });
+}
+
+/** The details with one shop's subscription mark set (or cleared, with null). */
+export function withSubMark(old: TxnDetails, key: string, mark: SubMark | null): TxnDetails {
+  const subs = { ...old.subs };
+  if (mark) subs[key] = mark;
+  else delete subs[key];
+  return validDetails({ ...old, subs });
+}
+
+/** The details with a subscription added by hand put in (or replaced, by its id), or taken out with `remove`. */
+export function withOwnSub(old: TxnDetails, sub: OwnSub, remove = false): TxnDetails {
+  const rest = (old.own ?? []).filter((o) => o.id !== sub.id);
+  return validDetails({ ...old, own: remove ? rest : [...rest, sub] });
+}
+
+/** What the Subscriptions page reads from the details, or null when there's nothing. */
+export function subscriptionNotes(details: TxnDetails | null): SubscriptionNotes | null {
+  if (!details || (!details.subs && !details.own)) return null;
+  return { marks: details.subs ?? {}, own: details.own ?? [] };
+}
+
+/**
+ * The money with the person's own subscription notes on it: their own view,
+ * the morning check and connected apps, never the household. Never the
+ * example household either: real and made-up money are never shown together.
+ */
+export function withSubscriptionNotes<T extends FinanceData>(data: T, details: TxnDetails | null): T {
+  const notes = subscriptionNotes(details);
+  return notes && data.source !== "demo" ? { ...data, subscriptionNotes: notes } : data;
 }
 
 /** Each transaction with what the person added: a split becomes its parts, and a line left out (or in an account left out) says so. Never changes the transactions it's given. */

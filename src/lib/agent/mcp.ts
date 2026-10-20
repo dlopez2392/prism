@@ -30,6 +30,7 @@ import {
   spendingBreakdown,
   taxes,
   upcomingBills,
+  listSubscriptions,
   type AgentData,
 } from "./tools";
 
@@ -222,6 +223,17 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Upcoming bills and paydays", ...READ_ONLY },
     },
     runWith(upcomingBills),
+  );
+
+  server.registerTool(
+    "list_subscriptions",
+    {
+      title: "Subscriptions",
+      description:
+        "Everything the user pays for again and again, as their Subscriptions page lists it: each one's cost, how often, cost per month, next charge, any recent price change, whether it is new or followed a free trial, whether Apple or Google bills it, and the service's own cancel page when known; the total per month and per year; the ones the user said they cancelled, with any charge that came after (each cited); and how many charges Apple and Google billed in the last month. Some are added by the user by hand and have no charges to cite. Read-only: nothing here cancels anything.",
+      annotations: { title: "Subscriptions", ...READ_ONLY },
+    },
+    run(listSubscriptions),
   );
 
   server.registerTool(

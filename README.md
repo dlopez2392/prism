@@ -580,6 +580,37 @@ counts a split bill the way the app does (`alerts_sources` hands it over).
 Exports carry the split, tags and debts as their own columns, after the ones
 Prism's importer reads.
 
+## Subscriptions
+
+`/subscriptions` lists everything a person pays for again and again
+(`src/lib/finance/subscriptions.ts`, `analyze().subscriptions`), and every
+screen and connector reads the same list and total: the Future card, the
+insight, the alerts and `list_subscriptions`.
+
+- **What counts:** a stream `detectRecurring` calls a subscription, and one
+  that comes every three, six or twelve months that would read as one if it
+  came monthly (`looksLikeSubscription`; its stream stays a "bill", so the
+  set-aside never moves). A free trial's first charge of a dollar or less is
+  left out of the rhythm, so the subscription after it stays fixed.
+- **What the person says:** a charge is one, or isn't; they cancelled one
+  (Prism Plus); and the ones Prism can't see, added by hand (counted in the
+  subscription total only, never in the forecast). Kept in the same sealed
+  record as splits and tags (`profiles.sealed_txn_details`: `subs` keyed by
+  the shop as `ruleKey` writes it, `own` by `own-<hex>`), applied to the
+  person's own view, the morning check and connected apps, never the
+  household or the example household (`withSubscriptionNotes`).
+- **Cancelled:** from the day they say so, a charge from that shop dated
+  more than three days later is caught, on the page and as an urgent alert
+  ("price-rise" kind, shown as "A subscription changed": the kinds a person
+  chooses are a database constraint).
+- **New, and after a free trial:** a subscription whose first charge came in
+  the last 100 days, with an alert while its latest charge is recent.
+- **Where to cancel:** a link to the service's own cancel page for the
+  services in `CANCEL_LINKS`, each checked by hand; Apple's and Google's
+  for what they bill. Apple and Google bill other apps' subscriptions under
+  their own name, so the page counts what each billed in the last month and
+  says where on the phone the list is.
+
 ## Bills that don't come every month
 
 The car insurance renewal, the water bill every three months, a yearly

@@ -388,3 +388,17 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     VinAudit, which the September research already named, is the self-serve
     path; KBB or J.D. Power can follow under a business agreement. Next: the
     loan beside it, as equity ("you owe $3,200 more than it's worth").
+32. **Subscriptions, on a page of their own.** **Built (2026-10-20):**
+    `/subscriptions` lists everything paid for again and again, yearly ones
+    included, with what it all costs, each one's next charge, and a link to
+    the service's own cancel page for the common ones. A person can say a
+    charge is or isn't a subscription and add the ones Prism can't see (cash,
+    an unconnected card). With Prism Plus they can say they cancelled one:
+    Prism then watches for a charge that shouldn't come and raises an urgent
+    alert if one does. A new subscription, or a free trial that turned into
+    one, is an alert too. Apple's and Google's bundled charges are counted,
+    with where on the phone to see what they're for. Prism never cancels
+    anything for anyone and never asks for a login to do it: a cancelling
+    service that takes a person's passwords is not on the roadmap. Next: the
+    cards view (statement-date usage, interest paid, annual fees), once
+    Liabilities is switched on.
