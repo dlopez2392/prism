@@ -7,10 +7,10 @@ import { holdsDebt, liabilitiesEnabled, liabilitiesStale, LIABILITIES_FRESH_MS, 
 import { validState } from "./sync";
 import type { PlaidAccount } from "./client";
 
-const card: StoredLiability = { account_id: "card", due: "2026-10-14", minimum: 35, statement: 1240.5, apr: 24.99, overdue: false };
+const card: StoredLiability = { account_id: "card", due: "2026-10-14", minimum: 35, statement: 1240.5, apr: 24.99, overdue: false, issued: "2026-09-19" };
 
 describe("what Plaid says a card or a loan asks for", () => {
-  it("is kept down to the due date, minimum, statement balance, rate and whether it's overdue", () => {
+  it("is kept down to the due date, minimum, statement balance and date, rate and whether it's overdue", () => {
     const slim = slimLiabilities({
       credit: [
         {
@@ -21,6 +21,7 @@ describe("what Plaid says a card or a loan asks for", () => {
           ],
           is_overdue: false,
           last_statement_balance: 1240.5,
+          last_statement_issue_date: "2026-09-19",
           minimum_payment_amount: 35,
           next_payment_due_date: "2026-10-14",
           // Anything else Plaid sends is left behind.
@@ -39,14 +40,20 @@ describe("what Plaid says a card or a loan asks for", () => {
 
   it("takes the first rate listed when a card has no purchase APR, and nothing it can't read", () => {
     const [c] = slimLiabilities({ credit: [{ account_id: "c", aprs: [{ apr_percentage: 19.5, apr_type: "special" }], next_payment_due_date: "Oct 14", minimum_payment_amount: Number.NaN }] });
-    expect(c).toEqual({ account_id: "c", due: null, minimum: null, statement: null, apr: 19.5, overdue: false });
+    expect(c).toEqual({ account_id: "c", due: null, minimum: null, statement: null, apr: 19.5, overdue: false, issued: null });
     // A student loan Plaid can't tie to an account can't be shown against one.
     expect(slimLiabilities({ student: [{ account_id: null, interest_rate_percentage: 5 }] })).toEqual([]);
     expect(slimLiabilities({})).toEqual([]);
   });
 
   it("shows owed amounts as positive cents, and a due date only while it's still ahead", () => {
-    expect(toLiability(card, "2026-10-14")).toEqual({ dueDate: "2026-10-14", minimumPayment: 3_500, statementBalance: 124_050, apr: 24.99, overdue: false });
+    expect(toLiability(card, "2026-10-14")).toEqual({ dueDate: "2026-10-14", minimumPayment: 3_500, statementBalance: 124_050, apr: 24.99, overdue: false, statementDate: "2026-09-19" });
+    // A statement date ahead of today isn't one yet, and a copy kept before statement dates were has none.
+    expect(toLiability({ ...card, issued: "2026-10-20" }, "2026-10-14")).not.toHaveProperty("statementDate");
+    const { issued, ...older } = card;
+    void issued;
+    expect(validLiabilities({ at: "2026-10-14T00:00:00Z", list: [older] })).not.toBeNull();
+    expect(validLiabilities({ at: "2026-10-14T00:00:00Z", list: [{ ...card, issued: "Sept 19" }] })).toBeNull();
     expect(toLiability(card, "2026-10-15").dueDate).toBeNull();
     // A lender reporting a credit balance as negative still owes nothing negative.
     expect(toLiability({ ...card, statement: -12, minimum: null }, "2026-10-01")).toMatchObject({ statementBalance: 1_200, minimumPayment: null });

@@ -31,6 +31,7 @@ import {
   taxes,
   upcomingBills,
   listSubscriptions,
+  getCards,
   type AgentData,
 } from "./tools";
 
@@ -234,6 +235,17 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Subscriptions", ...READ_ONLY },
     },
     run(listSubscriptions),
+  );
+
+  server.registerTool(
+    "get_cards",
+    {
+      title: "Credit cards",
+      description:
+        "Each credit card: what's owed against its credit limit and the share of the limit in use (what the credit bureaus see, from the statement balance), its last and next statement dates, what paying before the next statement would take for the reported share to drop under 30% or 10% (a description, not advice), the due date, minimum, statement balance and APR the lender reports, overdue status, and the interest (each charge cited) and annual fee it charged; plus the totals across cards.",
+      annotations: { title: "Credit cards", ...READ_ONLY },
+    },
+    run(getCards),
   );
 
   server.registerTool(

@@ -72,6 +72,8 @@ export type Account = {
   source: DataSource;
   /** A card's or a loan's own terms, from the lender (Plaid Liabilities), when Prism reads them. */
   liability?: Liability;
+  /** A card's credit limit, when the bank says: what its usage is measured against. */
+  creditLimit?: Cents;
 };
 
 /** What a card or a loan asks for next. Amounts are what's owed, as positive cents. */
@@ -84,6 +86,8 @@ export type Liability = {
   /** The purchase APR on a card, the interest rate on a loan, as a percentage. */
   apr: number | null;
   overdue: boolean;
+  /** A card's last statement date: the balance on it is what the card reports to the credit bureaus. Absent when the lender doesn't say. */
+  statementDate?: ISODate;
 };
 
 /** What kind of money an income transaction is, when the bank says (Plaid's detailed category). */

@@ -23,6 +23,8 @@ export type StoredLiability = {
   /** The purchase APR on a card, the interest rate on a loan: a percentage. */
   apr: number | null;
   overdue: boolean;
+  /** A card's last statement date (kept from 2026-10-20; absent in copies from before). */
+  issued?: ISODate | null;
 };
 
 /** A bank's liabilities as of `at`. An empty list is an answer too: nothing to show, and nothing to ask again today. */
@@ -53,6 +55,7 @@ type RawCredit = {
   aprs?: Apr[] | null;
   is_overdue?: boolean | null;
   last_statement_balance?: number | null;
+  last_statement_issue_date?: string | null;
   minimum_payment_amount?: number | null;
   next_payment_due_date?: string | null;
 };
@@ -95,6 +98,7 @@ export function slimLiabilities(raw: RawLiabilities): StoredLiability[] {
       statement: num(c.last_statement_balance),
       apr: purchaseApr(c.aprs),
       overdue: c.is_overdue === true,
+      issued: date(c.last_statement_issue_date),
     });
   }
   for (const m of raw.mortgage ?? []) {
@@ -134,7 +138,8 @@ export function validLiabilities(x: unknown): StoredLiabilities | null {
       (l.minimum === null || num(l.minimum) !== null) &&
       (l.statement === null || num(l.statement) !== null) &&
       (l.apr === null || num(l.apr) !== null) &&
-      typeof l.overdue === "boolean",
+      typeof l.overdue === "boolean" &&
+      (l.issued === undefined || l.issued === null || date(l.issued) !== null),
   );
   return ok ? (s as StoredLiabilities) : null;
 }
@@ -152,5 +157,7 @@ export function toLiability(l: StoredLiability, today: ISODate): Liability {
     statementBalance: l.statement === null ? null : toCents(Math.abs(l.statement)),
     apr: l.apr,
     overdue: l.overdue,
+    // Only a statement already issued: a date ahead of today isn't one.
+    ...(l.issued && l.issued <= today ? { statementDate: l.issued } : {}),
   };
 }

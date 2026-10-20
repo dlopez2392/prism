@@ -68,14 +68,15 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
           <Bullets>
             <li>
               Bancos, tarjetas, préstamos e inversiones, a través de Plaid: los nombres de las cuentas, los últimos cuatro dígitos de los números de cuenta, los
-              saldos, las transacciones (comercio, monto, fecha y categoría) y las inversiones que tienes. Inicias sesión en tu banco a través de Plaid; {p} nunca
+              saldos (y el límite de crédito de una tarjeta), las transacciones (comercio, monto, fecha y categoría) y las inversiones que tienes. Inicias sesión en tu banco a través de Plaid; {p} nunca
               ve tu usuario ni tu contraseña del banco.
               {liabilities ? (
                 <>
                   {" "}
-                  Con tu permiso, que Plaid te pide al conectar, {p} también lee los detalles de tus préstamos: la fecha de pago, el pago mínimo, el saldo del
-                  estado de cuenta y la tasa de interés de cada tarjeta o préstamo, como máximo una vez al día. Los usa para mostrar cuándo vence cada pago, en
-                  Futuro, en Patrimonio neto, en tus recordatorios del calendario y a las apps de IA que conectes, y los guarda cifrados con el resto de la copia
+                  Con tu permiso, que Plaid te pide al conectar, {p} también lee los detalles de tus préstamos: la fecha de pago, el pago mínimo, el saldo y la
+                  fecha del estado de cuenta y la tasa de interés de cada tarjeta o préstamo, como máximo una vez al día. Los usa para mostrar cuándo vence cada
+                  pago y cuándo cierra el estado de cuenta de una tarjeta, en Tarjetas, Futuro y Patrimonio neto, en tus recordatorios del calendario y a las
+                  apps de IA que conectes, y los guarda cifrados con el resto de la copia
                   de ese banco. No se le muestran a tu hogar.
                 </>
               ) : (

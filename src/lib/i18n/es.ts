@@ -9,6 +9,7 @@
 import { ACCOUNT } from "./es/account";
 import { ALERTS } from "./es/alerts";
 import { CALENDAR } from "./es/calendar";
+import { CARDS } from "./es/cards";
 import { CONNECTIONS } from "./es/connections";
 import { CORE } from "./es/core";
 import { FUTURE } from "./es/future";
@@ -35,6 +36,7 @@ export const ES_PARTS: Record<string, Record<string, string>> = {
   calendar: CALENDAR,
   plus: PLUS,
   subscriptions: SUBSCRIPTIONS,
+  cards: CARDS,
 };
 
 export const ES: Record<string, string> = Object.assign({}, ...Object.values(ES_PARTS));

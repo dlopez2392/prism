@@ -399,6 +399,11 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     one, is an alert too. Apple's and Google's bundled charges are counted,
     with where on the phone to see what they're for. Prism never cancels
     anything for anyone and never asks for a login to do it: a cancelling
-    service that takes a person's passwords is not on the roadmap. Next: the
-    cards view (statement-date usage, interest paid, annual fees), once
-    Liabilities is switched on.
+    service that takes a person's passwords is not on the roadmap.
+33. **Cards, on a page of their own.** **Built (2026-10-20), with Liabilities
+    switched on in production the same day:** `/cards` shows each credit
+    card's balance against its limit and the share in use (the number the
+    credit bureaus look at), its statement dates, what paying before the next
+    statement would bring that share down to, what's due, its APR, the
+    interest it charged in the last 12 months and its annual fee. Next: what
+    a card earned in rewards, which no aggregator reports reliably yet.

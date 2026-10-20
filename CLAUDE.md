@@ -389,6 +389,13 @@
   DROP, the owner's to run. Every cancel link is the service's own page,
   checked by hand before it's added; Prism never cancels for anyone and
   never takes a login to.
+- Cards (`/cards`, `src/lib/finance/cards.ts`, `get_cards`): one reading for
+  the page and the connector. A card's limit is `Account.creditLimit` (Plaid
+  `balances.limit`, cards only); its statement date is
+  `Liability.statementDate` (Liabilities, only when switched on, never a
+  date ahead of today). Usage is owed over limit; "paying before the
+  statement" describes what a payment would do to the reported share and
+  never tells anyone to make one.
 - Paying off what you owe (`src/lib/finance/payoff.ts`, the card on Net
   worth, `plan_debt_payoff`): one arithmetic for the screen and the
   connectors. A rate or a payment is the lender's (`Account.liability`) or

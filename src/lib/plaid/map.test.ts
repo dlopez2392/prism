@@ -194,3 +194,12 @@ describe("the Plaid client", () => {
     expect((bodies[1] as { cursor: string }).cursor).toBe("c1");
   });
 });
+
+describe("a card's limit", () => {
+  it("is kept for a card when the bank gives one, and never for anything else", () => {
+    const card: PlaidAccount = { account_id: "c", name: "Visa", official_name: null, mask: "1107", type: "credit", subtype: "credit card", balances: { available: 3200, current: 1800, iso_currency_code: "USD", limit: 5000 } };
+    expect(mapAccount(card, "item", [], "2026-10-20").creditLimit).toBe(500_000);
+    expect(mapAccount({ ...card, balances: { ...card.balances, limit: null } }, "item", [], "2026-10-20")).not.toHaveProperty("creditLimit");
+    expect(mapAccount({ ...card, type: "depository", subtype: "checking" }, "item", [], "2026-10-20")).not.toHaveProperty("creditLimit");
+  });
+});

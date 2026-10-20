@@ -90,6 +90,7 @@ describe("the MCP endpoint", () => {
       "can_i_afford",
       "fetch",
       "get_budgets",
+      "get_cards",
       "get_cash_flow",
       "get_goals",
       "get_income",

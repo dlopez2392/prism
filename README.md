@@ -611,6 +611,20 @@ insight, the alerts and `list_subscriptions`.
   their own name, so the page counts what each billed in the last month and
   says where on the phone the list is.
 
+## Cards
+
+`/cards` (`src/lib/finance/cards.ts`, `get_cards`) shows each credit card:
+what it owes against its limit, the share of the limit in use (overall too,
+across cards whose bank reports a limit), its last and next statement dates,
+what's due, its APR, the interest it charged over the last 12 months and its
+annual fee. The limit comes from Plaid with the balance
+(`balances.limit` → `Account.creditLimit`); the statement date comes from
+Liabilities (`last_statement_issue_date` → `Liability.statementDate`, kept as
+`issued` in the bank's sealed copy, absent in copies from before), so it shows
+only with `PLAID_LIABILITIES=on`. The next close is a month after the last.
+Before it, the page says what paying would bring the reported share down to
+(30%, then 10%), from today's balance: a description, never advice.
+
 ## Bills that don't come every month
 
 The car insurance renewal, the water bill every three months, a yearly
