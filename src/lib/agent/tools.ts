@@ -20,6 +20,7 @@ import { paymentsDue } from "@/lib/finance/debts";
 import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences, setAside } from "@/lib/finance/recurring";
+import { cardsFor } from "@/lib/finance/cards";
 import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
 import { comparePayoff, debtAccounts, PAYOFF_LIMITS, type Debt, type PayoffPlan } from "@/lib/finance/payoff";
 import { defaultTaxYear, taxSummary, taxYears } from "@/lib/finance/taxes";
@@ -495,6 +496,47 @@ export function listSubscriptions(data: AgentData) {
       ),
     })),
     billed_through_app_stores: s.appStores.map((x) => ({ store: x.store, charges_last_month: x.charges, total: usd(x.total) })),
+  };
+}
+
+// — get_cards ——————————————————————————————————————————————————
+
+/** Each credit card as the Cards page shows it: owed against its limit, its statement and payment, and what it cost in interest and fees. */
+export function getCards(data: AgentData) {
+  const c = cardsFor(data.accounts, data.transactions, data.today);
+  const accounts = byId(data);
+  const txById = new Map(data.transactions.map((t) => [t.id, t]));
+  return {
+    ...frame(data),
+    owed: usd(c.owed),
+    total_limits: usd(c.limits),
+    // Owed over the limits, across the cards whose banks report one: what the credit bureaus look at.
+    share_of_limits_used: c.usage === null ? null : Math.round(c.usage * 1000) / 1000,
+    interest_last_12_months: usd(c.interest12),
+    annual_fees_last_12_months: usd(c.fees12),
+    cards: c.cards.map((x) => ({
+      account: accountLabel(accounts.get(x.id)),
+      owed: usd(x.owed),
+      credit_limit: x.limit === null ? null : usd(x.limit),
+      share_of_limit_used: x.usage === null ? null : Math.round(x.usage * 1000) / 1000,
+      last_statement_date: x.statementDate,
+      next_statement_date: x.nextClose,
+      // What paying before the next statement would take for the balance it reports to be at most this share of the limit, from today's balance.
+      ...(x.payToReach ? { paying_before_statement: { amount: usd(x.payToReach.amount), brings_reported_share_to: x.payToReach.level, by: x.payToReach.by } } : {}),
+      due_date: x.dueDate,
+      minimum_payment: x.minimumPayment === null ? null : usd(x.minimumPayment),
+      statement_balance: x.statementBalance === null ? null : usd(x.statementBalance),
+      apr: x.apr,
+      overdue: x.overdue,
+      interest_last_12_months: usd(x.interest.last12),
+      interest_this_year: usd(x.interest.thisYear),
+      interest_charges: x.interest.ids
+        .map((id) => txById.get(id))
+        .filter((t): t is Transaction => Boolean(t))
+        .sort(newestFirst)
+        .map((t) => citeable(t, accounts)),
+      ...(x.annualFee ? { annual_fee: { amount: usd(x.annualFee.amount), date: x.annualFee.date, transaction: txById.has(x.annualFee.id) ? citeable(txById.get(x.annualFee.id)!, accounts) : null } } : {}),
+    })),
   };
 }
 

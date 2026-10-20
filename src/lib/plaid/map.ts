@@ -187,6 +187,7 @@ export function mapAccount(a: PlaidAccount, institutionId: string, txns: Transac
     balance,
     history,
     source: "plaid",
+    ...(kind === "credit" && typeof a.balances.limit === "number" && a.balances.limit > 0 ? { creditLimit: toCents(a.balances.limit) } : {}),
   };
 }
 

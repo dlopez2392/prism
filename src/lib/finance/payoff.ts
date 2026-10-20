@@ -178,7 +178,12 @@ const INTEREST_WORDS = /\b(interest charge|interest charged|purchase interest|fi
 /** Did the account charge interest lately: the bank's own category, or a line that says so. */
 export function chargedInterest(accountId: string, txns: Transaction[], today: ISODate): boolean {
   const since = addDays(today, -INTEREST_DAYS);
-  return txns.some((t) => t.accountId === accountId && t.amount < 0 && t.date >= since && (t.interestCharge === true || INTEREST_WORDS.test(t.merchant)));
+  return txns.some((t) => t.accountId === accountId && t.date >= since && isInterestCharge(t));
+}
+
+/** A line that is interest charged: the bank's own category says so, or its words do. */
+export function isInterestCharge(t: Pick<Transaction, "amount" | "interestCharge" | "merchant">): boolean {
+  return t.amount < 0 && (t.interestCharge === true || INTEREST_WORDS.test(t.merchant));
 }
 
 /** Every card and loan with something owed, the most owed first. */

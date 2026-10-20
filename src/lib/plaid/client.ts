@@ -101,7 +101,8 @@ export type PlaidAccount = {
   mask: string | null;
   type: "depository" | "credit" | "investment" | "loan" | "brokerage" | "other";
   subtype: string | null;
-  balances: { available: number | null; current: number | null; iso_currency_code: string | null };
+  /** `limit`: a card's credit limit (null or absent when the bank doesn't say). */
+  balances: { available: number | null; current: number | null; iso_currency_code: string | null; limit?: number | null };
 };
 
 export type PlaidTransaction = {

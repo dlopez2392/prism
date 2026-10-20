@@ -11,6 +11,7 @@ import {
   income,
   listAccounts,
   listSubscriptions,
+  getCards,
   netWorth,
   overview,
   searchTransactions,
@@ -445,5 +446,15 @@ describe("list_subscriptions", () => {
     for (const sub of r.subscriptions) expect(sub.based_on.length).toBeGreaterThan(0);
     // upcoming_bills says the same per month.
     expect(upcomingBills(data, {}).subscriptions_per_month).toBe(r.per_month);
+  });
+});
+
+describe("get_cards", () => {
+  it("reads the example household's card as the Cards page does", () => {
+    const r = getCards(demo());
+    expect(r.cards).toHaveLength(1);
+    expect(r.cards[0]).toMatchObject({ account: "Summit Rewards Visa ••1107", credit_limit: 12_000, apr: 24.49 });
+    expect(r.share_of_limits_used).toBeGreaterThan(0);
+    expect(r.cards[0]!.last_statement_date! <= r.as_of).toBe(true);
   });
 });

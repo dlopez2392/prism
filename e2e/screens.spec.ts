@@ -11,6 +11,7 @@ const SCREENS: { path: string; title: RegExp; hero: boolean }[] = [
   { path: "/spending", title: /Spending/, hero: true },
   { path: "/budgets", title: /Budgets/, hero: true },
   { path: "/subscriptions", title: /Subscriptions/, hero: true },
+  { path: "/cards", title: /Cards/, hero: true },
   { path: "/year", title: /Your \d{4}/, hero: true },
   { path: "/taxes", title: /Your \d{4} taxes/, hero: true },
   { path: "/future", title: /Future/, hero: true },

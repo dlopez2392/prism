@@ -15,6 +15,7 @@ import { msg } from "@/lib/i18n/t";
 import {
   CalendarRange,
   ChartPie,
+  CreditCard,
   Landmark,
   LayoutDashboard,
   Menu,
@@ -44,6 +45,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
       { href: "/spending", label: msg("Spending"), icon: ChartPie },
       { href: "/budgets", label: msg("Budgets"), icon: Target },
       { href: "/subscriptions", label: msg("Subscriptions"), icon: Repeat },
+      { href: "/cards", label: msg("Cards"), icon: CreditCard },
       { href: "/year", label: msg("Your year"), icon: CalendarRange },
       { href: "/taxes", label: msg("Taxes"), icon: ReceiptText },
     ],

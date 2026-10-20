@@ -55,15 +55,15 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
           <p className="font-semibold text-ink-1">Money you choose to connect</p>
           <Bullets>
             <li>
-              Banks, cards, loans and investments, through Plaid: account names, the last four digits of account numbers, balances, transactions (merchant, amount,
-              date and category) and investment holdings. You sign in to your bank through Plaid; {BRAND.product} never sees your bank username or password.
+              Banks, cards, loans and investments, through Plaid: account names, the last four digits of account numbers, balances (and a card&apos;s credit
+              limit), transactions (merchant, amount, date and category) and investment holdings. You sign in to your bank through Plaid; {BRAND.product} never sees your bank username or password.
               {/* Reading loan details is switched on by the operator (PLAID_LIABILITIES); this sentence changes with it, in the same deploy. */}
               {liabilities ? (
                 <>
                   {" "}
                   With your permission, which Plaid asks for when you connect, {BRAND.product} also reads loan details: each card&apos;s or loan&apos;s due
-                  date, minimum payment, statement balance and interest rate, at most once a day. It uses them to show when each payment is due, on Future,
-                  on Net worth, in your calendar reminders and to AI apps you connect, and keeps them encrypted with the rest of that bank&apos;s copy. They
+                  date, minimum payment, statement balance and date, and interest rate, at most once a day. It uses them to show when each payment is due
+                  and when a card&apos;s statement closes, on Cards, Future and Net worth, in your calendar reminders and to AI apps you connect, and keeps them encrypted with the rest of that bank&apos;s copy. They
                   aren&apos;t shown to your household.
                 </>
               ) : (

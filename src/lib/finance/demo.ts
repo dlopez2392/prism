@@ -288,13 +288,18 @@ export function buildDemoData(today: ISODate): FinanceData {
     return thisMonth >= today ? thisMonth : addMonths(thisMonth, 1);
   };
   const cardDue = next(18);
+  // The statement closes 25 days before its payment is due, as most cards' do: the last one already closed.
+  const closes = addDays(cardDue, -25);
+  const lastClose = closes <= today ? closes : addMonths(closes, -1);
   const statement = Math.abs(cardSpendByMonth.get(monthKey(addMonths(cardDue, -1))) ?? 0);
   const terms: Record<string, Account["liability"]> = {
-    [card]: { dueDate: cardDue, minimumPayment: 3_500, statementBalance: statement || null, apr: 24.49, overdue: false },
+    [card]: { dueDate: cardDue, minimumPayment: 3_500, statementBalance: statement || null, apr: 24.49, overdue: false, statementDate: lastClose },
     [ACCOUNT_IDS.autoLoan]: { dueDate: next(14), minimumPayment: 38_900, statementBalance: null, apr: 6.9, overdue: false },
     [ACCOUNT_IDS.studentLoan]: { dueDate: next(25), minimumPayment: 21_000, statementBalance: null, apr: 5.05, overdue: false },
   };
   for (const a of accounts) if (terms[a.id]) a.liability = terms[a.id];
+  // The card's limit, as the bank reports it.
+  accounts.find((a) => a.id === card)!.creditLimit = 1_200_000;
 
   const balanceOf = (id: string) => accounts.find((a) => a.id === id)!.balance;
   const split = (accountId: string, parts: [string, string, Holding["assetClass"], number][]): Holding[] => {
