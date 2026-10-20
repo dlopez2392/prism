@@ -47,7 +47,7 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
       <Card as="article" className="mt-5 space-y-6 p-5 sm:p-8">
         <Section id="who" title="Quiénes somos">
           <p>
-            {p} es una app de finanzas personales hecha por {BRAND.company} ({BRAND.companyShort}), a quien aquí llamamos &ldquo;nosotros&rdquo;. Esta política
+            {p} es una app de finanzas personales hecha por {BRAND.legalName} ({BRAND.companyShort}), a quien aquí llamamos &ldquo;nosotros&rdquo;. Esta política
             cubre el sitio web y la app de {p}. Preguntas o solicitudes: escribe a {mail}.
           </p>
         </Section>

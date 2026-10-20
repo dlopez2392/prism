@@ -1,6 +1,6 @@
 // src/components/bis-mark.tsx
 //
-// The mark of Bespoke Intelligence Solutions, the company behind Prism: a
+// The mark of Bespoke Intelligent Solutions, the company behind Prism: a
 // triangle knocked out of a disc. One path with an even-odd fill, so the
 // triangle is a real hole and the mark sits on any surface; the disc paints
 // currentColor, so it follows the theme through a text colour class.

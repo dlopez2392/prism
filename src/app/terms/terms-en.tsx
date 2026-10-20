@@ -60,7 +60,7 @@ export function TermsOfService({ billing }: TermsSwitches) {
       <Card as="article" className="mt-5 space-y-6 p-5 sm:p-8">
         <Section id="agree" title="Agreeing to these terms">
           <p>
-            These terms are an agreement between you and {BRAND.company} ({BRAND.companyShort}, &ldquo;we&rdquo; and &ldquo;us&rdquo;) about using {BRAND.product}.
+            These terms are an agreement between you and {BRAND.legalName} ({BRAND.companyShort}, &ldquo;we&rdquo; and &ldquo;us&rdquo;) about using {BRAND.product}.
             By creating an account, or by using {BRAND.product} at all, you agree to them. If you don&apos;t agree, please don&apos;t use {BRAND.product}.
           </p>
           <p>Our {privacy} explains what we collect, how we use it and who else sees it. It&apos;s part of this agreement.</p>

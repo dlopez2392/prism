@@ -338,7 +338,7 @@ export function buildCalendar(opts: CalendarOptions): string {
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Bespoke Intelligence Solutions//Prism//EN",
+    "PRODID:-//Bespoke Intelligent Solutions//Prism//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeText(opts.calendarName)}`,

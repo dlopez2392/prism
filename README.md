@@ -1,6 +1,6 @@
 # Prism — personal finance, in full colour
 
-**A Bespoke Intelligence Solutions (BIS) product.**
+**A Bespoke Intelligent Solutions (BIS) product.**
 
 A standalone consumer budgeting and money app: link a bank, then see where
 money came from, where it went, what's coming next, and how far you've come.
@@ -1048,7 +1048,7 @@ before the browser tests and fails if it isn't there.
 
 ## License
 
-Proprietary. © 2026 Bespoke Intelligence Solutions. All rights reserved. The
+Proprietary. © 2026 Bespoke Intelligent Solutions. All rights reserved. The
 source is public for reference only; see [`LICENSE`](./LICENSE).
 
 ## Limits (deliberate) and next steps

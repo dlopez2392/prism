@@ -66,7 +66,7 @@ export function TerminosDelServicio({ billing }: TermsSwitches) {
       <Card as="article" className="mt-5 space-y-6 p-5 sm:p-8">
         <Section id="agree" title="Aceptar estos términos">
           <p>
-            Estos términos son un acuerdo entre tú y {BRAND.company} ({BRAND.companyShort}, &ldquo;nosotros&rdquo;) sobre el uso de {p}. Al crear una cuenta, o
+            Estos términos son un acuerdo entre tú y {BRAND.legalName} ({BRAND.companyShort}, &ldquo;nosotros&rdquo;) sobre el uso de {p}. Al crear una cuenta, o
             al usar {p} de cualquier forma, los aceptas. Si no estás de acuerdo, por favor no uses {p}.
           </p>
           <p>Nuestra {privacy} explica qué recopilamos, cómo lo usamos y quién más lo ve. Forma parte de este acuerdo.</p>
