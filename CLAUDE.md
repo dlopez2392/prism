@@ -3,7 +3,7 @@
 @DESIGN.md
 
 - Prism is a standalone consumer finance app, a product of Bespoke
-  Intelligence Solutions (BIS). It is not part of any other BIS software and
+  Intelligent Solutions (BIS). It is not part of any other BIS software and
   shares no code, database, authentication or deployment with it.
 - Product and company names live in `src/lib/brand.ts`; never hard-code them.
 - Gates before any merge: `pnpm typecheck`, `pnpm lint`, `pnpm test`,

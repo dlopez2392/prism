@@ -8,7 +8,9 @@ export const BRAND = {
   /** The paid plan (src/lib/billing/plans.ts). */
   plus: "Prism Plus",
   tagline: "Your money, in full colour.",
-  company: "Bespoke Intelligence Solutions",
+  company: "Bespoke Intelligent Solutions",
+  /** The legal entity: the party to the Terms, and who the privacy policy says holds people's data. */
+  legalName: "Bespoke Intelligent Solutions LLC",
   companyShort: "BIS",
   /** Production's address: links handed to connected apps, which a person opens to check a figure. */
   site: "https://prism.bis-rgv.com",

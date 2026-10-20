@@ -38,7 +38,7 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
       <Card as="article" className="mt-5 space-y-6 p-5 sm:p-8">
         <Section id="who" title="Who we are">
           <p>
-            {BRAND.product} is a personal finance app made by {BRAND.company} ({BRAND.companyShort}), called &ldquo;we&rdquo; and &ldquo;us&rdquo; here. This
+            {BRAND.product} is a personal finance app made by {BRAND.legalName} ({BRAND.companyShort}), called &ldquo;we&rdquo; and &ldquo;us&rdquo; here. This
             policy covers the {BRAND.product} website and app. Questions or requests: email {mail}.
           </p>
         </Section>

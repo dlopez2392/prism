@@ -1,7 +1,7 @@
 # Prism — Design Contract
 
 > Prism is a standalone consumer personal-finance app from Bespoke
-> Intelligence Solutions (BIS). This file governs every UI change in it; if a
+> Intelligent Solutions (BIS). This file governs every UI change in it; if a
 > change conflicts with it, stop and flag it.
 > Tokens: `src/styles/tokens.css`. Components consume tokens ONLY.
 
