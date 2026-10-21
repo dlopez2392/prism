@@ -429,6 +429,12 @@
   a stored mark that doesn't fit is ignored, never coerced. Business lines
   are EXCLUDED from `taxSummary`'s personal sections. Totals are what the
   bank saw: never halve meals, never compute SE tax or a deduction.
+- Filed returns (`src/lib/finance/tax-return.ts`, `/taxes/return`): the PDF is
+  read in the BROWSER and never uploaded; never add a server route that takes
+  the file. A figure is found by the WORDS on its line (`FINDERS`); never add
+  a field that reads names, SSNs, addresses, dependents or bank details. The
+  safe-harbor line states the IRS rule; never turn it into what the person
+  "should" pay.
 - Money check-in (`/check-in`, `src/lib/finance/check-in.ts`,
   `get_check_in`): it GATHERS from the other engines (alerts, refunds, fees,
   budgets, cards, runway, inflation); it never computes its own version of

@@ -8,6 +8,7 @@
 
 import { ACCOUNT } from "./es/account";
 import { BUSINESS } from "./es/business";
+import { TAX_RETURN } from "./es/tax-return";
 import { ALERTS } from "./es/alerts";
 import { CALENDAR } from "./es/calendar";
 import { CARDS } from "./es/cards";
@@ -45,6 +46,7 @@ export const ES_PARTS: Record<string, Record<string, string>> = {
   fees: FEES,
   refunds: REFUNDS,
   business: BUSINESS,
+  taxReturn: TAX_RETURN,
 };
 
 export const ES: Record<string, string> = Object.assign({}, ...Object.values(ES_PARTS));

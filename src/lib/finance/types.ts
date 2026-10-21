@@ -12,6 +12,7 @@
 // day a coffee was bought.
 
 import type { BizMarks, RefundMark, SubscriptionNotes } from "./details";
+import type { TaxReturn } from "./tax-return";
 
 export type ISODate = string;
 export type Cents = number;
@@ -219,6 +220,8 @@ export type FinanceData = {
   leftOutAccountIds?: string[];
   /** Where the person put their business lines on Schedule C (finance/schedule-c.ts): their own view only. */
   businessMarks?: BizMarks;
+  /** The figures from the person's filed returns, newest year first (finance/tax-return.ts): their own view only. */
+  taxReturns?: TaxReturn[];
   /** The refunds the person is waiting on, by the line they're for (finance/refunds.ts): their own view only, never the household's. */
   refundMarks?: Record<string, RefundMark>;
 };

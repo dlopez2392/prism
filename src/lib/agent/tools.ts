@@ -30,6 +30,7 @@ import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
 import { comparePayoff, debtAccounts, PAYOFF_LIMITS, type Debt, type PayoffPlan } from "@/lib/finance/payoff";
 import { defaultTaxYear, taxSummary, taxYears } from "@/lib/finance/taxes";
 import { BIZ_LINE_INFO, bizLineLabel, scheduleC, SE_TAX_FROM } from "@/lib/finance/schedule-c";
+import { returnFacts } from "@/lib/finance/tax-return";
 import type { Account, CategoryId, Cents, FinanceData, ISODate, Liability, Transaction } from "@/lib/finance/types";
 
 /** The money a connected app is shown, and what kind of money it is. */
@@ -762,6 +763,37 @@ export function taxes(data: AgentData, args: { year?: number } = {}) {
         }
       : {}),
     business_schedule_c: scheduleCSummary(data, year),
+    returns_on_file: returnsOnFile(data, year),
+  };
+}
+
+/** The figures the user saved from their filed returns for this tax year and the one before (finance/tax-return.ts), or null when there are none. */
+function returnsOnFile(data: AgentData, year: number) {
+  const kept = (data.taxReturns ?? []).filter((r) => r.year === year || r.year === year - 1);
+  if (!kept.length) return null;
+  const dollars = (c: number | null) => (c === null ? null : usd(c));
+  return {
+    note: "Figures the user saved from their own filed Form 1040 (Prism reads the PDF on their device and keeps only these; it never checks them with the IRS). safe_harbor_for_next_year is the IRS rule, not advice: paying at least that much in total tax through withholding and estimated payments generally avoids an underpayment penalty.",
+    returns: kept.map((r) => {
+      const f = returnFacts(r);
+      return {
+        tax_year: r.year,
+        filing_status: r.status,
+        wages: dollars(r.wages),
+        business_income: dollars(r.business),
+        total_income: dollars(r.totalIncome),
+        adjusted_gross_income: dollars(r.agi),
+        taxable_income: dollars(r.taxable),
+        total_tax: dollars(r.totalTax),
+        tax_withheld: dollars(r.withheld),
+        estimated_payments: dollars(r.estimated),
+        total_payments: dollars(r.payments),
+        refund: dollars(r.refund),
+        amount_owed: dollars(r.owed),
+        effective_rate: f.effectiveRate === null ? null : Math.round(f.effectiveRate * 10_000) / 10_000,
+        ...(f.safeHarbor ? { safe_harbor_for_next_year: { amount: usd(f.safeHarbor.amount), share_of_total_tax: f.safeHarbor.share } } : {}),
+      };
+    }),
   };
 }
 

@@ -132,6 +132,12 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
               coming back and why, the day you started waiting, and the day you said it came back. {BRAND.product} never asks anyone for a refund for you. A
               reminder about what someone owes is written on your device and goes wherever you send it; {BRAND.product} never sends it.
             </li>
+            <li>
+              If you add a filed tax return, the figures you check and save from it: the tax year, your filing status, and the amounts on a few lines of your
+              Form 1040 (such as your wages, adjusted gross income, total tax, payments, and refund or amount owed), stored encrypted in your account and never
+              shown to your household. The PDF itself is opened on your device and never uploaded, and {BRAND.product} never reads or keeps your name, Social
+              Security number, address, dependents or bank details from it. You can remove a return at any time.
+            </li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
             {alerts ? (
               <li>

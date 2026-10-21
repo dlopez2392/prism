@@ -53,6 +53,7 @@ import { money, shortDate } from "./format";
 import { normalizeMerchant } from "./merchant";
 import { cleanText } from "./p2p";
 import type { Cadence } from "./recurring";
+import { RETURNS_KEPT, validTaxReturn, type TaxReturn } from "./tax-return";
 import type { Account, Cents, FinanceData, Holding, ISODate, Owed, SpendCategoryId, Transaction } from "./types";
 import { EN, type T } from "@/lib/i18n/t";
 
@@ -142,6 +143,8 @@ export type TxnDetails = {
   biz?: Record<string, BizLine>;
   /** Where every line from one shop goes on Schedule C, by `side:shop`. */
   bizShops?: Record<string, BizShop>;
+  /** The figures from the person's filed returns, by tax year. */
+  returns?: Record<string, TaxReturn>;
 };
 
 export const NO_DETAILS: TxnDetails = { v: 1, lines: {} };
@@ -437,6 +440,18 @@ export function validDetails(x: unknown): TxnDetails {
       if (bizShops.length === DETAIL_LIMITS.bizShops) break;
     }
   }
+  const filed = (x as { returns?: unknown }).returns;
+  const returns: [string, TaxReturn][] = [];
+  if (filed && typeof filed === "object" && !Array.isArray(filed)) {
+    // A return is never for a year still to come; a few years' grace keeps a stored one readable whatever the clock says.
+    const latest = new Date().getUTCFullYear() + 1;
+    for (const [year, value] of Object.entries(filed as Record<string, unknown>)) {
+      const r = validTaxReturn(value, latest);
+      if (!r || String(r.year) !== year) continue;
+      returns.push([year, r]);
+    }
+    returns.sort((a, b) => Number(b[0]) - Number(a[0])).splice(RETURNS_KEPT);
+  }
   return {
     v: 1,
     lines: Object.fromEntries(kept),
@@ -448,6 +463,7 @@ export function validDetails(x: unknown): TxnDetails {
     ...(refunds.length ? { refunds: Object.fromEntries(refunds) } : {}),
     ...(biz.length ? { biz: Object.fromEntries(biz) } : {}),
     ...(bizShops.length ? { bizShops: Object.fromEntries(bizShops) } : {}),
+    ...(returns.length ? { returns: Object.fromEntries(returns) } : {}),
   };
 }
 
@@ -494,7 +510,8 @@ export function hasDetails(details: TxnDetails): boolean {
     (details.own?.length ?? 0) > 0 ||
     Object.keys(details.refunds ?? {}).length > 0 ||
     Object.keys(details.biz ?? {}).length > 0 ||
-    Object.keys(details.bizShops ?? {}).length > 0
+    Object.keys(details.bizShops ?? {}).length > 0 ||
+    Object.keys(details.returns ?? {}).length > 0
   );
 }
 
@@ -523,6 +540,14 @@ export function withBizSort(old: TxnDetails, id: string, line: BizLine | null, s
   if (shop?.value) bizShops[shop.key] = shop.value;
   else if (shop) delete bizShops[shop.key];
   return validDetails({ ...old, biz, bizShops });
+}
+
+/** The details with one tax year's return kept (or removed, with null). */
+export function withTaxReturn(old: TxnDetails, year: number, r: TaxReturn | null): TxnDetails {
+  const returns = { ...old.returns };
+  if (r) returns[String(year)] = r;
+  else delete returns[String(year)];
+  return validDetails({ ...old, returns });
 }
 
 /** The details with one account marked as the person's business (or not). */
@@ -572,7 +597,8 @@ export function subscriptionNotes(details: TxnDetails | null): SubscriptionNotes
 
 /**
  * The money with the person's own notes on it, what they said about their
- * subscriptions and the refunds they're waiting on: their own view, the
+ * subscriptions, the refunds they're waiting on and the figures from their
+ * filed returns: their own view, the
  * morning check and connected apps, never the household. Never the example
  * household either: real and made-up money are never shown together.
  */
@@ -580,7 +606,8 @@ export function withOwnNotes<T extends FinanceData>(data: T, details: TxnDetails
   if (data.source === "demo" || !details) return data;
   const notes = subscriptionNotes(details);
   const refunds = details.refunds && Object.keys(details.refunds).length ? details.refunds : null;
-  return { ...data, ...(notes ? { subscriptionNotes: notes } : {}), ...(refunds ? { refundMarks: refunds } : {}) };
+  const returns = Object.values(details.returns ?? {}).sort((a, b) => b.year - a.year);
+  return { ...data, ...(notes ? { subscriptionNotes: notes } : {}), ...(refunds ? { refundMarks: refunds } : {}), ...(returns.length ? { taxReturns: returns } : {}) };
 }
 
 /** Each transaction with what the person added: a split becomes its parts, and a line left out (or in an account left out) says so. Never changes the transactions it's given. */
