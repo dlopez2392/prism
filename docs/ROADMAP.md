@@ -418,3 +418,7 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     Klarna, Afterpay, Sezzle and Zip, found from the payments to them, on
     Cards: each plan's payment, how many are left, at least what's still to
     pay and when the next comes; ongoing monthly plans as monthly payments.
+36. **Payday plan.** **Built (2026-10-21):** on Future, the last paycheck
+    given a job for every dollar until the next payday: bills before it,
+    goals' share, what's left to live on and about how much a day. Prism
+    moves no money; the plan is laid out for the person to follow.

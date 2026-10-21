@@ -649,6 +649,17 @@ and sends themselves: Prism never sends it. The same amount at the same place
 on the same day in the same account (at least $10, last 90 days) is asked
 about as a possible double charge, never asserted. Nothing is stored.
 
+## Payday plan
+
+The "Your paycheck, planned" card on Future (`src/lib/finance/payday.ts`):
+the last paycheck, given a job for every dollar until the next payday. What
+landed on payday; each bill and subscription before the next payday, paid or
+still to come (recurring streams, never card payments, whose purchases are
+already counted day to day); each goal's share of the days, from its monthly
+amount; what that leaves to live on, what's been spent day to day since
+payday, and about what's left a day. Prism moves no money: it's the plan,
+laid out.
+
 ## Bills that don't come every month
 
 The car insurance renewal, the water bill every three months, a yearly
