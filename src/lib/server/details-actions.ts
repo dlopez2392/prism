@@ -17,7 +17,7 @@
 // with a split, saved with none, is kept whole: the others still follow.
 
 import { refresh } from "next/cache";
-import { checkDetail, ruleKey, sharesOf, validRule, withDetail, withHidden, withRule, wholeLines, type SplitRule, type TxnDetail } from "@/lib/finance/details";
+import { checkDetail, ruleKey, sharesOf, validRule, withBusiness, withDetail, withHidden, withRule, wholeLines, type SplitRule, type TxnDetail } from "@/lib/finance/details";
 import { currentAccount } from "@/lib/supabase/server";
 import { loadAccountDetails, saveAccountDetails } from "./account-store";
 import { getPersonalFinance } from "./finance";
@@ -181,6 +181,37 @@ export async function countAccount(accountId: unknown, counted: unknown): Promis
     return {
       status: "saved",
       message: counted === true ? t("{account} counts in your totals again.", { account: account.name }) : t("{account} is left out of your totals. It's still connected.", { account: account.name }),
+      at: Date.now(),
+    };
+  } catch {
+    return { status: "error", message: t("That didn't save. Try again in a moment.") };
+  }
+}
+
+/**
+ * Mark one of the person's accounts as their business (or not). A business
+ * account is kept out of every personal total, like one left out, and summed
+ * on its own on Cash flow. It stays connected; unmarking it counts it again
+ * unless it was also left out.
+ */
+export async function markBusiness(accountId: unknown, business: unknown): Promise<DetailState> {
+  const t = await getT();
+  try {
+    if (typeof business !== "boolean") return { status: "error", message: t("That didn't come through. Try again.") };
+    const me = await ownAccount();
+    if (!me.ok) return { status: "error", message: t(me.error) };
+    const data = await getPersonalFinance();
+    if (data.source === "demo") return { status: "error", message: t("Link a bank first. This is for your own accounts.") };
+    const account = typeof accountId === "string" ? [...data.accounts, ...(data.hiddenAccounts ?? [])].find((a) => a.id === accountId) : undefined;
+    if (!account) return { status: "error", message: t("That account isn't one of yours.") };
+    const current = await loadAccountDetails(me.account, me.key);
+    await saveAccountDetails(me.account, withBusiness(current, account.id, business), me.key);
+    refresh();
+    return {
+      status: "saved",
+      message: business
+        ? t("{account} is a business account now: kept apart from your personal totals, and summed on Cash flow.", { account: account.name })
+        : t("{account} isn't a business account any more.", { account: account.name }),
       at: Date.now(),
     };
   } catch {

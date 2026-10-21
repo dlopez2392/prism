@@ -2,7 +2,8 @@
 // profiles.sealed_txn_details) and read back after a reload: one purchase from
 // the transaction's own switch, and a whole account from Net worth's "Choose
 // what counts". Either stays listed and counts in no total until it's
-// switched back.
+// switched back. An account marked as business is kept apart the same way,
+// and summed on its own on Cash flow.
 
 import type { Page } from "@playwright/test";
 import { watchErrors } from "../helpers";
@@ -81,5 +82,46 @@ test("an account left out takes its balance and every line in it out of the tota
   await expect(page.getByText("Every account is left out of your totals")).toHaveCount(0);
   await page.goto("/spending?range=3");
   expect(await spent(page)).toBe(before);
+  expect(errors).toEqual([]);
+});
+
+test("an account marked as business leaves the personal totals and is summed on its own on Cash flow", async ({ page, account }) => {
+  void account;
+  const errors = watchErrors(page);
+  await importRows(page);
+  await page.goto("/spending?range=3");
+  expect(await spent(page)).toBeGreaterThan(0);
+
+  await page.goto("/net-worth");
+  await page.getByRole("button", { name: "Choose what counts" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("checkbox", { name: "This is a business account" }).check();
+  // The only account, now business: no personal net worth, and it's listed with the business accounts.
+  await expect(page.getByText("Every account is a business account")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Business accounts" }).getByText("Everyday Checking")).toBeVisible();
+  // Kept apart: its counted switch rests while it's business.
+  await page.getByRole("button", { name: "Choose what counts" }).click();
+  await expect(page.getByRole("dialog").getByRole("switch", { name: "Everyday Checking" })).toBeDisabled();
+  await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
+
+  // Read back after a reload: nothing personal left to spend, and the business summed on Cash flow.
+  await page.goto("/spending?range=3");
+  await expect.poll(() => spent(page)).toBe(0);
+  await page.goto("/cash-flow");
+  const card = page.locator("section", { has: page.getByRole("heading", { name: "Your business", exact: true }) });
+  await expect(card.getByText("Everyday Checking, kept apart from your personal totals: none of it counts above.")).toBeVisible();
+  await expect(card.getByRole("table")).toBeVisible();
+
+  // Personal again, it counts again.
+  await page.goto("/net-worth");
+  await page.getByRole("button", { name: "Choose what counts" }).click();
+  await page.getByRole("dialog").getByRole("checkbox", { name: "This is a business account" }).uncheck();
+  // Personal again, and not left out: net worth is back, and its switch counts it.
+  await expect(page.getByText("Every account is a business account")).toHaveCount(0);
+  await page.getByRole("button", { name: "Choose what counts" }).click();
+  await expect(page.getByRole("dialog").getByRole("switch", { name: "Everyday Checking" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
+  await page.goto("/spending?range=3");
+  await expect.poll(() => spent(page)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });

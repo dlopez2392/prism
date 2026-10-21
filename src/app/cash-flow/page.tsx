@@ -13,7 +13,7 @@ import { Legend } from "@/components/charts/core";
 import { SankeyChart } from "@/components/charts/sankey-chart";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { RangeTabs } from "@/components/range-tabs";
-import { Card, Change, EmptyState, PageHeader } from "@/components/ui";
+import { Card, CardHeader, Change, EmptyState, PageHeader } from "@/components/ui";
 import { categoryTotals, incomeSources, monthlyCashFlow, sumIncome, sumSpending } from "@/lib/finance/cashflow";
 import { capitalized, money0, monthLong, monthShort, monthYear, percent, signedMoney0 } from "@/lib/finance/format";
 import { incomeSummary } from "@/lib/finance/income";
@@ -22,6 +22,8 @@ import { buildCashFlowSankey } from "@/lib/finance/sankey";
 import { againstLabel, monthHref, periodLabel, rangeView } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/t";
+import { businessFor, type Business } from "@/lib/finance/business";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
@@ -33,6 +35,8 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
   const { locale } = t;
   const { range, month, w, step } = rangeView(await searchParams, data.today, data.transactions);
   const txns = data.transactions;
+  // The person's business accounts, summed apart from everything else on the page.
+  const business = businessFor(data.hiddenAccounts ?? [], data.businessAccountIds, txns, data.today);
 
   const income = sumIncome(txns, w.from, w.to);
   const spending = sumSpending(txns, w.from, w.to);
@@ -206,6 +210,54 @@ export default async function CashFlowPage({ searchParams }: { searchParams: Pro
           ariaLabel={t("Savings rate by month against a 20% target")}
         />
       </ChartCard>
+
+      {business ? <BusinessCard business={business} t={t} /> : null}
     </div>
+  );
+}
+
+/** The person's business accounts, kept apart from everything above and summed on their own. */
+function BusinessCard({ business: b, t }: { business: Business; t: T }) {
+  const { locale } = t;
+  return (
+    <Card className="p-5 sm:p-6">
+      <CardHeader
+        title={t("Your business")}
+        subtitle={
+          b.accounts.length === 1
+            ? t("{account}, kept apart from your personal totals: none of it counts above.", { account: b.accounts[0]!.name })
+            : t("{n} business accounts, kept apart from your personal totals: none of it counts above.", { n: b.accounts.length })
+        }
+      />
+      <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="num text-[32px] font-extrabold leading-none tracking-tight text-ink-1">{money0(b.balance)}</span>
+        <span className="text-sm text-ink-2">{t("in your business accounts now")}</span>
+      </div>
+      <table className="mt-4 w-full text-sm">
+        <caption className="sr-only">{t("Money in and out of your business accounts by month")}</caption>
+        <thead>
+          <tr className="text-left text-[11px] font-bold uppercase tracking-[0.08em] text-ink-3 sm:tracking-[0.14em]">
+            <th scope="col" className="py-2 font-bold">{t("Month")}</th>
+            <th scope="col" className="py-2 pl-3 text-right font-bold">{t("Money in")}</th>
+            <th scope="col" className="py-2 pl-3 text-right font-bold">{t("Money out")}</th>
+            <th scope="col" className="py-2 pl-3 text-right font-bold">{t("Left")}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--line)]">
+          {b.months.map((m, i) => (
+            <tr key={m.month}>
+              <th scope="row" className="py-2.5 text-left font-semibold text-ink-1">
+                {capitalized(monthLong(m.from, locale))}
+                {i === 0 ? <span className="ml-1 text-xs font-normal text-ink-3">{t("so far")}</span> : null}
+              </th>
+              <td className="num whitespace-nowrap py-2.5 pl-3 text-right text-ink-1">{money0(m.moneyIn)}</td>
+              <td className="num whitespace-nowrap py-2.5 pl-3 text-right text-ink-1">{money0(m.moneyOut)}</td>
+              <td className="num whitespace-nowrap py-2.5 pl-3 text-right font-semibold text-ink-1">{signedMoney0(m.net)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-3 text-xs text-ink-3">{t("Every line in a business account counts, what you pay yourself included; money moved between two business accounts doesn't. Change which accounts are business under Choose what counts on Net worth.")}</p>
+    </Card>
   );
 }

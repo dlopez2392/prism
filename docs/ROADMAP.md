@@ -445,3 +445,9 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     part of Prism (each linked to the page that settles it, leaving when
     settled), what changed and the month ahead. The monthly recap email now
     opens it. Also `get_check_in` for the AI connector.
+41. **Business accounts.** **Built (2026-10-21):** any account can be marked
+    as the person's business under Choose what counts on Net worth: kept out
+    of every personal total, and summed on its own as "Your business" on
+    Cash flow (balance, and money in and out over three months). Next, if
+    wanted: a separate business view with its own categories and a
+    Schedule C-style summary on Taxes.

@@ -416,6 +416,12 @@
   words; each credit pays one refund, oldest first. Personal view only
   (`withOwnNotes`), never the household or the demo's stored data. Prism
   never asks anyone for money.
+- Business accounts (`TxnDetails.business`, `src/lib/finance/business.ts`,
+  the Cash flow card): a business account is APART like a left-out one
+  (`apartAccounts` = hidden ∪ business, used by applyDetails and
+  hideAccounts), and the two marks are independent, so unmarking business
+  never counts an account the person also left out. Never add business money
+  to a personal figure.
 - Money check-in (`/check-in`, `src/lib/finance/check-in.ts`,
   `get_check_in`): it GATHERS from the other engines (alerts, refunds, fees,
   budgets, cards, runway, inflation); it never computes its own version of

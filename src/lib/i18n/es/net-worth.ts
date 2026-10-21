@@ -50,8 +50,24 @@ export const NET_WORTH: Record<string, string> = {
   "Enter what it's worth today, for now.": "Por ahora, escribe cuánto vale hoy.",
   "Even a little extra moves the date.": "Hasta un poco extra adelanta la fecha.",
   "Every account is left out of your totals": "Todas tus cuentas están fuera de tus totales",
-  "Every account stays connected. One left out isn't added to your net worth, and none of its transactions count in spending, income or budgets.":
-    "Todas las cuentas siguen conectadas. La que dejes fuera no se suma a tu patrimonio neto, y ninguna de sus transacciones cuenta en gastos, ingresos ni presupuestos.",
+  "Every account stays connected. One left out isn't added to your net worth, and none of its transactions count in spending, income or budgets. A business account is kept apart the same way, and summed on its own on Cash flow.":
+    "Todas las cuentas siguen conectadas. La que dejes fuera no se suma a tu patrimonio neto, y ninguna de sus transacciones cuenta en gastos, ingresos ni presupuestos. Una cuenta de negocio se mantiene aparte de la misma forma, y se suma por separado en Flujo de efectivo.",
+  "Business accounts": "Cuentas de negocio",
+  "Every account is a business account": "Todas las cuentas son de negocio",
+  "Every line in a business account counts, what you pay yourself included; money moved between two business accounts doesn't. Change which accounts are business under Choose what counts on Net worth.":
+    "Cuenta cada movimiento de una cuenta de negocio, incluido lo que te pagas a ti; el dinero que pasa entre dos cuentas de negocio no cuenta. Cambia qué cuentas son de negocio en Elegir qué se incluye, en Patrimonio neto.",
+  "Money in and out of your business accounts by month": "Entradas y salidas de tus cuentas de negocio por mes",
+  "This is a business account": "Es una cuenta de negocio",
+  "Your business": "Tu negocio",
+  "Your business is summed on its own on Cash flow. Link a personal account, or mark one as personal below, and your net worth shows here.":
+    "Tu negocio se suma por separado en Flujo de efectivo. Conecta una cuenta personal, o marca una como personal abajo, y aquí aparece tu patrimonio neto.",
+  "business, kept apart": "de negocio, aparte",
+  "in your business accounts now": "en tus cuentas de negocio ahora",
+  "{account} is a business account now: kept apart from your personal totals, and summed on Cash flow.":
+    "{account} ahora es una cuenta de negocio: queda aparte de tus totales personales y se suma en Flujo de efectivo.",
+  "{account} isn't a business account any more.": "{account} ya no es una cuenta de negocio.",
+  "{account}, kept apart from your personal totals: none of it counts above.": "{account}, aparte de tus totales personales: nada de esto cuenta arriba.",
+  "{n} business accounts, kept apart from your personal totals: none of it counts above.": "{n} cuentas de negocio, aparte de tus totales personales: nada de esto cuenta arriba.",
   "Every debt keeps its own payment; the extra goes to one at a time, and each one paid off adds its payment to the next. Nothing you try is saved.":
     "Cada deuda mantiene su propio pago; el extra va a una a la vez, y cada una que terminas de pagar suma su pago a la siguiente. Nada de lo que pruebes se guarda.",
   "Everything you own, minus everything you owe — and how it's moving.": "Todo lo que tienes, menos todo lo que debes, y cómo va cambiando.",

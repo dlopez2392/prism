@@ -213,6 +213,10 @@ export type FinanceData = {
   hiddenHoldings?: Holding[];
   /** What the person said about their subscriptions (finance/details.ts): their own view only, never the household's. */
   subscriptionNotes?: SubscriptionNotes;
+  /** Which of `hiddenAccounts` are the person's business (finance/details.ts): kept apart from the personal totals, summed on their own. */
+  businessAccountIds?: string[];
+  /** Which business accounts the person also left out, so they stay out once they're personal again. */
+  leftOutAccountIds?: string[];
   /** The refunds the person is waiting on, by the line they're for (finance/refunds.ts): their own view only, never the household's. */
   refundMarks?: Record<string, RefundMark>;
 };
