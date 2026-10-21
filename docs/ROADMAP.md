@@ -407,3 +407,18 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     statement would bring that share down to, what's due, its APR, the
     interest it charged in the last 12 months and its annual fee. Next: what
     a card earned in rewards, which no aggregator reports reliably yet.
+34. **Fees found.** **Built (2026-10-21):** `/fees` shows every fee the
+    banks and cards charged in the last year, what came back, a request to
+    ask for each of the rest back (copied or shared by the person, never sent
+    by Prism), and charges that may have gone through twice. Free, because
+    "Prism found $214 you lost to fees" is the clearest reason to try it.
+    Next on this list: buy-now-pay-later plans (Affirm, Klarna, Afterpay) and
+    a payday plan.
+35. **Buy now, pay later.** **Built (2026-10-21):** plans with Affirm,
+    Klarna, Afterpay, Sezzle and Zip, found from the payments to them, on
+    Cards: each plan's payment, how many are left, at least what's still to
+    pay and when the next comes; ongoing monthly plans as monthly payments.
+36. **Payday plan.** **Built (2026-10-21):** on Future, the last paycheck
+    given a job for every dollar until the next payday: bills before it,
+    goals' share, what's left to live on and about how much a day. Prism
+    moves no money; the plan is laid out for the person to follow.

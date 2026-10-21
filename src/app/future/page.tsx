@@ -22,6 +22,7 @@ import { addDays, daysBetween } from "@/lib/finance/dates";
 import { capitalized, dayDate, money, money0, shortDate } from "@/lib/finance/format";
 import { scheduleText } from "@/lib/finance/income";
 import { analyze, FORECAST_DAYS } from "@/lib/finance/model";
+import { paydayPlan, type PaydayPlan } from "@/lib/finance/payday";
 import { monthlyCost, setAside } from "@/lib/finance/recurring";
 import type { ISODate } from "@/lib/finance/types";
 import { dailyBalances } from "@/lib/finance/view";
@@ -94,6 +95,8 @@ export default async function FuturePage() {
   const deposits = next30.filter((e) => e.amount > 0).length;
   const outgoing = next30.filter((e) => e.amount < 0).length;
   const bills = { bills: money0(safe.committed), cushion: money0(safe.cushion) };
+  // The last paycheck, given a job for every dollar until the next one.
+  const plan = paydayPlan(data, a.streams);
 
   return (
     <div className="space-y-5">
@@ -128,6 +131,8 @@ export default async function FuturePage() {
           />
         </div>
       </div>
+
+      {plan ? <PaydayCard plan={plan} t={t} /> : null}
 
       <ChartCard
         title={t("Where your balance is heading")}
@@ -353,6 +358,73 @@ function dueText(due: ISODate, today: ISODate, t: T): string {
   const n = daysBetween(today, due);
   const date = shortDate(due, t.locale);
   return n <= 0 ? t("Due {date}, today", { date }) : n === 1 ? t("Due {date}, tomorrow", { date }) : t("Due {date}, in {n} days", { date, n });
+}
+
+/** The payday plan: the last paycheck, bills and goals until the next one, and what's left to live on. */
+function PaydayCard({ plan, t }: { plan: PaydayPlan; t: T }) {
+  const { locale } = t;
+  const paid = plan.bills.filter((b) => b.paid).length;
+  return (
+    <Card className="p-5 sm:p-6">
+      <CardHeader
+        title={t("Your paycheck, planned")}
+        subtitle={t("{amount} came in on {date}. Here's a job for every dollar until your next payday, {next}.", {
+          amount: money0(plan.paycheck),
+          date: shortDate(plan.payday, locale),
+          next: dayDate(plan.nextPayday, locale),
+        })}
+      />
+      <dl className="mt-4 divide-y divide-[var(--line)] text-sm">
+        <PlanRow label={t("Paycheck")} value={money(plan.paycheck)} />
+        <div className="py-2.5">
+          <details>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-ctl focus-visible:outline-2 focus-visible:outline-[var(--focus)]">
+              <span className="text-ink-2">
+                {plan.bills.length === 1
+                  ? t("1 bill before payday ({paid} paid)", { paid })
+                  : t("{n} bills before payday ({paid} paid)", { n: plan.bills.length, paid })}
+              </span>
+              <span className="num font-semibold text-ink-1">−{money(plan.billsTotal)}</span>
+            </summary>
+            <ul className="mt-2 space-y-1 text-xs text-ink-3">
+              {plan.bills.map((b, i) => (
+                <li key={`${b.name}:${b.date}:${i}`} className="flex justify-between gap-3">
+                  <span className="[overflow-wrap:anywhere]">
+                    {b.name} · {b.paid ? t("paid {date}", { date: shortDate(b.date, locale) }) : t("due {date}", { date: shortDate(b.date, locale) })}
+                  </span>
+                  <span className="num shrink-0">{money(b.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+        {plan.goals.length ? <PlanRow label={plan.goals.length === 1 ? t("Toward {goal}", { goal: plan.goals[0]!.name }) : t("Toward your {n} goals", { n: plan.goals.length })} value={`−${money(plan.goalsTotal)}`} /> : null}
+        <PlanRow label={t("To live on")} value={money(plan.toLiveOn)} strong />
+        <PlanRow label={t("Spent since payday")} value={`−${money(plan.spent)}`} />
+        <PlanRow label={t("Left")} value={money(plan.left)} strong />
+      </dl>
+      <div className="mt-3">
+        {plan.toLiveOn < 0 ? (
+          <StatusPill status="warn">{t("Bills and goals come to {amount} more than this paycheck.", { amount: money(-plan.toLiveOn) })}</StatusPill>
+        ) : plan.left < 0 ? (
+          <StatusPill status="warn">{t("{amount} more spent than planned since payday.", { amount: money(-plan.left) })}</StatusPill>
+        ) : (
+          <StatusPill status="good">
+            {plan.daysLeft === 1 ? t("About {amount} for today, until payday.", { amount: money(plan.perDay) }) : t("About {amount} a day for the next {n} days.", { amount: money(plan.perDay), n: plan.daysLeft })}
+          </StatusPill>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function PlanRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <dt className={strong ? "font-semibold text-ink-1" : "text-ink-2"}>{label}</dt>
+      <dd className={`num ${strong ? "font-bold text-ink-1" : "font-semibold text-ink-1"}`}>{value}</dd>
+    </div>
+  );
 }
 
 function Figure({ label, value, note, status }: { label: string; value: string; note: string; status?: "good" | "warn" }) {

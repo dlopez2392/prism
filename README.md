@@ -625,6 +625,41 @@ only with `PLAID_LIABILITIES=on`. The next close is a month after the last.
 Before it, the page says what paying would bring the reported share down to
 (30%, then 10%), from today's balance: a description, never advice.
 
+Buy now, pay later (`src/lib/finance/paylater.ts`, on Cards and in
+`get_cards`): plans with Affirm, Klarna, Afterpay, Sezzle and Zip, found from
+the payments to them (no aggregator reports the plans). A run of payments of
+the same amount from one account, every two weeks, is a pay-in-4 plan: four
+less those seen are still to come, two weeks apart. Every month, it's an
+ongoing payment whose length the payments don't show. A plan whose next
+payment is more than 10 days late is over. What's owed is "at least": a plan
+that began before Prism's history looks shorter than it is.
+
+## Fees
+
+`/fees` (`src/lib/finance/fees.ts`, `get_fees`, an Overview heads-up) lists
+every fee the person's banks and cards charged over the last 12 months:
+overdraft, returned payment, ATM, foreign transaction, late, monthly service,
+cash advance. A fee is Plaid's own `BANK_FEES_*` category (`bankFee`), or, for
+imported history, its words on a line that reads as a bill or as nothing, up
+to $100. Interest isn't a fee here (Cards counts it). Money of the same
+amount back to the same account within 45 days, under the same name or with
+refund words, marks a fee given back. Each fee still lost has a polite request
+for it back, written in the page's language, that the person copies or shares
+and sends themselves: Prism never sends it. The same amount at the same place
+on the same day in the same account (at least $10, last 90 days) is asked
+about as a possible double charge, never asserted. Nothing is stored.
+
+## Payday plan
+
+The "Your paycheck, planned" card on Future (`src/lib/finance/payday.ts`):
+the last paycheck, given a job for every dollar until the next payday. What
+landed on payday; each bill and subscription before the next payday, paid or
+still to come (recurring streams, never card payments, whose purchases are
+already counted day to day); each goal's share of the days, from its monthly
+amount; what that leaves to live on, what's been spent day to day since
+payday, and about what's left a day. Prism moves no money: it's the plan,
+laid out.
+
 ## Bills that don't come every month
 
 The car insurance renewal, the water bill every three months, a yearly

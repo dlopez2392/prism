@@ -396,6 +396,17 @@
   date ahead of today). Usage is owed over limit; "paying before the
   statement" describes what a payment would do to the reported share and
   never tells anyone to make one.
+- Buy now, pay later (`src/lib/finance/paylater.ts`, on Cards, in
+  `get_cards`): found from payments to the providers, so every total is "at
+  least" and a monthly plan has no total. Never read a plan as debt the
+  person didn't make: a provider's payment that doesn't repeat at the same
+  amount is just a purchase.
+- Fees (`/fees`, `src/lib/finance/fees.ts`, `get_fees`, the "fees" insight):
+  a fee is `Transaction.bankFee` (Plaid BANK_FEES detail, never the interest
+  charge) or, only on a "bills"/"other" line up to $100, its words. Refunds
+  are matched, never assumed; a double charge is a question, never a claim.
+  The refund request is written for the person to send themselves: Prism
+  never contacts a bank for anyone.
 - Paying off what you owe (`src/lib/finance/payoff.ts`, the card on Net
   worth, `plan_debt_payoff`): one arithmetic for the screen and the
   connectors. A rate or a payment is the lender's (`Account.liability`) or

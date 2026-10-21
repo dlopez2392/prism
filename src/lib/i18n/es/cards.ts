@@ -53,4 +53,15 @@ export const CARDS: Record<string, string> = {
   "{pct} used: over 30%": "{pct} en uso: más del 30%",
   "{pct} used: under 10%": "{pct} en uso: menos del 10%",
   "{pct} used: under 30%": "{pct} en uso: menos del 30%",
+  "1 plan paid off in the last 90 days.": "1 plan pagado por completo en los últimos 90 días.",
+  "At least {owed} still to pay, {next30} of it in the next 30 days. Found from your payments to Affirm, Klarna, Afterpay, Sezzle and Zip.":
+    "Al menos {owed} por pagar todavía, {next30} en los próximos 30 días. Encontrado en tus pagos a Affirm, Klarna, Afterpay, Sezzle y Zip.",
+  "Buy now, pay later": "Compra ahora, paga después",
+  "Every month · next {date}": "Cada mes · el próximo, el {date}",
+  "Every two weeks · {paid} of 4 paid · next {date}": "Cada dos semanas · {paid} de 4 pagados · el próximo, el {date}",
+  "No plans running right now.": "No hay planes activos en este momento.",
+  "Plans with Affirm, Klarna, Afterpay, Sezzle and Zip show here, found from your payments to them.":
+    "Los planes con Affirm, Klarna, Afterpay, Sezzle y Zip aparecen aquí, encontrados en tus pagos a ellos.",
+  "{n} plans paid off in the last 90 days.": "{n} planes pagados por completo en los últimos 90 días.",
+  "{owed} left": "faltan {owed}",
 };

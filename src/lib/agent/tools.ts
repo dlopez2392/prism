@@ -21,6 +21,8 @@ import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences, setAside } from "@/lib/finance/recurring";
 import { cardsFor } from "@/lib/finance/cards";
+import { feesFor } from "@/lib/finance/fees";
+import { payLaterFor, PROVIDER_NAMES } from "@/lib/finance/paylater";
 import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
 import { comparePayoff, debtAccounts, PAYOFF_LIMITS, type Debt, type PayoffPlan } from "@/lib/finance/payoff";
 import { defaultTaxYear, taxSummary, taxYears } from "@/lib/finance/taxes";
@@ -504,6 +506,7 @@ export function listSubscriptions(data: AgentData) {
 /** Each credit card as the Cards page shows it: owed against its limit, its statement and payment, and what it cost in interest and fees. */
 export function getCards(data: AgentData) {
   const c = cardsFor(data.accounts, data.transactions, data.today);
+  const later = payLaterFor(data.transactions, data.today);
   const accounts = byId(data);
   const txById = new Map(data.transactions.map((t) => [t.id, t]));
   return {
@@ -537,6 +540,42 @@ export function getCards(data: AgentData) {
         .map((t) => citeable(t, accounts)),
       ...(x.annualFee ? { annual_fee: { amount: usd(x.annualFee.amount), date: x.annualFee.date, transaction: txById.has(x.annualFee.id) ? citeable(txById.get(x.annualFee.id)!, accounts) : null } } : {}),
     })),
+    // Found from payments to the providers, which report no plans: owed is "at least", and a monthly plan's length is unknown.
+    buy_now_pay_later: {
+      at_least_still_to_pay: usd(later.owed),
+      due_next_30_days: usd(later.next30),
+      plans: later.active.map((p) => ({
+        provider: PROVIDER_NAMES[p.provider],
+        account: accountLabel(accounts.get(p.accountId)),
+        installment: usd(p.installment),
+        cadence: p.cadence,
+        payments_seen: p.paid.length,
+        payments_left: p.left,
+        still_to_pay: p.owed === null ? null : usd(p.owed),
+        next_payment: p.next,
+        payments: p.paid.map((x) => (txById.has(x.id) ? citeable(txById.get(x.id)!, accounts) : null)),
+      })),
+    },
+  };
+}
+
+// — get_fees ———————————————————————————————————————————————————
+
+/** Every fee the banks and cards charged over the last year, what came back, and charges that may have gone through twice, as the Fees page lists them. */
+export function getFees(data: AgentData) {
+  const f = feesFor(data.transactions, data.today);
+  const accounts = byId(data);
+  const txById = new Map(data.transactions.map((t) => [t.split?.of ?? t.id, t]));
+  const cite = (id: string) => (txById.has(id) ? citeable(txById.get(id)!, accounts) : null);
+  return {
+    ...frame(data),
+    charged_last_12_months: usd(f.paid12),
+    given_back_last_12_months: usd(f.refunded12),
+    charged_this_year: usd(f.paidThisYear),
+    by_kind: f.byKind.map((k) => ({ kind: k.kind, count: k.count, still_lost: usd(k.lost) })),
+    fees: f.fees.map((x) => ({ kind: x.kind, amount: usd(x.amount), date: x.date, transaction: cite(x.id), ...(x.refund ? { given_back: { date: x.refund.date, transaction: cite(x.refund.id) } } : {}) })),
+    // The same amount at the same place on the same day, in the last 90 days: possibly right (two tickets), worth a look.
+    possible_double_charges: f.doubles.map((d) => ({ merchant: d.merchant, amount: usd(d.amount), date: d.date, transactions: d.ids.map(cite) })),
   };
 }
 

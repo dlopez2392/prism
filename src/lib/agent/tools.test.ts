@@ -12,6 +12,7 @@ import {
   listAccounts,
   listSubscriptions,
   getCards,
+  getFees,
   netWorth,
   overview,
   searchTransactions,
@@ -456,5 +457,23 @@ describe("get_cards", () => {
     expect(r.cards[0]).toMatchObject({ account: "Summit Rewards Visa ••1107", credit_limit: 12_000, apr: 24.49 });
     expect(r.share_of_limits_used).toBeGreaterThan(0);
     expect(r.cards[0]!.last_statement_date! <= r.as_of).toBe(true);
+  });
+});
+
+describe("get_fees", () => {
+  it("lists the example household's fees, with the one given back", () => {
+    const r = getFees(demo());
+    expect(r.fees.map((f) => f.kind).sort()).toEqual(["atm", "atm", "maintenance", "overdraft"]);
+    expect(r.given_back_last_12_months).toBe(12);
+    expect(r.charged_last_12_months).toBe(3.5 + 3.5 + 35 + 12);
+    for (const f of r.fees) expect(f.transaction).not.toBeNull();
+  });
+});
+
+describe("get_cards: pay later", () => {
+  it("lists the example household's Klarna plan, half paid", () => {
+    const r = getCards(demo());
+    expect(r.buy_now_pay_later.plans).toEqual([expect.objectContaining({ provider: "Klarna", installment: 42.5, payments_seen: 2, payments_left: 2, still_to_pay: 85 })]);
+    expect(r.buy_now_pay_later.at_least_still_to_pay).toBe(85);
   });
 });
