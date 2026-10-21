@@ -1,4 +1,4 @@
-// Account, while it loads: a card per setting — name, language, two-step sign-in, calendar, connected apps, delete.
+// Account, while it loads: a card per setting — name, language, Ask AI, what's saved, alerts, two-step sign-in and the rest.
 
 import { Bone, CardTitle, Frame, Header, Loading } from "@/components/skeletons";
 import { msg } from "@/lib/i18n/t";

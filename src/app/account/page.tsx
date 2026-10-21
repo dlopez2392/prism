@@ -5,7 +5,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { BellRing, CalendarClock, Download, Landmark, PiggyBank, Smartphone, Target, Wallet, type LucideIcon } from "lucide-react";
+import { BellRing, Bot, CalendarClock, Download, Landmark, MessageCircleQuestion, PiggyBank, Smartphone, Target, Wallet, type LucideIcon } from "lucide-react";
 import { AlertEmails } from "@/components/alert-emails";
 import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { DeleteAccount } from "@/components/delete-account";
@@ -75,6 +75,17 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       value: data.goals.length === 1 ? t("1 goal") : data.goals.length ? t("{n} goals", { n: data.goals.length }) : t("None yet"),
       on: data.goals.length > 0,
     },
+    // Listed only when apps can be connected and the list could be read.
+    ...(enabled && apps
+      ? [
+          {
+            icon: Bot,
+            label: t("AI apps"),
+            value: apps.length === 1 ? t("1 connected") : apps.length ? t("{n} connected", { n: apps.length }) : t("None yet — connect one above"),
+            on: apps.length > 0,
+          },
+        ]
+      : []),
     { icon: CalendarClock, label: t("Calendar link"), value: data.account.calendarFeed ? t("On") : t("Off — turn it on from Future"), on: data.account.calendarFeed },
     ...(alerts ? [{ icon: BellRing, label: t("Alert emails"), value: alerts.on ? t("On") : t("Off — turn them on below"), on: alerts.on }] : []),
     ...(alerts && devices
@@ -119,6 +130,33 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           </Card>
         </section>
       ) : null}
+
+      <section id="ai" className="scroll-mt-6">
+        <Card className="p-5 sm:p-6">
+          <CardHeader
+            title={t("Ask AI about your money")}
+            subtitle={t("Connect Claude or ChatGPT, then ask things like “What did I spend on eating out last month?” Connected apps can read — never move money or change anything.")}
+          />
+          {/* What it can answer, shown with or without Plus: the questions sell it better than a list of tools. */}
+          <h3 className="mt-4 text-[13px] font-semibold text-ink-2">{t("Questions it can answer")}</h3>
+          <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+            {[
+              t("Which subscriptions could I cancel, and what would I save in a year?"),
+              t("What fees did my bank charge me this year, and were any refunded?"),
+              t("Can I afford a $400 a month car payment?"),
+              t("Which card should I pay down first, and how long until it's paid off?"),
+            ].map((q) => (
+              <li key={q} className="flex items-start gap-2 rounded-ctl bg-surface-2 p-3 text-sm text-ink-1">
+                <MessageCircleQuestion aria-hidden className="mt-0.5 size-4 shrink-0 text-accent" />
+                {q}
+              </li>
+            ))}
+          </ul>
+          {plus.plus ? null : <PlusNeeded feature="apps" trial={plus.trial} t={t} quiet />}
+          {/* Without Plus, an app already connected is still listed, so it can be disconnected. */}
+          {plus.plus || apps?.length ? <ConnectedApps endpoint={endpoint} enabled={enabled} apps={apps} /> : null}
+        </Card>
+      </section>
 
       <Card className="p-5 sm:p-6">
         <CardHeader title={t("Saved to your account")} subtitle={t("Everything here follows you to any device you sign in on.")} />
@@ -188,18 +226,6 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             }
           />
           {household === undefined ? null : <HouseholdCard household={household} needsPlus={!plus.householdView} />}
-        </Card>
-      </section>
-
-      <section id="ai" className="scroll-mt-6">
-        <Card className="p-5 sm:p-6">
-          <CardHeader
-            title={t("Ask AI about your money")}
-            subtitle={t("Connect Claude or ChatGPT, then ask things like “What did I spend on eating out last month?” Connected apps can read — never move money or change anything.")}
-          />
-          {plus.plus ? null : <PlusNeeded feature="apps" trial={plus.trial} t={t} quiet />}
-          {/* Without Plus, an app already connected is still listed, so it can be disconnected. */}
-          {plus.plus || apps?.length ? <ConnectedApps endpoint={endpoint} enabled={enabled} apps={apps} /> : null}
         </Card>
       </section>
 
