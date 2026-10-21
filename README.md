@@ -649,6 +649,23 @@ and sends themselves: Prism never sends it. The same amount at the same place
 on the same day in the same account (at least $10, last 90 days) is asked
 about as a possible double charge, never asserted. Nothing is stored.
 
+## Refunds
+
+`/refunds` (`src/lib/finance/refunds.ts`, `get_refunds`, an Overview
+heads-up) is money on its way back. A signed-in person opens a purchase and
+chooses **Waiting on a refund** (the whole amount or part of it), or says
+they asked for one back from the page's suggestions: recent fees not given
+back, possible double charges, and charges after a subscription was
+cancelled. Each wait is a `RefundMark` sealed with the rest of their
+transaction details (the shop, the day, the amount, why, and the day they
+started waiting). Prism finds it come back on its own: money in for exactly
+that amount, on or after the purchase and within 120 days, from the same
+shop, or in the same account with refund words. Past its usual wait (a fee 10
+days, a return 14, a dispute 30) it's late, and the Overview says so. When it
+came back another way (store credit, cash) the person says so. The page also
+lists what friends owe from purchases marked on Spending. Prism never asks
+anyone for money.
+
 ## Payday plan
 
 The "Your paycheck, planned" card on Future (`src/lib/finance/payday.ts`):
@@ -1017,6 +1034,7 @@ as U.S. banks write them in either language.
 | **Overview** | A **Heads up** for anything to act on now (a bank that has stopped updating or will within the week, a bill before payday the account won't cover), net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
 | **Cash flow** | Income → categories → saved **Sankey**; **your paychecks** (who pays you, how often, what lands, the next payday) and where your income comes from, by kind; money in vs out by month, what you kept each month, savings-rate trend |
 | **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, **Owed to you** and **Your tags**, and a searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop), **splits** a purchase across categories, **tags** it and notes **who owes them** for it, all kept sealed in their account and applied everywhere, Claude included |
+| **Refunds** | Money coming back to you: refunds you're waiting on (found come back on their own, the late ones first), what friends owe you, money you may be owed and haven't asked for (recent fees, charges twice, charges after cancelling), and what came back this year |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), **bills that don't come every month** (every three, six or twelve months, each with its next date and what to put aside for it each month), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |

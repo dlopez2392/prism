@@ -33,6 +33,7 @@ import {
   listSubscriptions,
   getCards,
   getFees,
+  getRefunds,
   type AgentData,
 } from "./tools";
 
@@ -258,6 +259,17 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Bank fees", ...READ_ONLY },
     },
     run(getFees),
+  );
+
+  server.registerTool(
+    "get_refunds",
+    {
+      title: "Refunds and money owed back",
+      description:
+        "Money on its way back to the user: refunds they said they're waiting on (a return, a fee asked back, a charge twice or after cancelling), each with how many days late it is, found come back automatically when the money lands; what friends owe them for purchases they marked; money they may be owed and haven't asked for (recent fees not given back, possible double charges, charges after cancelling); and what came back in the last year. Prism never asks anyone for money.",
+      annotations: { title: "Refunds and money owed back", ...READ_ONLY },
+    },
+    run(getRefunds),
   );
 
   server.registerTool(

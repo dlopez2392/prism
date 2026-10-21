@@ -34,6 +34,13 @@
 // (keyed like a shop's split), that they cancelled it and when, and the ones
 // they pay for that Prism can't see, added by hand. It names shops, so it's
 // sealed with the rest, and it stays out of the household like the rest.
+//
+// And the REFUNDS they're waiting on (finance/refunds.ts): a purchase they
+// returned, a fee they asked to have back, a charge that went through twice
+// or came after they cancelled. Keyed by the line's id, each keeps the shop's
+// name, the day and the amount, so it still reads once the line is older
+// than the history Prism holds, and the day they said it came back when
+// Prism can't see it (store credit, cash).
 
 import { CATEGORIES, isSpendCategory } from "./categories";
 import { money, shortDate } from "./format";
@@ -61,6 +68,16 @@ export type SubMark = { name: string; is?: boolean; cancelled?: { on: ISODate; a
 export type OwnCadence = "weekly" | "monthly" | "quarterly" | "semiannual" | "annual";
 /** A subscription Prism can't see (paid in cash, or on a card that isn't connected), added by hand. `next`: the next charge, as they gave it. */
 export type OwnSub = { id: string; name: string; amount: Cents; cadence: OwnCadence; next: ISODate };
+/** Why money is due back: a purchase returned, a fee asked back, a charge that went through twice or came after cancelling, or anything else. */
+export type RefundKind = "return" | "fee" | "double" | "after-cancel" | "other";
+export const REFUND_KINDS: readonly RefundKind[] = ["return", "fee", "double", "after-cancel", "other"];
+/**
+ * A refund the person is waiting on, for one of their lines: the shop and the
+ * line's day as the bank wrote them, how much is due back (up to what the
+ * line cost), why, the day they started waiting, and `got`, the day they said
+ * it came back when no line of theirs shows it.
+ */
+export type RefundMark = { name: string; date: ISODate; amount: Cents; kind: RefundKind; asked: ISODate; got?: ISODate };
 /** What the Subscriptions page keeps: marks by shop (as ruleKey writes it), and those added by hand. */
 export type SubscriptionNotes = { marks: Record<string, SubMark>; own: OwnSub[] };
 /**
@@ -68,7 +85,16 @@ export type SubscriptionNotes = { marks: Record<string, SubMark>; own: OwnSub[] 
  * ids of accounts left out of every total. `subs` and `own`: the
  * Subscriptions page's marks and the subscriptions added by hand.
  */
-export type TxnDetails = { v: 1; lines: Record<string, TxnDetail>; rules?: Record<string, SplitRule>; hidden?: string[]; subs?: Record<string, SubMark>; own?: OwnSub[] };
+export type TxnDetails = {
+  v: 1;
+  lines: Record<string, TxnDetail>;
+  rules?: Record<string, SplitRule>;
+  hidden?: string[];
+  subs?: Record<string, SubMark>;
+  own?: OwnSub[];
+  /** Refunds the person is waiting on, by the id of the line they're for. */
+  refunds?: Record<string, RefundMark>;
+};
 
 export const NO_DETAILS: TxnDetails = { v: 1, lines: {} };
 
@@ -93,6 +119,8 @@ export const DETAIL_LIMITS = {
   subName: 60,
   /** The most a subscription added by hand may cost a time: $10,000. */
   subAmount: 1_000_000,
+  /** Refunds kept, waiting or come back. */
+  refunds: 200,
 } as const;
 
 const CADENCES: readonly Cadence[] = ["weekly", "biweekly", "semimonthly", "monthly", "quarterly", "semiannual", "annual"];
@@ -249,6 +277,17 @@ export function validOwnSub(x: unknown): OwnSub | null {
   return { id, name: label, amount: amount as Cents, cadence: cadence as OwnCadence, next };
 }
 
+/** A refund mark as stored, or null when any part of it doesn't read: it's never half kept. */
+export function validRefundMark(x: unknown): RefundMark | null {
+  if (!x || typeof x !== "object") return null;
+  const { name, date, amount, kind, asked, got } = x as Record<string, unknown>;
+  const label = typeof name === "string" ? cleanText(name, DETAIL_LIMITS.subName) : "";
+  if (!label || !isDay(date) || !isDay(asked) || !REFUND_KINDS.includes(kind as RefundKind)) return null;
+  if (!Number.isSafeInteger(amount) || (amount as number) <= 0) return null;
+  if (got !== undefined && !isDay(got)) return null;
+  return { name: label, date, amount: amount as Cents, kind: kind as RefundKind, asked, ...(got !== undefined ? { got } : {}) };
+}
+
 /** Everything stored, as it was kept: anything unreadable is dropped, never guessed at. */
 export function validDetails(x: unknown): TxnDetails {
   if (!x || typeof x !== "object" || (x as { v?: unknown }).v !== 1) return NO_DETAILS;
@@ -297,6 +336,16 @@ export function validDetails(x: unknown): TxnDetails {
     own.push(o);
     if (own.length === DETAIL_LIMITS.own) break;
   }
+  const waiting = (x as { refunds?: unknown }).refunds;
+  const refunds: [string, RefundMark][] = [];
+  if (waiting && typeof waiting === "object" && !Array.isArray(waiting)) {
+    for (const [id, value] of Object.entries(waiting as Record<string, unknown>)) {
+      if (!id || id.length > TXN_ID_MAX || id.includes(SPLIT_MARK)) continue;
+      const m = validRefundMark(value);
+      if (m) refunds.push([id, m]);
+      if (refunds.length === DETAIL_LIMITS.refunds) break;
+    }
+  }
   return {
     v: 1,
     lines: Object.fromEntries(kept),
@@ -304,6 +353,7 @@ export function validDetails(x: unknown): TxnDetails {
     ...(hidden.length ? { hidden } : {}),
     ...(subs.length ? { subs: Object.fromEntries(subs) } : {}),
     ...(own.length ? { own } : {}),
+    ...(refunds.length ? { refunds: Object.fromEntries(refunds) } : {}),
   };
 }
 
@@ -339,14 +389,15 @@ export function checkDetail(t: Pick<Transaction, "amount" | "category">, x: unkn
 
 const dollars = (c: Cents) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Anything to keep: a line's own details, a shop's split with no line of its own (a split rule made from a plain purchase), an account left out, or something about a subscription. */
+/** Anything to keep: a line's own details, a shop's split with no line of its own (a split rule made from a plain purchase), an account left out, something about a subscription, or a refund. */
 export function hasDetails(details: TxnDetails): boolean {
   return (
     Object.keys(details.lines).length > 0 ||
     Object.keys(details.rules ?? {}).length > 0 ||
     (details.hidden?.length ?? 0) > 0 ||
     Object.keys(details.subs ?? {}).length > 0 ||
-    (details.own?.length ?? 0) > 0
+    (details.own?.length ?? 0) > 0 ||
+    Object.keys(details.refunds ?? {}).length > 0
   );
 }
 
@@ -386,6 +437,14 @@ export function withOwnSub(old: TxnDetails, sub: OwnSub, remove = false): TxnDet
   return validDetails({ ...old, own: remove ? rest : [...rest, sub] });
 }
 
+/** The details with one line's refund mark set (or cleared, with null). */
+export function withRefundMark(old: TxnDetails, id: string, mark: RefundMark | null): TxnDetails {
+  const refunds = { ...old.refunds };
+  if (mark) refunds[id] = mark;
+  else delete refunds[id];
+  return validDetails({ ...old, refunds });
+}
+
 /** What the Subscriptions page reads from the details, or null when there's nothing. */
 export function subscriptionNotes(details: TxnDetails | null): SubscriptionNotes | null {
   if (!details || (!details.subs && !details.own)) return null;
@@ -393,13 +452,16 @@ export function subscriptionNotes(details: TxnDetails | null): SubscriptionNotes
 }
 
 /**
- * The money with the person's own subscription notes on it: their own view,
- * the morning check and connected apps, never the household. Never the
- * example household either: real and made-up money are never shown together.
+ * The money with the person's own notes on it, what they said about their
+ * subscriptions and the refunds they're waiting on: their own view, the
+ * morning check and connected apps, never the household. Never the example
+ * household either: real and made-up money are never shown together.
  */
-export function withSubscriptionNotes<T extends FinanceData>(data: T, details: TxnDetails | null): T {
+export function withOwnNotes<T extends FinanceData>(data: T, details: TxnDetails | null): T {
+  if (data.source === "demo" || !details) return data;
   const notes = subscriptionNotes(details);
-  return notes && data.source !== "demo" ? { ...data, subscriptionNotes: notes } : data;
+  const refunds = details.refunds && Object.keys(details.refunds).length ? details.refunds : null;
+  return { ...data, ...(notes ? { subscriptionNotes: notes } : {}), ...(refunds ? { refundMarks: refunds } : {}) };
 }
 
 /** Each transaction with what the person added: a split becomes its parts, and a line left out (or in an account left out) says so. Never changes the transactions it's given. */

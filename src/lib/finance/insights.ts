@@ -18,6 +18,7 @@ import { money, money0, monthLong, percent } from "./format";
 import { perYear, type RecurringStream } from "./recurring";
 import { subscriptionsFor, type Subscriptions } from "./subscriptions";
 import { feesFor } from "./fees";
+import type { Refunds } from "./refunds";
 import type { ISODate, Transaction } from "./types";
 
 export type InsightTone = "heads_up" | "win" | "idea";
@@ -42,10 +43,12 @@ export function generateInsights(input: {
   flows: MonthFlow[];
   /** The Subscriptions page's list (subscriptions.ts), so the two never disagree; without it, the streams that are subscriptions. */
   subscriptions?: Subscriptions;
+  /** Money on its way back (refunds.ts), for the late ones. */
+  refunds?: Refunds;
   /** The language to say it in; English unless asked. */
   t?: T;
 }): Insight[] {
-  const { txns, today, budgets, streams, flows, subscriptions, t = EN } = input;
+  const { txns, today, budgets, streams, flows, subscriptions, refunds, t = EN } = input;
   const { locale } = t;
   const inCategory = (n: number, label: string) =>
     n === 1 ? t("1 {category} transaction this month", { category: label.toLowerCase() }) : t("{n} {category} transactions this month", { n, category: label.toLowerCase() });
@@ -192,6 +195,20 @@ export function generateInsights(input: {
       detail: t("Banks often give a fee back if you ask. Fees has a request ready to send."),
       evidence: recentFees.map((f) => f.id),
       evidenceLabel: t("Fees charged in the last 30 days"),
+    });
+  }
+
+  // 5c. Refunds the person is waiting on that are late: worth chasing now.
+  const late = refunds?.waiting.filter((w) => w.late > 0) ?? [];
+  if (late.length) {
+    const total = late.reduce((s, w) => s + w.amount, 0);
+    out.push({
+      id: "refunds-late",
+      tone: "heads_up",
+      title: late.length === 1 ? t("Your {amount} refund from {name} is late", { amount: money(total), name: late[0]!.name }) : t("{n} refunds are late: {amount} in all", { n: late.length, amount: money(total) }),
+      detail: t("It hasn't come back yet. Check with them, and if it came back another way, say so on Refunds."),
+      evidence: late.map((w) => w.id),
+      evidenceLabel: t("The purchases these refunds are for"),
     });
   }
 
