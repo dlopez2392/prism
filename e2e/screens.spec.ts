@@ -17,6 +17,8 @@ const SCREENS: { path: string; title: RegExp; hero: boolean }[] = [
   { path: "/refunds", title: /Refunds/, hero: true },
   { path: "/year", title: /Your \d{4}/, hero: true },
   { path: "/taxes", title: /Your \d{4} taxes/, hero: true },
+  // The example household has no business account: the page says how to mark one.
+  { path: "/business", title: /Your business/, hero: false },
   { path: "/future", title: /Future/, hero: true },
   { path: "/goals", title: /Goals/, hero: true },
   { path: "/net-worth", title: /Net worth/, hero: true },

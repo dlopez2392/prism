@@ -7,6 +7,7 @@
 // none is missing, that no {name} is lost, and that nothing is left over.
 
 import { ACCOUNT } from "./es/account";
+import { BUSINESS } from "./es/business";
 import { ALERTS } from "./es/alerts";
 import { CALENDAR } from "./es/calendar";
 import { CARDS } from "./es/cards";
@@ -43,6 +44,7 @@ export const ES_PARTS: Record<string, Record<string, string>> = {
   checkIn: CHECK_IN,
   fees: FEES,
   refunds: REFUNDS,
+  business: BUSINESS,
 };
 
 export const ES: Record<string, string> = Object.assign({}, ...Object.values(ES_PARTS));

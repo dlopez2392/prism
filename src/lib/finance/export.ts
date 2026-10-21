@@ -21,6 +21,7 @@ import { INCOME_LABELS } from "./income";
 import type { ManualItem } from "./manual";
 import { MANUAL_KINDS } from "./manual";
 import { P2P_APP_NAMES, p2pLabel } from "./p2p";
+import { bizLineLabel, COST_LINES, scheduleC, type BizTxn } from "./schedule-c";
 import { taxSummary } from "./taxes";
 import type { Account, Budget, Cents, FinanceData, Goal, Holding, ISODate, Institution, Transaction } from "./types";
 import { lastMonths } from "./dates";
@@ -115,12 +116,31 @@ export function transactionsCsv(data: Money, year?: number): string {
  * transaction, grouped by what a return asks about, each group closed by its
  * total. Money out stays negative, as in every file Prism writes.
  */
-export function taxesCsv(data: Money & Pick<FinanceData, "today">, year: number): string {
+export function taxesCsv(data: Money & Pick<FinanceData, "today" | "businessAccountIds" | "businessMarks" | "hiddenAccounts">, year: number): string {
   const accounts = byId(data.accounts);
   const rows: Cell[][] = [];
+  const total = (n: number) => `Total of ${n} ${n === 1 ? "transaction" : "transactions"}`;
   for (const s of taxSummary(data, year).sections) {
     for (const t of s.lines) rows.push([s.title, t.date, t.merchant, t.p2p ? p2pLabel(t.p2p) : "", amount(t.amount), accountName(accounts.get(t.accountId)), s.form]);
-    rows.push([s.title, "", `Total of ${s.lines.length} ${s.lines.length === 1 ? "transaction" : "transactions"}`, "", amount(s.side === "in" ? s.total : -s.total), "", s.form]);
+    rows.push([s.title, "", total(s.lines.length), "", amount(s.side === "in" ? s.total : -s.total), "", s.form]);
+  }
+  // The business's lines, by where they go on Schedule C (or that they aren't on it), each place closed by its total.
+  const c = scheduleC(data, year);
+  if (c) {
+    // In the form's order: money in, refunds to customers, the costs, then what isn't on it.
+    const order = ["sales", "other-income", ...COST_LINES, "owner", "personal"];
+    const rank = (t: BizTxn) => order.indexOf(t.biz) * 2 + (t.side === "out" ? 1 : 0);
+    const places = new Map<string, { form: string | null; lines: BizTxn[] }>();
+    for (const t of [...c.lines].sort((a, b) => rank(a) - rank(b))) {
+      const place = `Business: ${bizLineLabel(t.biz, undefined, t.side)}`;
+      const row = places.get(place) ?? { form: t.biz === "owner" || t.biz === "personal" ? null : "Schedule C", lines: [] };
+      row.lines.push(t);
+      places.set(place, row);
+    }
+    for (const [place, { form, lines }] of places) {
+      for (const t of lines) rows.push([place, t.date, t.merchant, t.p2p ? p2pLabel(t.p2p) : "", amount(t.amount), accountName(accounts.get(t.accountId)), form]);
+      rows.push([place, "", total(lines.length), "", amount(lines.reduce((n, t) => n + t.amount, 0)), "", form]);
+    }
   }
   return csv(["Section", "Date", "Merchant", "Paid to or from", "Amount", "Account", "Form"], rows);
 }

@@ -11,7 +11,7 @@
 // time or a zone, so a server in UTC and a phone in Honolulu agree on which
 // day a coffee was bought.
 
-import type { RefundMark, SubscriptionNotes } from "./details";
+import type { BizMarks, RefundMark, SubscriptionNotes } from "./details";
 
 export type ISODate = string;
 export type Cents = number;
@@ -217,6 +217,8 @@ export type FinanceData = {
   businessAccountIds?: string[];
   /** Which business accounts the person also left out, so they stay out once they're personal again. */
   leftOutAccountIds?: string[];
+  /** Where the person put their business lines on Schedule C (finance/schedule-c.ts): their own view only. */
+  businessMarks?: BizMarks;
   /** The refunds the person is waiting on, by the line they're for (finance/refunds.ts): their own view only, never the household's. */
   refundMarks?: Record<string, RefundMark>;
 };

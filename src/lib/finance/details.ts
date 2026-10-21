@@ -41,6 +41,12 @@
 // name, the day and the amount, so it still reads once the line is older
 // than the history Prism holds, and the day they said it came back when
 // Prism can't see it (store credit, cash).
+//
+// And where each line in a BUSINESS account goes on Schedule C
+// (finance/schedule-c.ts): by the line's id, or for every line from one shop
+// going the same way (`out:` money out and money back, `in:` money in, then
+// the shop as ruleKey writes it). The person's word on a line beats their
+// word on its shop, which beats Prism's guess.
 
 import { CATEGORIES, isSpendCategory } from "./categories";
 import { money, shortDate } from "./format";
@@ -78,6 +84,42 @@ export const REFUND_KINDS: readonly RefundKind[] = ["return", "fee", "double", "
  * it came back when no line of theirs shows it.
  */
 export type RefundMark = { name: string; date: ISODate; amount: Cents; kind: RefundKind; asked: ISODate; got?: ISODate };
+/** Where a business line goes: a Schedule C line, or not on it at all (`owner`: money the person put in or took out; `personal`: not the business's). */
+export type BizLine =
+  | "sales"
+  | "other-income"
+  | "goods"
+  | "advertising"
+  | "car"
+  | "commissions"
+  | "contract-labor"
+  | "insurance"
+  | "interest"
+  | "legal"
+  | "office"
+  | "rent"
+  | "repairs"
+  | "supplies"
+  | "taxes"
+  | "travel"
+  | "meals"
+  | "utilities"
+  | "wages"
+  | "other-expense"
+  | "owner"
+  | "personal";
+/** Which way a business line goes: money in, or money out (and money back from a purchase, which undoes part of one). */
+export type BizSide = "in" | "out";
+/** Where each may go: what came in can't be a cost, and what went out can't be other income. */
+export const BIZ_LINES: Record<BizSide, readonly BizLine[]> = {
+  in: ["sales", "other-income", "owner"],
+  out: ["goods", "advertising", "car", "commissions", "contract-labor", "insurance", "interest", "legal", "office", "rent", "repairs", "supplies", "taxes", "travel", "meals", "utilities", "wages", "other-expense", "sales", "owner", "personal"],
+};
+/** Every line from one shop going one way, sorted the same: the shop's name as the bank last wrote it. */
+export type BizShop = { name: string; line: BizLine };
+/** What the person said about their business lines: by line id, and by `side:shop`. */
+export type BizMarks = { lines: Record<string, BizLine>; shops: Record<string, BizShop> };
+
 /** What the Subscriptions page keeps: marks by shop (as ruleKey writes it), and those added by hand. */
 export type SubscriptionNotes = { marks: Record<string, SubMark>; own: OwnSub[] };
 /**
@@ -96,6 +138,10 @@ export type TxnDetails = {
   refunds?: Record<string, RefundMark>;
   /** The ids of accounts that are the person's business: kept apart from every personal total, like `hidden`, and summed on their own. */
   business?: string[];
+  /** Where business lines go on Schedule C, by line id. */
+  biz?: Record<string, BizLine>;
+  /** Where every line from one shop goes on Schedule C, by `side:shop`. */
+  bizShops?: Record<string, BizShop>;
 };
 
 export const NO_DETAILS: TxnDetails = { v: 1, lines: {} };
@@ -123,6 +169,9 @@ export const DETAIL_LIMITS = {
   subAmount: 1_000_000,
   /** Refunds kept, waiting or come back. */
   refunds: 200,
+  /** Business lines sorted one by one, and shops sorted all at once. */
+  biz: 5000,
+  bizShops: 300,
 } as const;
 
 const CADENCES: readonly Cadence[] = ["weekly", "biweekly", "semimonthly", "monthly", "quarterly", "semiannual", "annual"];
@@ -290,6 +339,17 @@ export function validRefundMark(x: unknown): RefundMark | null {
   return { name: label, date, amount: amount as Cents, kind: kind as RefundKind, asked, ...(got !== undefined ? { got } : {}) };
 }
 
+/** Whether a business line may go where it's put, for the way its money went. */
+export function bizLineFits(side: BizSide, line: unknown): line is BizLine {
+  return typeof line === "string" && BIZ_LINES[side].includes(line as BizLine);
+}
+
+/** A shop's key for its business lines going one way: `out:costco`. */
+export function bizShopKey(side: BizSide, merchant: string): string | null {
+  const key = ruleKey(merchant);
+  return key ? `${side}:${key}` : null;
+}
+
 /** Everything stored, as it was kept: anything unreadable is dropped, never guessed at. */
 export function validDetails(x: unknown): TxnDetails {
   if (!x || typeof x !== "object" || (x as { v?: unknown }).v !== 1) return NO_DETAILS;
@@ -352,6 +412,31 @@ export function validDetails(x: unknown): TxnDetails {
       if (refunds.length === DETAIL_LIMITS.refunds) break;
     }
   }
+  const sorted = (x as { biz?: unknown }).biz;
+  const biz: [string, BizLine][] = [];
+  if (sorted && typeof sorted === "object" && !Array.isArray(sorted)) {
+    for (const [id, value] of Object.entries(sorted as Record<string, unknown>)) {
+      if (!id || id.length > TXN_ID_MAX || id.includes(SPLIT_MARK)) continue;
+      // Either way it went: the line's own side is checked when it's sorted.
+      if (!bizLineFits("in", value) && !bizLineFits("out", value)) continue;
+      biz.push([id, value]);
+      if (biz.length === DETAIL_LIMITS.biz) break;
+    }
+  }
+  const byShop = (x as { bizShops?: unknown }).bizShops;
+  const bizShops: [string, BizShop][] = [];
+  if (byShop && typeof byShop === "object" && !Array.isArray(byShop)) {
+    for (const [key, value] of Object.entries(byShop as Record<string, unknown>)) {
+      const m = /^(in|out):(.+)$/.exec(key);
+      // Only a key a shop's name could have made, and a line that fits its side.
+      if (!m || ruleKey(m[2]!) !== m[2]) continue;
+      const { name, line } = (value ?? {}) as Record<string, unknown>;
+      const label = typeof name === "string" ? cleanText(name, DETAIL_LIMITS.ruleName) : "";
+      if (!label || !bizLineFits(m[1] as BizSide, line)) continue;
+      bizShops.push([key, { name: label, line }]);
+      if (bizShops.length === DETAIL_LIMITS.bizShops) break;
+    }
+  }
   return {
     v: 1,
     lines: Object.fromEntries(kept),
@@ -361,6 +446,8 @@ export function validDetails(x: unknown): TxnDetails {
     ...(subs.length ? { subs: Object.fromEntries(subs) } : {}),
     ...(own.length ? { own } : {}),
     ...(refunds.length ? { refunds: Object.fromEntries(refunds) } : {}),
+    ...(biz.length ? { biz: Object.fromEntries(biz) } : {}),
+    ...(bizShops.length ? { bizShops: Object.fromEntries(bizShops) } : {}),
   };
 }
 
@@ -405,7 +492,9 @@ export function hasDetails(details: TxnDetails): boolean {
     (details.business?.length ?? 0) > 0 ||
     Object.keys(details.subs ?? {}).length > 0 ||
     (details.own?.length ?? 0) > 0 ||
-    Object.keys(details.refunds ?? {}).length > 0
+    Object.keys(details.refunds ?? {}).length > 0 ||
+    Object.keys(details.biz ?? {}).length > 0 ||
+    Object.keys(details.bizShops ?? {}).length > 0
   );
 }
 
@@ -425,7 +514,17 @@ export function withRule(old: TxnDetails, key: string, rule: SplitRule | null): 
   return validDetails({ ...old, rules });
 }
 
-/** The details with one account left out of every total (or counted again). */
+/** The details with one business line's place on Schedule C set (or cleared, with null), and, when `shop` is given, its shop's too. */
+export function withBizSort(old: TxnDetails, id: string, line: BizLine | null, shop?: { key: string; value: BizShop | null }): TxnDetails {
+  const biz = { ...old.biz };
+  if (line) biz[id] = line;
+  else delete biz[id];
+  const bizShops = { ...old.bizShops };
+  if (shop?.value) bizShops[shop.key] = shop.value;
+  else if (shop) delete bizShops[shop.key];
+  return validDetails({ ...old, biz, bizShops });
+}
+
 /** The details with one account marked as the person's business (or not). */
 export function withBusiness(old: TxnDetails, accountId: string, business: boolean): TxnDetails {
   const ids = (old.business ?? []).filter((id) => id !== accountId);
@@ -437,6 +536,7 @@ export function apartAccounts(details: TxnDetails | null): Set<string> {
   return new Set([...(details?.hidden ?? []), ...(details?.business ?? [])]);
 }
 
+/** The details with one account left out of every total (or counted again). */
 export function withHidden(old: TxnDetails, accountId: string, hidden: boolean): TxnDetails {
   const ids = (old.hidden ?? []).filter((id) => id !== accountId);
   return validDetails({ ...old, hidden: hidden ? [...ids, accountId] : ids });
@@ -597,10 +697,13 @@ export function hideAccounts<T extends FinanceData>(data: T, details: TxnDetails
   if (!data.accounts.some((a) => hidden.has(a.id))) return { ...data, hiddenAccounts: [], hiddenHoldings: [] };
   // Which of those set aside are the person's business, summed on their own (finance/business.ts).
   const business = (details?.business ?? []).filter((id) => data.accounts.some((a) => a.id === id));
+  const marks: BizMarks = { lines: details?.biz ?? {}, shops: details?.bizShops ?? {} };
   return {
     ...data,
-    // And which of them are also left out, so unmarking one as business says whether it counts again.
-    ...(business.length ? { businessAccountIds: business, leftOutAccountIds: (details?.hidden ?? []).filter((id) => business.includes(id)) } : {}),
+    // And which of them are also left out, so unmarking one as business says whether it counts again; and where the person put their lines on Schedule C.
+    ...(business.length
+      ? { businessAccountIds: business, leftOutAccountIds: (details?.hidden ?? []).filter((id) => business.includes(id)), ...(Object.keys(marks.lines).length || Object.keys(marks.shops).length ? { businessMarks: marks } : {}) }
+      : {}),
     accounts: data.accounts.filter((a) => !hidden.has(a.id)),
     holdings: data.holdings.filter((h) => !hidden.has(h.accountId)),
     hiddenAccounts: data.accounts.filter((a) => hidden.has(a.id)),

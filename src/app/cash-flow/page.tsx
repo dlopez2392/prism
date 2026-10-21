@@ -4,6 +4,7 @@
 // Sankey. Everything on the screen is scoped by the range row.
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Waves } from "lucide-react";
 import { StatTile } from "@/components/blocks";
 import { ChartCard } from "@/components/chart-card";
@@ -258,6 +259,9 @@ function BusinessCard({ business: b, t }: { business: Business; t: T }) {
         </tbody>
       </table>
       <p className="mt-3 text-xs text-ink-3">{t("Every line in a business account counts, what you pay yourself included; money moved between two business accounts doesn't. Change which accounts are business under Choose what counts on Net worth.")}</p>
+      <Link href="/business" className="mt-2 inline-block text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
+        {t("Sort it for Schedule C")}
+      </Link>
     </Card>
   );
 }

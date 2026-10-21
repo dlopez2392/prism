@@ -691,6 +691,36 @@ business accounts. The mark is a list of account ids (`TxnDetails.business`),
 sealed with the rest of the person's details. `list_accounts` lists those
 accounts apart, under `business`.
 
+### Business categories and Schedule C
+
+`/business` (`src/lib/finance/schedule-c.ts`) takes the year's lines in the
+business accounts and sorts each one by where it goes on Schedule C, the form
+a sole proprietor or single-member LLC reports its profit on:
+- **Money in:** gross receipts (line 1), refunds to customers (line 2) and
+  other income such as interest (line 6).
+- **Costs:** cost of goods sold (Part III) and each Part II line, from
+  advertising (8) to other expenses (27a).
+- **Not on the form:** money paid to the owner or put in by them (a transfer
+  to a personal account, or the owner's own income tax), and spending that
+  wasn't the business's.
+
+Where a line goes is, most certain first: what the person said about that
+line, then what they said about every line from its shop going the same way
+(`out:` or `in:` plus the shop), then Prism's guess. The guess reads the name
+first (a payroll service is wages, a card processor's fee is a fee), then the
+line's category (a restaurant is a meal, a gas station is the car). Money back
+from a purchase goes where the purchase went. The person's choices are kept in
+`TxnDetails.biz` and `TxnDetails.bizShops`, sealed with the rest, and saved by
+`sortBusinessLine` with an Undo.
+
+The Taxes page shows the same year by Schedule C line, with what the accounts
+saw left and a note on Schedule SE when that's $400 or more. Lines in a
+business account no longer appear in the personal tax sections. The tax
+download lists them by line, and `get_tax_summary` returns them under
+`business_schedule_c`. It is information, not tax advice: a meal usually
+counts at half, and a home office, mileage or depreciation aren't visible to
+Prism. Part of Prism Plus with the tax year.
+
 ## Money check-in
 
 `/check-in` (`src/lib/finance/check-in.ts`, `get_check_in`) is one page for
