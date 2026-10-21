@@ -414,3 +414,7 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     "Prism found $214 you lost to fees" is the clearest reason to try it.
     Next on this list: buy-now-pay-later plans (Affirm, Klarna, Afterpay) and
     a payday plan.
+35. **Buy now, pay later.** **Built (2026-10-21):** plans with Affirm,
+    Klarna, Afterpay, Sezzle and Zip, found from the payments to them, on
+    Cards: each plan's payment, how many are left, at least what's still to
+    pay and when the next comes; ongoing monthly plans as monthly payments.

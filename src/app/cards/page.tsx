@@ -11,8 +11,10 @@ import type { Metadata } from "next";
 import { CreditCard, Info } from "lucide-react";
 import { ButtonLink, Card, CardHeader, EmptyState, Meter, PageHeader, StatusPill } from "@/components/ui";
 import { cardsFor, type CardRow } from "@/lib/finance/cards";
+import { payLaterFor, PROVIDER_NAMES, type PayLater } from "@/lib/finance/paylater";
 import { rateText } from "@/lib/finance/debts";
 import { money, money0, percent, shortDate } from "@/lib/finance/format";
+import type { Account } from "@/lib/finance/types";
 import type { T } from "@/lib/i18n/t";
 import { getT } from "@/lib/i18n/server";
 import { getFinance } from "@/lib/server/finance";
@@ -28,11 +30,12 @@ const LINE = 0.3;
 export default async function CardsPage() {
   const [data, t] = await Promise.all([getFinance(), getT()]);
   const c = cardsFor(data.accounts, data.transactions, data.today);
+  const later = payLaterFor(data.transactions, data.today);
   const header = <PageHeader title={t("Cards")} subtitle={t("How much of each card's limit you're using, when its statement closes, and what it has cost you.")} />;
 
   if (!c.cards.length) {
     return (
-      <div>
+      <div className="space-y-5">
         {header}
         <Card>
           <EmptyState
@@ -42,6 +45,7 @@ export default async function CardsPage() {
             action={<ButtonLink href="/connections">{t("Go to Connections")}</ButtonLink>}
           />
         </Card>
+        {later.active.length || later.finished.length ? <PayLaterCard later={later} accounts={data.accounts} t={t} /> : null}
       </div>
     );
   }
@@ -92,6 +96,8 @@ export default async function CardsPage() {
           <CardPanel key={card.id} card={card} t={t} />
         ))}
       </div>
+
+      <PayLaterCard later={later} accounts={data.accounts} t={t} />
 
       <Card className="p-5 sm:p-6">
         <div className="flex items-start gap-3">
@@ -174,6 +180,60 @@ function CardPanel({ card, t }: { card: CardRow; t: T }) {
         <div className="mt-3">
           <StatusPill status="crit">{t("Its bank says a payment is overdue")}</StatusPill>
         </div>
+      ) : null}
+    </Card>
+  );
+}
+
+/** Buy now, pay later: each plan still running, what it takes next, and what's still to pay as far as its payments show. */
+function PayLaterCard({ later, accounts, t }: { later: PayLater; accounts: Account[]; t: T }) {
+  const { locale } = t;
+  const name = (id: string) => {
+    const a = accounts.find((x) => x.id === id);
+    return a ? (a.mask ? `${a.name} ••${a.mask}` : a.name) : "";
+  };
+  return (
+    <Card className="p-5 sm:p-6">
+      <CardHeader
+        title={t("Buy now, pay later")}
+        subtitle={
+          later.active.length
+            ? t("At least {owed} still to pay, {next30} of it in the next 30 days. Found from your payments to Affirm, Klarna, Afterpay, Sezzle and Zip.", {
+                owed: money(later.owed),
+                next30: money(later.next30),
+              })
+            : t("Plans with Affirm, Klarna, Afterpay, Sezzle and Zip show here, found from your payments to them.")
+        }
+      />
+      {later.active.length ? (
+        <ul className="mt-3 divide-y divide-[var(--line)]">
+          {later.active.map((p) => (
+            <li key={`${p.provider}:${p.accountId}:${p.paid[0]!.id}`} className="py-3">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-ink-1">{PROVIDER_NAMES[p.provider]}</div>
+                  <div className="text-xs text-ink-3">
+                    {p.cadence === "biweekly"
+                      ? t("Every two weeks · {paid} of 4 paid · next {date}", { paid: p.paid.length, date: shortDate(p.next!, locale) })
+                      : t("Every month · next {date}", { date: shortDate(p.next!, locale) })}
+                    {name(p.accountId) ? ` · ${name(p.accountId)}` : ""}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="num text-sm font-bold text-ink-1">{money(p.installment)}</div>
+                  <div className="text-xs text-ink-3">{p.owed !== null ? t("{owed} left", { owed: money(p.owed) }) : t("a month")}</div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-ink-2">{t("No plans running right now.")}</p>
+      )}
+      {later.finished.length ? (
+        <p className="mt-3 text-xs text-ink-3">
+          {later.finished.length === 1 ? t("1 plan paid off in the last 90 days.") : t("{n} plans paid off in the last 90 days.", { n: later.finished.length })}
+        </p>
       ) : null}
     </Card>
   );
