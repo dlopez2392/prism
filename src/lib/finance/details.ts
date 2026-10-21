@@ -94,6 +94,8 @@ export type TxnDetails = {
   own?: OwnSub[];
   /** Refunds the person is waiting on, by the id of the line they're for. */
   refunds?: Record<string, RefundMark>;
+  /** The ids of accounts that are the person's business: kept apart from every personal total, like `hidden`, and summed on their own. */
+  business?: string[];
 };
 
 export const NO_DETAILS: TxnDetails = { v: 1, lines: {} };
@@ -110,7 +112,7 @@ export const DETAIL_LIMITS = {
   /** Shops with a split of their own. */
   rules: 100,
   ruleName: 60,
-  /** Accounts left out of totals. */
+  /** Accounts left out of totals, and accounts marked as business. */
   hidden: 200,
   /** Shops with a subscription mark. */
   subs: 200,
@@ -315,6 +317,10 @@ export function validDetails(x: unknown): TxnDetails {
   const hidden = Array.isArray(listed)
     ? [...new Set(listed.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= ACCOUNT_ID_MAX))].slice(0, DETAIL_LIMITS.hidden)
     : [];
+  const ofBusiness = (x as { business?: unknown }).business;
+  const business = Array.isArray(ofBusiness)
+    ? [...new Set(ofBusiness.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= ACCOUNT_ID_MAX))].slice(0, DETAIL_LIMITS.hidden)
+    : [];
   const marked = (x as { subs?: unknown }).subs;
   const subs: [string, SubMark][] = [];
   if (marked && typeof marked === "object" && !Array.isArray(marked)) {
@@ -351,6 +357,7 @@ export function validDetails(x: unknown): TxnDetails {
     lines: Object.fromEntries(kept),
     ...(rules.length ? { rules: Object.fromEntries(rules) } : {}),
     ...(hidden.length ? { hidden } : {}),
+    ...(business.length ? { business } : {}),
     ...(subs.length ? { subs: Object.fromEntries(subs) } : {}),
     ...(own.length ? { own } : {}),
     ...(refunds.length ? { refunds: Object.fromEntries(refunds) } : {}),
@@ -395,6 +402,7 @@ export function hasDetails(details: TxnDetails): boolean {
     Object.keys(details.lines).length > 0 ||
     Object.keys(details.rules ?? {}).length > 0 ||
     (details.hidden?.length ?? 0) > 0 ||
+    (details.business?.length ?? 0) > 0 ||
     Object.keys(details.subs ?? {}).length > 0 ||
     (details.own?.length ?? 0) > 0 ||
     Object.keys(details.refunds ?? {}).length > 0
@@ -418,6 +426,17 @@ export function withRule(old: TxnDetails, key: string, rule: SplitRule | null): 
 }
 
 /** The details with one account left out of every total (or counted again). */
+/** The details with one account marked as the person's business (or not). */
+export function withBusiness(old: TxnDetails, accountId: string, business: boolean): TxnDetails {
+  const ids = (old.business ?? []).filter((id) => id !== accountId);
+  return validDetails({ ...old, business: business ? [...ids, accountId] : ids });
+}
+
+/** Every account kept out of the personal totals: those left out, and those that are the person's business. */
+export function apartAccounts(details: TxnDetails | null): Set<string> {
+  return new Set([...(details?.hidden ?? []), ...(details?.business ?? [])]);
+}
+
 export function withHidden(old: TxnDetails, accountId: string, hidden: boolean): TxnDetails {
   const ids = (old.hidden ?? []).filter((id) => id !== accountId);
   return validDetails({ ...old, hidden: hidden ? [...ids, accountId] : ids });
@@ -468,7 +487,7 @@ export function withOwnNotes<T extends FinanceData>(data: T, details: TxnDetails
 export function applyDetails<T extends Transaction>(txns: T[], details: TxnDetails): T[] {
   if (!hasDetails(details)) return txns;
   const rules = details.rules ?? {};
-  const hidden = new Set(details.hidden ?? []);
+  const hidden = apartAccounts(details);
   const out: T[] = [];
   for (const t of txns) {
     const d = Object.hasOwn(details.lines, t.id) ? details.lines[t.id]! : null;
@@ -574,10 +593,14 @@ export function tagTotals(txns: Transaction[]): { tag: string; spent: Cents; cou
  * applyDetails; `hiddenAccounts` lists them so they can be counted again.
  */
 export function hideAccounts<T extends FinanceData>(data: T, details: TxnDetails | null): T & { hiddenAccounts: Account[]; hiddenHoldings: Holding[] } {
-  const hidden = new Set(details?.hidden ?? []);
+  const hidden = apartAccounts(details);
   if (!data.accounts.some((a) => hidden.has(a.id))) return { ...data, hiddenAccounts: [], hiddenHoldings: [] };
+  // Which of those set aside are the person's business, summed on their own (finance/business.ts).
+  const business = (details?.business ?? []).filter((id) => data.accounts.some((a) => a.id === id));
   return {
     ...data,
+    // And which of them are also left out, so unmarking one as business says whether it counts again.
+    ...(business.length ? { businessAccountIds: business, leftOutAccountIds: (details?.hidden ?? []).filter((id) => business.includes(id)) } : {}),
     accounts: data.accounts.filter((a) => !hidden.has(a.id)),
     holdings: data.holdings.filter((h) => !hidden.has(h.accountId)),
     hiddenAccounts: data.accounts.filter((a) => hidden.has(a.id)),

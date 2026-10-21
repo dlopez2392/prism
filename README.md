@@ -677,6 +677,20 @@ amount; what that leaves to live on, what's been spent day to day since
 payday, and about what's left a day. Prism moves no money: it's the plan,
 laid out.
 
+## Business accounts
+
+A signed-in person can mark any of their accounts as their business, under
+**Choose what counts** on Net worth ("This is a business account"). A
+business account is kept out of every personal total, like one left out: its
+balance leaves net worth and none of its lines count in spending, income,
+budgets, forecasts or the check-in. On its own, it shows as the **Your
+business** card on Cash flow: what the business accounts hold now, and what
+came in and went out this month, last month and the month before. Every line
+counts there, the owner's pay included, except money moved between two
+business accounts. The mark is a list of account ids (`TxnDetails.business`),
+sealed with the rest of the person's details. `list_accounts` lists those
+accounts apart, under `business`.
+
 ## Money check-in
 
 `/check-in` (`src/lib/finance/check-in.ts`, `get_check_in`) is one page for

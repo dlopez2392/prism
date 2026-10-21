@@ -21,6 +21,7 @@ import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences, setAside } from "@/lib/finance/recurring";
 import { cardsFor } from "@/lib/finance/cards";
+import { businessFor } from "@/lib/finance/business";
 import { checkIn } from "@/lib/finance/check-in";
 import { feesFor } from "@/lib/finance/fees";
 import { inflationFor, type PriceChange } from "@/lib/finance/inflation";
@@ -191,6 +192,19 @@ export function listAccounts(data: AgentData) {
         ...(a.liability ? { lender_terms: lenderTerms(a.liability) } : {}),
       })),
     })),
+    // Accounts the user marked as their business: kept out of every total above, summed on their own.
+    business: businessSummary(data),
+  };
+}
+
+function businessSummary(data: AgentData) {
+  const b = businessFor(data.hiddenAccounts ?? [], data.businessAccountIds, data.transactions, data.today);
+  if (!b) return null;
+  return {
+    note: "The user's business accounts, kept apart from their personal totals: none of their money counts in personal spending, income, budgets or net worth. Money in and out counts every line, owner's pay included; transfers between two business accounts don't.",
+    balance: usd(b.balance),
+    accounts: b.accounts.map((a) => ({ id: a.id, name: a.name, kind: a.kind, mask: a.mask, balance: usd(a.balance) })),
+    months: b.months.map((m) => ({ month: m.month, money_in: usd(m.moneyIn), money_out: usd(m.moneyOut), net: usd(m.net) })),
   };
 }
 

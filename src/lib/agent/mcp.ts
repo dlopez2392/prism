@@ -146,7 +146,7 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
     "list_accounts",
     {
       title: "Accounts and balances",
-      description: "Every linked account with its current balance, grouped as cash, investments, property, credit cards and loans. Debts are negative. Cards and loans whose lender reports them carry lender_terms: next due date, minimum payment, statement balance and interest rate. Account ids here can filter search_transactions.",
+      description: "Every linked account with its current balance, grouped as cash, investments, property, credit cards and loans. Debts are negative. Cards and loans whose lender reports them carry lender_terms: next due date, minimum payment, statement balance and interest rate. Account ids here can filter search_transactions. Accounts the user marked as their business are listed apart under business, with their balance and money in and out by month, and never count in any personal total.",
       annotations: { title: "Accounts and balances", ...READ_ONLY },
     },
     run(listAccounts),

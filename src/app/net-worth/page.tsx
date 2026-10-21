@@ -77,12 +77,15 @@ export default async function NetWorthPage() {
   };
   // Which of their own accounts count in their totals: every one they have, those left out included, so any can come back.
   const hiddenAccounts = data.hiddenAccounts ?? [];
+  const businessIds = new Set(data.businessAccountIds ?? []);
   const counted: CountedAccount[] = [...data.accounts.map((a) => ({ a, counted: true })), ...hiddenAccounts.map((a) => ({ a, counted: false }))].map(({ a, counted }) => ({
     id: a.id,
     name: a.name,
     where: `${institutionName(a.institutionId)}${a.mask ? ` ·· ${a.mask}` : ""}`,
     balance: a.balance,
-    counted,
+    // A business account is kept apart; it counts again only once it's personal and not left out.
+    counted: counted || (businessIds.has(a.id) && !(data.leftOutAccountIds ?? []).includes(a.id)),
+    business: businessIds.has(a.id),
   }));
   const choose = canAdd && data.source !== "demo" && counted.length > 0 ? <CountedAccounts accounts={counted} /> : null;
 
@@ -93,9 +96,17 @@ export default async function NetWorthPage() {
         <Card>
           <EmptyState
             icon={Landmark}
-            title={hiddenAccounts.length ? t("Every account is left out of your totals") : t("Your whole picture, in one number")}
+            title={
+              hiddenAccounts.length && hiddenAccounts.every((a) => businessIds.has(a.id))
+                ? t("Every account is a business account")
+                : hiddenAccounts.length
+                  ? t("Every account is left out of your totals")
+                  : t("Your whole picture, in one number")
+            }
             body={
-              hiddenAccounts.length
+              hiddenAccounts.length && hiddenAccounts.every((a) => businessIds.has(a.id))
+                ? t("Your business is summed on its own on Cash flow. Link a personal account, or mark one as personal below, and your net worth shows here.")
+                : hiddenAccounts.length
                 ? t("Count one again below and your net worth comes back, month by month.")
                 : canAdd
                   ? t("Link your accounts, or add your home, a car or a loan below, and this becomes your net worth, month by month.")
