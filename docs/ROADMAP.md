@@ -422,3 +422,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     given a job for every dollar until the next payday: bills before it,
     goals' share, what's left to live on and about how much a day. Prism
     moves no money; the plan is laid out for the person to follow.
+37. **Refunds you're owed.** **Built (2026-10-21):** `/refunds` keeps
+    track of money on its way back: a purchase returned, a fee asked back, a
+    charge twice or after cancelling (marked from a purchase, or from the
+    page's suggestions), found come back on its own when the money lands,
+    late past its usual wait (with an Overview heads-up), and what friends
+    owe. Prism never asks anyone for money. Next: an alert email for a late
+    refund (a new alert kind; the owner's call, as it needs a DROP).

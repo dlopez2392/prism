@@ -13,6 +13,7 @@ import {
   listSubscriptions,
   getCards,
   getFees,
+  getRefunds,
   netWorth,
   overview,
   searchTransactions,
@@ -467,6 +468,20 @@ describe("get_fees", () => {
     expect(r.given_back_last_12_months).toBe(12);
     expect(r.charged_last_12_months).toBe(3.5 + 3.5 + 35 + 12);
     for (const f of r.fees) expect(f.transaction).not.toBeNull();
+  });
+});
+
+describe("get_refunds", () => {
+  it("lists the example household's refunds: one back, one waiting, a late fee, and a friend who owes", () => {
+    const r = getRefunds(demo());
+    expect(r.came_back.map((b) => [b.name, b.amount, b.said_by_user])).toEqual([["Target", 64.99, false]]);
+    expect(r.waiting.map((w) => [w.name, w.amount, w.days_late > 0])).toEqual([
+      ["ATM FEE - NON-NETWORK", 3.5, true],
+      ["NIKE.COM", 120, false],
+    ]);
+    expect(r.friends_owe).toEqual([expect.objectContaining({ who: "Sam", amount: 43 })]);
+    expect(r.coming_back).toBe(3.5 + 120 + 43);
+    for (const w of r.waiting) expect(w.purchase).not.toBeNull();
   });
 });
 

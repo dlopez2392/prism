@@ -407,6 +407,15 @@
   are matched, never assumed; a double charge is a question, never a claim.
   The refund request is written for the person to send themselves: Prism
   never contacts a bank for anyone.
+- Refunds (`/refunds`, `src/lib/finance/refunds.ts`, `get_refunds`, the
+  "refunds-late" insight): a wait is a `RefundMark` in the sealed details
+  (`TxnDetails.refunds`, keyed by the whole line's id, carrying the shop,
+  day and amount so it outlives the history), never on the line itself, so
+  the transaction dialog's Save can't drop it. Come back means money in for
+  EXACTLY the amount, from the same shop or in the same account with refund
+  words; each credit pays one refund, oldest first. Personal view only
+  (`withOwnNotes`), never the household or the demo's stored data. Prism
+  never asks anyone for money.
 - Paying off what you owe (`src/lib/finance/payoff.ts`, the card on Net
   worth, `plan_debt_payoff`): one arithmetic for the screen and the
   connectors. A rate or a payment is the lender's (`Account.liability`) or

@@ -22,6 +22,7 @@ import { p2pLabel } from "@/lib/finance/p2p";
 import { orderLabel } from "@/lib/finance/orders";
 import { normalizeMerchant } from "@/lib/finance/recurring";
 import type { CategoryId, Transaction } from "@/lib/finance/types";
+import type { RefundMark } from "@/lib/finance/details";
 import { readLedgerHash } from "@/lib/finance/view";
 
 const PAGE = 25;
@@ -33,6 +34,7 @@ export function TransactionsTable({
   canFix = false,
   fixHint = null,
   ruleShops = [],
+  refunds = {},
 }: {
   transactions: Transaction[];
   accountNames: Record<string, string>;
@@ -42,6 +44,8 @@ export function TransactionsTable({
   fixHint?: string | null;
   /** The shops whose every purchase the person splits the same way. */
   ruleShops?: string[];
+  /** The refunds the person is waiting on, by the line they're for. */
+  refunds?: Record<string, RefundMark>;
 }) {
   const t = useT();
   const { locale } = t;
@@ -247,7 +251,7 @@ export function TransactionsTable({
           {t("Show {n} more", { n: Math.min(PAGE, rows.length - shown) })}
         </button>
       ) : null}
-      {canFix ? <TransactionDialog dialogRef={dialog} opened={fixing} session={session} onDone={setNotice} ruleShops={ruleShops} /> : null}
+      {canFix ? <TransactionDialog dialogRef={dialog} opened={fixing} session={session} onDone={setNotice} ruleShops={ruleShops} refunds={refunds} /> : null}
     </div>
   );
 }

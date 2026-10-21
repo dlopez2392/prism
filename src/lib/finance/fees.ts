@@ -50,7 +50,7 @@ const FEE_WORDS: [FeeKind, RegExp][] = [
   ["late", /\blate (payment )?(fee|charge)\b/i],
   ["maintenance", /\b(monthly )?(maintenance|service|account) (fee|charge)\b|\bmonthly fee\b/i],
 ];
-const REFUND_WORDS = /\b(refund|reversal|reversed|rebate|courtesy|waive[dr]?|credit adjustment|fee credit)\b/i;
+export const REFUND_WORDS = /\b(refund|reversal|reversed|rebate|courtesy|waive[dr]?|credit adjustment|fee credit)\b/i;
 
 /** Which fee a line is, or null when it isn't one. */
 export function feeKind(t: Pick<Transaction, "amount" | "merchant" | "category" | "bankFee" | "interestCharge">): FeeKind | null {

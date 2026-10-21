@@ -128,7 +128,8 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
               who owes you for it (the name you type and the amount), and which transactions and accounts you leave out of your totals, stored
               encrypted in your account and never shown to your household. What you tell {BRAND.product} about your subscriptions is kept the same way:
               which repeating charges are or aren&apos;t one, the ones you cancelled and the day you did, and the ones you add yourself (a name, an
-              amount and how often). A
+              amount and how often). So are the refunds you say you&apos;re waiting on: the purchase&apos;s shop, day and amount, how much is
+              coming back and why, the day you started waiting, and the day you said it came back. {BRAND.product} never asks anyone for a refund for you. A
               reminder about what someone owes is written on your device and goes wherever you send it; {BRAND.product} never sends it.
             </li>
             <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>

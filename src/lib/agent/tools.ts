@@ -579,6 +579,28 @@ export function getFees(data: AgentData) {
   };
 }
 
+// — get_refunds ————————————————————————————————————————————————
+
+/** Money on its way back, as the Refunds page lists it: refunds waiting (late ones first), what friends owe, money that may be owed, and what came back. */
+export function getRefunds(data: AgentData) {
+  const r = analyze(data).refunds;
+  const accounts = byId(data);
+  const txById = new Map(data.transactions.map((t) => [t.split?.of ?? t.id, t]));
+  const cite = (id: string) => (txById.has(id) ? citeable(txById.get(id)!, accounts) : null);
+  return {
+    ...frame(data),
+    coming_back: usd(r.waitingTotal + r.owedTotal),
+    refunds_waiting_total: usd(r.waitingTotal),
+    friends_owe_total: usd(r.owedTotal),
+    came_back_this_year: usd(r.backThisYear),
+    waiting: r.waiting.map((w) => ({ name: w.name, amount: usd(w.amount), why: w.kind, bought: w.date, waiting_since: w.asked, usually_back_by: w.due, days_late: w.late, purchase: cite(w.id) })),
+    friends_owe: r.owed.map(({ t, owed }) => ({ who: owed.who, amount: usd(owed.amount), for: citeable(t, accounts) })),
+    // Not asked for yet: fees not given back, charges that may have gone through twice, charges after cancelling. Possibly right; worth a look.
+    may_be_owed: r.suggestions.map((x) => ({ name: x.name, amount: usd(x.amount), why: x.kind, date: x.date, transaction: cite(x.id) })),
+    came_back: r.back.map((b) => ({ name: b.name, amount: usd(b.amount), why: b.kind, on: b.on, refund: b.via ? cite(b.via.id) : null, said_by_user: b.via === null })),
+  };
+}
+
 // — get_net_worth ——————————————————————————————————————————————
 
 export function netWorth(data: AgentData) {

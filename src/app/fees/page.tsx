@@ -7,6 +7,7 @@
 // months, after what was given back. That's the number worth acting on.
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { BadgeDollarSign, Copy } from "lucide-react";
 import { FeeRequest } from "@/components/fee-request";
 import { Card, CardHeader, EmptyState, PageHeader, StatusPill } from "@/components/ui";
@@ -33,6 +34,8 @@ export default async function FeesPage() {
   const accounts = new Map([...data.accounts, ...(data.hiddenAccounts ?? [])].map((a) => [a.id, a]));
   const lost = f.paid12 - f.refunded12;
   const refundedCount = f.fees.filter((x) => x.refund).length;
+  // One whole sentence, so a language can put the link where its words need it.
+  const [beforeRefunds, afterRefunds] = t("Asked for one back? Say so on {refunds}, and Prism tells you when it comes in, or if it's late.").split("{refunds}");
   const header = <PageHeader title={t("Fees")} subtitle={t("Every fee your banks and cards charged this past year, what came back, and how to ask for the rest.")} />;
 
   if (!f.fees.length && !f.doubles.length) {
@@ -97,6 +100,13 @@ export default async function FeesPage() {
       {f.fees.length ? (
         <Card className="p-5 sm:p-6">
           <CardHeader title={t("Every fee")} subtitle={t("Newest first. Asking costs nothing, and banks often give a fee back as a courtesy, especially a first one.")} />
+          <p className="mt-2 text-sm text-ink-2">
+            {beforeRefunds}
+            <Link href="/refunds" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+              {t("Refunds")}
+            </Link>
+            {afterRefunds}
+          </p>
           <ul className="mt-3 divide-y divide-[var(--line)]">
             {f.fees.map((fee) => {
               const account = accountLabel(accounts.get(fee.accountId));

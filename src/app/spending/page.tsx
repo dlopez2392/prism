@@ -283,7 +283,7 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
           <CardHeader title={t("Transactions")} subtitle={t("Everything in {period}", { period })} />
         </div>
         <div className="mt-4">
-          <TransactionsTable transactions={inWindow} accountNames={accountNames} canFix={canFix} fixHint={fixHint} ruleShops={canFix ? data.splitRules.map((r) => r.key) : []} />
+          <TransactionsTable transactions={inWindow} accountNames={accountNames} canFix={canFix} fixHint={fixHint} ruleShops={canFix ? data.splitRules.map((r) => r.key) : []} refunds={canFix ? (data.refundMarks ?? {}) : {}} />
         </div>
       </Card>
     </div>

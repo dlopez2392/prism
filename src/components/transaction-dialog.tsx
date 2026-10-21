@@ -11,19 +11,21 @@
 // every purchase at the same shop; one there can still be kept whole.
 
 import { startTransition, useActionState, useId, useState, useTransition, type FormEvent } from "react";
-import { PackageOpen, Plus, ReceiptText, X } from "lucide-react";
+import { HandCoins, PackageOpen, Plus, ReceiptText, X } from "lucide-react";
 import clsx from "clsx";
 import { FixForm } from "@/components/category-fixer";
-import { buttonGhost, buttonPrimary, Dialog, FormMessage } from "@/components/dialog";
+import { buttonGhost, buttonPrimary, buttonSmall, Dialog, FormMessage } from "@/components/dialog";
 import { categoryLabel, SPEND_CATEGORIES, isSpendCategory } from "@/lib/finance/categories";
 import { useT } from "@/components/locale";
-import { DETAIL_LIMITS, ruleKey } from "@/lib/finance/details";
+import { DETAIL_LIMITS, ruleKey, type RefundMark } from "@/lib/finance/details";
+import { refundKindOf } from "@/lib/finance/refunds";
 import { itemParts } from "@/lib/finance/orders";
 import { dayDate, money, shortDate } from "@/lib/finance/format";
 import { dollarsInput, parseDollars } from "@/lib/finance/plan";
 import type { Cents, SpendCategoryId, Transaction } from "@/lib/finance/types";
 import { Switch } from "@/components/switch";
 import { leaveOut, saveTransactionDetail, type DetailState } from "@/lib/server/details-actions";
+import { stopWaiting, waitForRefund, type RefundState } from "@/lib/server/refund-actions";
 
 /** A line as the bank sent it, with what the person added: its parts when it's split. */
 export type Opened = { whole: Transaction; parts: Transaction[] };
@@ -48,6 +50,7 @@ export function TransactionDialog({
   session,
   onDone,
   ruleShops = [],
+  refunds = {},
 }: {
   dialogRef: React.RefObject<HTMLDialogElement | null>;
   opened: Opened | null;
@@ -56,6 +59,8 @@ export function TransactionDialog({
   onDone: (message: string) => void;
   /** The shops whose every purchase the person splits the same way, by ruleKey. */
   ruleShops?: string[];
+  /** The refunds the person is waiting on, by the line they're for. */
+  refunds?: Record<string, RefundMark>;
 }) {
   const t = useT();
   const [tab, setTab] = useState<"category" | "details">("category");
@@ -83,6 +88,7 @@ export function TransactionDialog({
       {txn && opened ? (
         <>
           <LeaveOut key={`${session}-${txn.id}-out`} txn={txn} onDone={done} />
+          {txn.amount < 0 && !txn.pending ? <RefundWait key={`${session}-${txn.id}-refund`} txn={txn} mark={Object.hasOwn(refunds, txn.id) ? refunds[txn.id]! : null} onDone={done} /> : null}
           <div role="tablist" aria-label={t("What to change")} className="mb-4 inline-flex rounded-ctl border border-line bg-surface-2 p-1">
             {(
               [
@@ -157,6 +163,76 @@ function LeaveOut({ txn, onDone }: { txn: Transaction; onDone: (message: string)
               : t("Not counted in spending, income or budgets: for a one-off like a car, or a work trip you're paid back for. It stays in your transactions.")
         }
       />
+      {error ? (
+        <p role="alert" className="mt-2 text-sm font-medium text-crit-ink">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Waiting on money back for this line (refunds.ts): how much, up to what it
+ * cost, and then Prism watches for it. Saved at once, like Leave out; Stop
+ * waiting takes it off again.
+ */
+function RefundWait({ txn, mark, onDone }: { txn: Transaction; mark: RefundMark | null; onDone: (message: string) => void }) {
+  const t = useT();
+  const id = useId();
+  const total: Cents = -txn.amount;
+  const [amount, setAmount] = useState(dollarsInput(total));
+  const [error, setError] = useState<string | null>(null);
+  const [saving, start] = useTransition();
+  const cents = amount.trim() ? parseDollars(amount) : null;
+  const act = (run: () => Promise<RefundState>) => {
+    setError(null);
+    start(async () => {
+      const r = await run();
+      if (r.status === "saved") onDone(r.message);
+      else setError(r.status === "error" ? r.message : null);
+    });
+  };
+  const wait = () => {
+    if (cents === null || cents === 0) return setError(t("Say how much is coming back."));
+    if (cents > total) return setError(t("At most {total}, what this cost.", { total: money(total) }));
+    act(() => waitForRefund(txn.id, cents, refundKindOf(txn)));
+  };
+  return (
+    <div className="mb-4 rounded-ctl border border-line bg-surface-2 p-3">
+      {mark ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <HandCoins aria-hidden className="size-4 shrink-0 text-accent" />
+          <span className="min-w-0 flex-1 text-ink-1">
+            {mark.got
+              ? t("{amount} came back on {date}.", { amount: money(mark.amount), date: shortDate(mark.got, t.locale) })
+              : t("Waiting on {amount} back since {date}. See it on Refunds.", { amount: money(mark.amount), date: shortDate(mark.asked, t.locale) })}
+          </span>
+          <button type="button" onClick={() => act(() => stopWaiting(txn.id))} disabled={saving} className={buttonSmall}>
+            {t("Stop waiting")}
+          </button>
+        </div>
+      ) : (
+        <div>
+          <div className="text-sm font-semibold text-ink-1">{t("Waiting on a refund?")}</div>
+          <p className="text-[13px] text-ink-3">{t("Returned it, or asked for it back? Prism watches for the money and tells you if it's late.")}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label htmlFor={`${id}-refund`} className="sr-only">
+              {t("Refund amount")}
+            </label>
+            <div className="relative w-32">
+              <span aria-hidden className="pointer-events-none absolute inset-y-0 left-2.5 grid place-items-center text-sm text-ink-3">
+                $
+              </span>
+              <input id={`${id}-refund`} value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" autoComplete="off" className={clsx(field, "num pr-2 pl-6")} />
+            </div>
+            <button type="button" onClick={wait} disabled={saving} className={buttonSmall}>
+              <HandCoins aria-hidden className="size-4" />
+              {saving ? t("Saving…") : t("Waiting on a refund")}
+            </button>
+          </div>
+        </div>
+      )}
       {error ? (
         <p role="alert" className="mt-2 text-sm font-medium text-crit-ink">
           {error}

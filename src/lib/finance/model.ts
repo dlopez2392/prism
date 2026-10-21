@@ -13,6 +13,7 @@ import { incomeSummary } from "./income";
 import { generateInsights } from "./insights";
 import { netWorthSeries } from "./networth";
 import { detectRecurring } from "./recurring";
+import { refundsFor } from "./refunds";
 import { subscriptionsFor } from "./subscriptions";
 import { EN, type T } from "@/lib/i18n/t";
 import type { FinanceData } from "./types";
@@ -31,6 +32,8 @@ export function analyze(data: FinanceData, t: T = EN) {
   const netWorth = netWorthSeries(data.accounts, today);
   // Everything paid for again and again, with what the person said about it: one list for every screen and connector.
   const subscriptions = subscriptionsFor(streams, txns, data.subscriptionNotes, today);
+  // Money on its way back, with the refunds the person said they're waiting on.
+  const refunds = refundsFor(txns, data.refundMarks ?? {}, subscriptions, today);
 
   const checking =
     data.accounts
@@ -66,12 +69,13 @@ export function analyze(data: FinanceData, t: T = EN) {
     budgetTotals: budgetTotals(budgets),
     streams,
     subscriptions,
+    refunds,
     income: incomeSummary(txns, streams, today),
     checking,
     forecast,
     safe,
     netWorth,
-    insights: generateInsights({ txns, today, budgets, streams, flows, subscriptions, t }),
+    insights: generateInsights({ txns, today, budgets, streams, flows, subscriptions, refunds, t }),
   };
 }
 

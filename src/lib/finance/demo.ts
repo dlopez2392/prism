@@ -20,6 +20,7 @@
 //     lenses twice a year, a delivery membership once a year.
 
 import { addDays, addMonths, daysInMonth, dayOfWeek, monthKey, startOfMonth } from "./dates";
+import type { RefundMark } from "./details";
 import type {
   Account,
   Budget,
@@ -232,6 +233,20 @@ export function buildDemoData(today: ISODate): FinanceData {
   add(chk, addDays(today, -19), -4_250, "KLARNA* Lumen Home", "shopping");
   add(chk, addDays(today, -5), -4_250, "KLARNA* Lumen Home", "shopping");
   for (const k of [82, 68, 54, 40]) add(chk, addDays(today, -k), -2_199, "AFTERPAY", "shopping");
+  // Money on its way back, on the card so checking's forecast is untouched: a return that came back, one still out, an ATM fee asked back that's late, and a dinner a friend owes for.
+  const last = () => txns.at(-1)!;
+  const refundMarks: Record<string, RefundMark> = {};
+  const waitFor = (t: Transaction, asked: number, kind: RefundMark["kind"]) => {
+    refundMarks[t.id] = { name: t.merchant, date: t.date, amount: -t.amount, kind, asked: addDays(today, -asked) };
+  };
+  add(card, addDays(today, -20), -6_499, "Target", "shopping");
+  waitFor(last(), 18, "return");
+  add(card, addDays(today, -9), 6_499, "Target", "shopping");
+  add(card, addDays(today, -10), -12_000, "NIKE.COM", "shopping");
+  waitFor(last(), 7, "return");
+  waitFor(txns.find((t) => t.merchant === "ATM FEE - NON-NETWORK" && t.date === addDays(today, -40))!, 38, "fee");
+  add(card, addDays(today, -14), -8_600, "Olive Garden", "food");
+  last().owed = { who: "Sam", amount: 4_300, paid: null };
 
   txns.sort((a, b) => (a.date === b.date ? a.id.localeCompare(b.id) : a.date < b.date ? -1 : 1));
 
@@ -410,5 +425,6 @@ export function buildDemoData(today: ISODate): FinanceData {
     goals,
     holdings,
     credit,
+    refundMarks,
   };
 }
