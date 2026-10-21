@@ -93,6 +93,9 @@ export type Liability = {
 /** What kind of money an income transaction is, when the bank says (Plaid's detailed category). */
 export type IncomeKind = "pay" | "interest" | "dividends" | "retirement" | "benefits" | "tax-refund" | "other";
 
+/** A fee a bank or card charged, by kind, when the bank's own category says so (finance/fees.ts reads the name otherwise). */
+export type FeeKind = "overdraft" | "nsf" | "atm" | "foreign" | "late" | "maintenance" | "cash-advance" | "other";
+
 /** What a tax return might ask about a payment, when the bank's own category says (finance/taxes.ts reads the name otherwise). */
 export type TaxHint = "donation" | "tax-payment" | "medical" | "childcare" | "education" | "mortgage" | "student-loan";
 
@@ -112,6 +115,8 @@ export type Transaction = {
   taxHint?: TaxHint;
   /** Interest a card or a loan charged, when the bank's category says so (finance/payoff.ts reads the name otherwise). */
   interestCharge?: true;
+  /** A fee the bank charged, when its category says which (finance/fees.ts). */
+  bankFee?: FeeKind;
   /** Who a Venmo, PayPal or Cash App payment was for, from the person's own file of that app (finance/p2p.ts). */
   p2p?: P2pNote;
   /** One part of a line the person split across categories: which line, which part, and the whole line's amount (finance/details.ts). */

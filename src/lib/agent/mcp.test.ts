@@ -92,6 +92,7 @@ describe("the MCP endpoint", () => {
       "get_budgets",
       "get_cards",
       "get_cash_flow",
+      "get_fees",
       "get_goals",
       "get_income",
       "get_net_worth",

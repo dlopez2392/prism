@@ -17,6 +17,7 @@ import { addDays, monthKey, startOfMonth } from "./dates";
 import { money, money0, monthLong, percent } from "./format";
 import { perYear, type RecurringStream } from "./recurring";
 import { subscriptionsFor, type Subscriptions } from "./subscriptions";
+import { feesFor } from "./fees";
 import type { ISODate, Transaction } from "./types";
 
 export type InsightTone = "heads_up" | "win" | "idea";
@@ -177,6 +178,20 @@ export function generateInsights(input: {
       detail: t("That's {monthly} a month. See them all, and where to cancel, on Subscriptions.", { monthly: money0(subs.monthly) }),
       evidence: subs.active.flatMap((s) => s.transactionIds.slice(-1)),
       evidenceLabel: t("The latest charge from each subscription"),
+    });
+  }
+
+  // 5b. Fees the bank charged lately and hasn't given back: money worth asking for.
+  const recentFees = feesFor(txns, today).fees.filter((f) => !f.refund && f.date > addDays(today, -30));
+  if (recentFees.length) {
+    const total = recentFees.reduce((s, f) => s + f.amount, 0);
+    out.push({
+      id: "fees",
+      tone: "heads_up",
+      title: recentFees.length === 1 ? t("Your bank charged you a {amount} fee", { amount: money(total) }) : t("Your banks charged you {amount} in fees this month", { amount: money(total) }),
+      detail: t("Banks often give a fee back if you ask. Fees has a request ready to send."),
+      evidence: recentFees.map((f) => f.id),
+      evidenceLabel: t("Fees charged in the last 30 days"),
     });
   }
 

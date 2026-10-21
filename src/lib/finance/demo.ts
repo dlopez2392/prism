@@ -221,6 +221,14 @@ export function buildDemoData(today: ISODate): FinanceData {
     }
   }
 
+  // ── Fees the bank charged (added after the loop, so the random sequence above is untouched) ──
+  // Two out-of-network ATM fees, an overdraft from the spring, and a monthly fee the bank gave back.
+  add(chk, addDays(today, -40), -350, "ATM FEE - NON-NETWORK", "other");
+  add(chk, addDays(today, -75), -350, "ATM FEE - NON-NETWORK", "other");
+  add(chk, addDays(today, -130), -3_500, "OVERDRAFT ITEM FEE", "other");
+  add(chk, addDays(today, -55), -1_200, "MONTHLY MAINTENANCE FEE", "bills");
+  add(chk, addDays(today, -52), 1_200, "MAINTENANCE FEE REFUND", "other");
+
   txns.sort((a, b) => (a.date === b.date ? a.id.localeCompare(b.id) : a.date < b.date ? -1 : 1));
 
   // ── Balances ─────────────────────────────────────────────────────────────
