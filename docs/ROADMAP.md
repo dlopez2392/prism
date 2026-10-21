@@ -440,3 +440,8 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     by what's spent on each, with what it adds to a year; what a typical
     visit costs at the places the person goes most, listed apart and never
     in the rate. Also `get_my_inflation` for the AI connector.
+40. **Money check-in.** **Built (2026-10-21):** `/check-in`, second in the
+    nav: last month in numbers, what's worth a look now gathered from every
+    part of Prism (each linked to the page that settles it, leaving when
+    settled), what changed and the month ahead. The monthly recap email now
+    opens it. Also `get_check_in` for the AI connector.

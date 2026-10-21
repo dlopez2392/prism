@@ -677,6 +677,29 @@ amount; what that leaves to live on, what's been spent day to day since
 payday, and about what's left a day. Prism moves no money: it's the plan,
 laid out.
 
+## Money check-in
+
+`/check-in` (`src/lib/finance/check-in.ts`, `get_check_in`) is one page for
+once a month. It has four parts:
+- **Last month in numbers:** what came in, went out and was kept, against
+  the month before, with net worth. These are the same figures the recap
+  email sends, and the recap's link now opens this page.
+- **Worth a look:** what needs attention, gathered from every part of Prism
+  and ordered Now / This month / Good to know. Each item links to the page
+  that settles it. It covers the alerts (a bank to reconnect, a bill that may
+  not be covered, a price rise, a new subscription, a charge after
+  cancelling), late refunds, fees from the last 30 days nobody gave back,
+  possible double charges, budgets over or on course to go over, card
+  payments due within a week or overdue, more than 30% of card limits in
+  use, friends who have owed for two weeks, and a cushion under three months
+  of essentials.
+- **What changed:** the categories that moved most against the month before
+  (at least $50 and 15%), and the prices that rose in a year.
+- **The month ahead:** the bills in the next 30 days, and the next payday.
+
+Nothing is stored. An item leaves the list when what it's about is settled,
+never because it was ticked, and Prism never acts on any of it.
+
 ## Your own inflation rate
 
 The "Your own inflation rate" card on Spending (`src/lib/finance/inflation.ts`,
@@ -1059,6 +1082,7 @@ as U.S. banks write them in either language.
 |---|---|
 | **Overview** | A **Heads up** for anything to act on now (a bank that has stopped updating or will within the week, a bill before payday the account won't cover), net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
 | **Cash flow** | Income → categories → saved **Sankey**; **your paychecks** (who pays you, how often, what lands, the next payday) and where your income comes from, by kind; money in vs out by month, what you kept each month, savings-rate trend |
+| **Check-in** | Once a month: last month in numbers against the month before, **what's worth a look now** from every part of Prism (each linked to the page that settles it), what changed, and the month ahead |
 | **Spending** | **Your own inflation rate** (what the same bills and subscriptions cost now against a year ago, weighted by what you spend on each, with typical visits listed apart), stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, **Owed to you** and **Your tags**, and a searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop), **splits** a purchase across categories, **tags** it and notes **who owes them** for it, all kept sealed in their account and applied everywhere, Claude included |
 | **Refunds** | Money coming back to you: refunds you're waiting on (found come back on their own, the late ones first), what friends owe you, money you may be owed and haven't asked for (recent fees, charges twice, charges after cancelling), and what came back this year |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |

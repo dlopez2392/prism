@@ -416,6 +416,13 @@
   words; each credit pays one refund, oldest first. Personal view only
   (`withOwnNotes`), never the household or the demo's stored data. Prism
   never asks anyone for money.
+- Money check-in (`/check-in`, `src/lib/finance/check-in.ts`,
+  `get_check_in`): it GATHERS from the other engines (alerts, refunds, fees,
+  budgets, cards, runway, inflation); it never computes its own version of
+  their numbers. Nothing is stored and there's no "done" tick: an item leaves
+  when its cause is settled. A new kind of item belongs in `checkIn` with a
+  tone and the page that settles it. The monthly recap's summary links here
+  (`Summary.href`).
 - Your own inflation rate (`src/lib/finance/inflation.ts`, the Spending
   card, `get_my_inflation`): the RATE is prices only (a charge that repeated
   at one price a year ago, now at one price or stepped at its latest), never

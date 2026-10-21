@@ -32,6 +32,7 @@ import {
   upcomingBills,
   listSubscriptions,
   getCards,
+  getCheckIn,
   getFees,
   getRefunds,
   howLongCouldILast,
@@ -250,6 +251,17 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Credit cards", ...READ_ONLY },
     },
     run(getCards),
+  );
+
+  server.registerTool(
+    "get_check_in",
+    {
+      title: "Monthly money check-in",
+      description:
+        "The user's monthly money check-in: last month in numbers (what came in, went out and was kept, against the month before, and net worth), what's worth a look now gathered from all of Prism (a bill the account may not cover, a card payment due or overdue, a bank to reconnect, a late refund, fees they could ask back, a possible double charge, budgets over, price rises, new subscriptions, what friends owe, a thin cushion), each with its urgency and the Prism page that settles it, the categories that moved most, prices that rose in a year, and the bills and payday ahead. A good first call for \"how did last month go?\" or \"what should I look at?\".",
+      annotations: { title: "Monthly money check-in", ...READ_ONLY },
+    },
+    run(getCheckIn),
   );
 
   server.registerTool(

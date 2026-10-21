@@ -16,6 +16,7 @@ import {
   BadgeDollarSign,
   CalendarRange,
   ChartPie,
+  ClipboardCheck,
   HandCoins,
   CreditCard,
   Landmark,
@@ -43,6 +44,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     group: msg("Your money"),
     items: [
       { href: "/", label: msg("Overview"), icon: LayoutDashboard },
+      { href: "/check-in", label: msg("Check-in"), icon: ClipboardCheck },
       { href: "/cash-flow", label: msg("Cash flow"), icon: Waves },
       { href: "/spending", label: msg("Spending"), icon: ChartPie },
       { href: "/budgets", label: msg("Budgets"), icon: Target },

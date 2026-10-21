@@ -48,7 +48,7 @@ export function renderEmail(email: Email, links: Links, t: T = EN): Rendered {
     text.push(email.summary.title.toLocaleUpperCase(t.locale));
     for (const l of email.summary.lines) text.push(`${l.label}: ${l.value}`);
     if (email.summary.note) text.push(email.summary.note);
-    text.push(`${links.site}/`, "");
+    text.push(`${links.site}${email.summary.href ?? "/"}`, "");
   }
   text.push("—", ...footerWords(email, t), `${t("Your Account page")}: ${links.settings}`, `${stop}: ${links.unsubscribe}`);
 
@@ -77,7 +77,7 @@ export function renderEmail(email: Email, links: Links, t: T = EN): Rendered {
       parts.push(`</table>`);
     }
     if (s.note) parts.push(p(escape(s.note)));
-    parts.push(p(a(`${links.site}/`, t("Open {product}", { product })), "margin:0"), `</div>`);
+    parts.push(p(a(`${links.site}${s.href ?? "/"}`, s.href === "/check-in" ? t("Open your check-in") : t("Open {product}", { product })), "margin:0"), `</div>`);
   }
   const footer = footerWords(email, t).map((w) => p(escape(w), `font-size:12px;color:${C.muted}`));
   footer.push(p(`${a(links.settings, t("Account page"))} &nbsp;·&nbsp; ${a(links.unsubscribe, stop)}`, "font-size:12px"));
