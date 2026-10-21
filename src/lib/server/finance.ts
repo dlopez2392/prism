@@ -517,7 +517,7 @@ export const getFinance = cache(async (): Promise<Loaded> => {
   if (!(await plusFor(src.account)).householdView) return loaded;
   try {
     // After the calendar's refresh in ownMoney: the feed is only ever the person's own bills.
-    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household", splitRules: [], hiddenAccounts: [], hiddenHoldings: [], subscriptionNotes: undefined, refundMarks: undefined, businessAccountIds: undefined, leftOutAccountIds: undefined };
+    return { ...loaded, ...(await householdFor(src.account, isLive(src) ? shared : null, today)), notice: base.notice, view: "household", splitRules: [], hiddenAccounts: [], hiddenHoldings: [], subscriptionNotes: undefined, refundMarks: undefined, businessAccountIds: undefined, leftOutAccountIds: undefined, businessMarks: undefined };
   } catch {
     return { ...loaded, notice: "We couldn't load your household just now. This is your own money." };
   }
@@ -735,6 +735,7 @@ export async function agentFinance(account: Account): Promise<AgentData> {
     ...(planned.subscriptionNotes ? { subscriptionNotes: planned.subscriptionNotes } : {}),
     ...(planned.refundMarks ? { refundMarks: planned.refundMarks } : {}),
     ...(planned.businessAccountIds ? { businessAccountIds: planned.businessAccountIds } : {}),
+    ...(planned.businessMarks ? { businessMarks: planned.businessMarks } : {}),
     credit: planned.credit,
     notice: planned.notice,
     demo: !isLive(src),

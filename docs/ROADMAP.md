@@ -448,6 +448,15 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
 41. **Business accounts.** **Built (2026-10-21):** any account can be marked
     as the person's business under Choose what counts on Net worth: kept out
     of every personal total, and summed on its own as "Your business" on
-    Cash flow (balance, and money in and out over three months). Next, if
-    wanted: a separate business view with its own categories and a
-    Schedule C-style summary on Taxes.
+    Cash flow (balance, and money in and out over three months).
+42. **Business categories and Schedule C.** **Built (2026-10-21):**
+    `/business` sorts every line in a business account by where it goes on
+    Schedule C (gross receipts, refunds to customers, other income, cost of
+    goods sold, each Part II cost by its line), or that it isn't on the form
+    (paid to the owner, put in by the owner, not the business's). Prism
+    guesses from the name and category; the person can move one line, or
+    every line from that shop. Taxes shows the year by line with what the
+    accounts saw left, the download carries it, and `get_tax_summary`
+    returns it under `business_schedule_c`. Business lines leave the personal
+    tax sections. Part of Prism Plus with the tax year. Not built: mileage,
+    a home office or depreciation, which Prism can't see.

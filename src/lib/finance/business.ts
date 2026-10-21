@@ -28,14 +28,15 @@ export type Business = {
   months: BusinessMonth[];
 };
 
-/** Null when the person has marked no account as business. */
-export function businessFor(hidden: Account[], ids: string[] | undefined, txns: Transaction[], today: ISODate): Business | null {
-  const marked = new Set(ids ?? []);
-  const accounts = hidden.filter((a) => marked.has(a.id));
-  if (!accounts.length) return null;
-  const mine = new Set(accounts.map((a) => a.id));
+/**
+ * Every settled line in the business accounts `ids` names, as the bank sent
+ * it (a split joined back), up to `today`: a transfer between two of them
+ * left out, since that's the business moving its own money.
+ */
+export function businessLines(ids: Iterable<string>, txns: Transaction[], today: ISODate): Transaction[] {
+  const mine = new Set(ids);
   const lines = wholeLines(txns).filter((t) => mine.has(t.accountId) && !t.pending && t.date <= today);
-  // Pairs of opposite lines on the same day between two business accounts: the business moving its own money.
+  // Pairs of opposite lines on the same day between two business accounts.
   const internal = new Set<string>();
   for (const t of lines) {
     if (t.category !== "transfer" || internal.has(t.id)) continue;
@@ -45,6 +46,15 @@ export function businessFor(hidden: Account[], ids: string[] | undefined, txns: 
       internal.add(other.id);
     }
   }
+  return lines.filter((t) => !internal.has(t.id));
+}
+
+/** Null when the person has marked no account as business. */
+export function businessFor(hidden: Account[], ids: string[] | undefined, txns: Transaction[], today: ISODate): Business | null {
+  const marked = new Set(ids ?? []);
+  const accounts = hidden.filter((a) => marked.has(a.id));
+  if (!accounts.length) return null;
+  const lines = businessLines(accounts.map((a) => a.id), txns, today);
   const thisMonth = startOfMonth(today);
   const months = [0, -1, -2].map((n) => {
     const from = addMonths(thisMonth, n);
@@ -52,7 +62,7 @@ export function businessFor(hidden: Account[], ids: string[] | undefined, txns: 
     let moneyIn = 0;
     let moneyOut = 0;
     for (const t of lines) {
-      if (t.date < from || t.date > to || internal.has(t.id)) continue;
+      if (t.date < from || t.date > to) continue;
       if (t.amount > 0) moneyIn += t.amount;
       else moneyOut -= t.amount;
     }

@@ -10,6 +10,7 @@
 // Each switch saves the moment it's flipped; flipping it back is the undo.
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { CircleCheck, SlidersHorizontal } from "lucide-react";
 import { buttonSmall, Dialog } from "@/components/dialog";
 import { useT } from "@/components/locale";
@@ -42,6 +43,9 @@ export function CountedAccounts({ accounts }: { accounts: CountedAccount[] }) {
               </li>
             ))}
           </ul>
+          <Link href="/business" className="mt-1.5 inline-block text-xs font-semibold text-accent-ink underline-offset-2 hover:underline">
+            {t("Sort their money for Schedule C")}
+          </Link>
         </section>
       ) : null}
       {hidden.length ? (

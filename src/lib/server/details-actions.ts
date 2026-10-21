@@ -17,7 +17,8 @@
 // with a split, saved with none, is kept whole: the others still follow.
 
 import { refresh } from "next/cache";
-import { checkDetail, ruleKey, sharesOf, validRule, withBusiness, withDetail, withHidden, withRule, wholeLines, type SplitRule, type TxnDetail } from "@/lib/finance/details";
+import { bizLineFits, bizShopKey, checkDetail, ruleKey, sharesOf, validRule, withBizSort, withBusiness, withDetail, withHidden, withRule, wholeLines, type BizLine, type SplitRule, type TxnDetail } from "@/lib/finance/details";
+import { bizLineLabel, bizSide } from "@/lib/finance/schedule-c";
 import { currentAccount } from "@/lib/supabase/server";
 import { loadAccountDetails, saveAccountDetails } from "./account-store";
 import { getPersonalFinance } from "./finance";
@@ -212,6 +213,46 @@ export async function markBusiness(accountId: unknown, business: unknown): Promi
       message: business
         ? t("{account} is a business account now: kept apart from your personal totals, and summed on Cash flow.", { account: account.name })
         : t("{account} isn't a business account any more.", { account: account.name }),
+      at: Date.now(),
+    };
+  } catch {
+    return { status: "error", message: t("That didn't save. Try again in a moment.") };
+  }
+}
+
+/**
+ * Put one line from a business account where it goes on Schedule C
+ * (finance/schedule-c.ts). `own`: this line's place, or null to let it follow
+ * its shop (or Prism's guess). `shop`, when sent: where every line from its
+ * shop going the same way goes, or null to stop that. The Business page sends
+ * both at once, and its Undo sends back what was there before.
+ */
+export async function sortBusinessLine(txnId: unknown, sort: unknown): Promise<DetailState> {
+  const t = await getT();
+  try {
+    const own = await ownLine(txnId);
+    if (!own.ok) return { status: "error", message: t(own.error) };
+    const data = await getPersonalFinance();
+    if (!(data.businessAccountIds ?? []).includes(own.line.accountId)) return { status: "error", message: t("That line isn't in one of your business accounts.") };
+    const { own: line, shop } = (sort && typeof sort === "object" ? sort : {}) as Record<string, unknown>;
+    const side = bizSide(own.line);
+    const fits = (x: unknown): x is BizLine | null => x === null || bizLineFits(side, x);
+    if (!fits(line) || (shop !== undefined && !fits(shop))) return { status: "error", message: t("That isn't a place this money can go.") };
+    const key = bizShopKey(side, own.line.merchant);
+    if (shop !== undefined && key === null) return { status: "error", message: t("That line has no shop name to sort by.") };
+    const current = await loadAccountDetails(own.account, own.key);
+    const next = withBizSort(current, own.line.id, line, shop === undefined ? undefined : { key: key!, value: shop === null ? null : { name: own.line.merchant, line: shop } });
+    await saveAccountDetails(own.account, next, own.key);
+    refresh();
+    const where = line ?? shop;
+    return {
+      status: "saved",
+      message:
+        shop && !line
+          ? t("Every {merchant} line like it goes under {place} now.", { merchant: own.line.merchant, place: bizLineLabel(shop, t, side) })
+          : where
+            ? t("Moved to {place}.", { place: bizLineLabel(where, t, side) })
+            : t("Back to Prism's guess."),
       at: Date.now(),
     };
   } catch {

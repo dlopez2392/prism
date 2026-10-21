@@ -422,6 +422,13 @@
   hideAccounts), and the two marks are independent, so unmarking business
   never counts an account the person also left out. Never add business money
   to a personal figure.
+- Business categories / Schedule C (`src/lib/finance/schedule-c.ts`,
+  `/business`, the Taxes card): the order is the person's word on the line,
+  then on its shop (`TxnDetails.bizShops`, keyed `out:`/`in:` + ruleKey),
+  then the guess. `BIZ_LINES` says which places fit which way the money went;
+  a stored mark that doesn't fit is ignored, never coerced. Business lines
+  are EXCLUDED from `taxSummary`'s personal sections. Totals are what the
+  bank saw: never halve meals, never compute SE tax or a deduction.
 - Money check-in (`/check-in`, `src/lib/finance/check-in.ts`,
   `get_check_in`): it GATHERS from the other engines (alerts, refunds, fees,
   budgets, cards, runway, inflation); it never computes its own version of

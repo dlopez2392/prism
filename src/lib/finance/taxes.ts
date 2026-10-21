@@ -23,7 +23,9 @@
 //      Chicken isn't a church, a thrift store sells things, and a gift to a
 //      campaign isn't a gift to charity.
 // Pending lines, future dates and transfers between the person's own
-// accounts never count.
+// accounts never count, nor does a line in an account the person marked as
+// their business: that's the business's, summed on Schedule C
+// (finance/schedule-c.ts).
 
 import { isSpendCategory } from "./categories";
 import { incomeKind } from "./income";
@@ -302,9 +304,10 @@ export function defaultTaxYear(data: Pick<FinanceData, "transactions" | "today">
 const newestFirst = (a: Transaction, b: Transaction) => (a.date === b.date ? a.id.localeCompare(b.id) : a.date < b.date ? 1 : -1);
 
 /** The summary, its titles and notes in the language of `t`: English for the download and connected apps, the page's own on screen. */
-export function taxSummary(data: Pick<FinanceData, "transactions" | "today">, year: number, t: T = EN): TaxSummary {
+export function taxSummary(data: Pick<FinanceData, "transactions" | "today" | "businessAccountIds">, year: number, t: T = EN): TaxSummary {
   const { from, to, partial, recordsFrom } = yearSpan(data, year);
-  const inSpan = data.transactions.filter((x) => x.date >= from && x.date <= to);
+  const business = new Set(data.businessAccountIds ?? []);
+  const inSpan = data.transactions.filter((x) => x.date >= from && x.date <= to && !business.has(x.accountId));
   const lines = new Map<TaxSectionId, Transaction[]>(TAX_SECTIONS.map((s) => [s.id, []]));
   const political: Transaction[] = [];
 

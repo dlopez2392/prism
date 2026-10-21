@@ -140,7 +140,7 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
             </li>
             <li>
               Lo que le agregas a una transacción: cómo la divides entre categorías (o cada compra en una tienda, lo que nombra la tienda), tus etiquetas, quién
-              te debe por ella (el nombre que escribes y el monto), qué transacciones y cuentas dejas fuera de tus totales, y qué cuentas marcas como de tu negocio, guardado cifrado en tu cuenta y nunca
+              te debe por ella (el nombre que escribes y el monto), qué transacciones y cuentas dejas fuera de tus totales, qué cuentas marcas como de tu negocio, y dónde ordenas sus transacciones en el Schedule C, guardado cifrado en tu cuenta y nunca
               mostrado a tu hogar. Lo que le dices a {p} sobre tus suscripciones se guarda igual: qué cargos que se repiten lo son o no, las que cancelaste y
               el día en que lo hiciste, y las que agregas tú (un nombre, un monto y cada cuánto). También los reembolsos que dices que esperas: la tienda, el día
               y el monto de la compra, cuánto te van a devolver y por qué, el día en que empezaste a esperar y el día en que dijiste que llegó. {p} nunca le

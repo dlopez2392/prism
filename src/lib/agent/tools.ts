@@ -29,6 +29,7 @@ import { payLaterFor, PROVIDER_NAMES } from "@/lib/finance/paylater";
 import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
 import { comparePayoff, debtAccounts, PAYOFF_LIMITS, type Debt, type PayoffPlan } from "@/lib/finance/payoff";
 import { defaultTaxYear, taxSummary, taxYears } from "@/lib/finance/taxes";
+import { BIZ_LINE_INFO, bizLineLabel, scheduleC, SE_TAX_FROM } from "@/lib/finance/schedule-c";
 import type { Account, CategoryId, Cents, FinanceData, ISODate, Liability, Transaction } from "@/lib/finance/types";
 
 /** The money a connected app is shown, and what kind of money it is. */
@@ -760,6 +761,38 @@ export function taxes(data: AgentData, args: { year?: number } = {}) {
           },
         }
       : {}),
+    business_schedule_c: scheduleCSummary(data, year),
+  };
+}
+
+/** The user's business accounts' year by Schedule C line (finance/schedule-c.ts), or null when no account is marked as business. */
+function scheduleCSummary(data: AgentData, year: number) {
+  const c = scheduleC(data, year);
+  if (!c) return null;
+  const accounts = byId(data);
+  return {
+    note: "Every line in the user's business accounts, sorted by where it goes on Schedule C: by the user where they said so, otherwise Prism's guess from the name and category. What the accounts saw, not the form's figures: a meal usually counts at half, and a home office, mileage in a personal car or depreciation aren't visible here. Never present net as the user's taxable profit.",
+    accounts: c.accounts.map((a) => ({ id: a.id, name: a.name })),
+    gross_receipts: usd(c.receipts),
+    refunds_to_customers: usd(c.returns),
+    other_income: usd(c.otherIncome),
+    costs: c.costs.map((x) => ({
+      line: x.line,
+      title: x.title,
+      // A cost, so negative, as money out is everywhere.
+      total: usd(-x.total),
+      transaction_count: x.lines.length,
+      transactions: x.lines.slice(0, TAX_LINES_MAX).map((t) => ({ ...citeable(t, accounts), sorted_by: t.how === "guess" ? "prism_guess" : "user" })),
+      ...(x.lines.length > TAX_LINES_MAX ? { not_listed: x.lines.length - TAX_LINES_MAX } : {}),
+    })),
+    costs_total: usd(-c.costsTotal),
+    net_as_accounts_saw_it: usd(c.net),
+    ...(c.net >= SE_TAX_FROM ? { schedule_se_note: "A net profit of $400 or more usually means self-employment tax (Schedule SE)." } : {}),
+    not_on_schedule_c: {
+      [BIZ_LINE_INFO.owner.title]: { paid_to_user: usd(-c.owner.out), put_in_by_user: usd(c.owner.in) },
+      [bizLineLabel("personal")]: usd(-c.personal.total),
+    },
+    lines_still_guessed: c.guessed,
   };
 }
 

@@ -125,7 +125,7 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
             <li>Categories you fix, such as &ldquo;everything at this shop is groceries&rdquo;, so Prism files your purchases where you put them. They name the shops, so they&apos;re stored encrypted, like your transactions.</li>
             <li>
               What you add to a transaction yourself: how you split it across categories (or every purchase at a shop, which names the shop), your tags,
-              who owes you for it (the name you type and the amount), which transactions and accounts you leave out of your totals, and which accounts you mark as your business, stored
+              who owes you for it (the name you type and the amount), which transactions and accounts you leave out of your totals, which accounts you mark as your business, and where you sort their transactions on Schedule C, stored
               encrypted in your account and never shown to your household. What you tell {BRAND.product} about your subscriptions is kept the same way:
               which repeating charges are or aren&apos;t one, the ones you cancelled and the day you did, and the ones you add yourself (a name, an
               amount and how often). So are the refunds you say you&apos;re waiting on: the purchase&apos;s shop, day and amount, how much is

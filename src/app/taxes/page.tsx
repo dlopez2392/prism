@@ -17,9 +17,10 @@ import { buttonGhost } from "@/components/dialog";
 import { PlusCard } from "@/components/plus";
 import { PrintButton } from "@/components/print-button";
 import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill } from "@/components/ui";
-import { dayDate, money, shortDate } from "@/lib/finance/format";
+import { dayDate, money, shortDate, signedMoney0 } from "@/lib/finance/format";
 import { p2pLabel } from "@/lib/finance/p2p";
 import { defaultTaxYear, GIFT_RECEIPT_FROM, TAX_SECTIONS, taxSummary, taxYears, type TaxSection } from "@/lib/finance/taxes";
+import { bizLineLabel, scheduleC, SE_TAX_FROM, type ScheduleC } from "@/lib/finance/schedule-c";
 import type { Account, Transaction } from "@/lib/finance/types";
 import { plusFor } from "@/lib/billing/plus";
 import { getFinance } from "@/lib/server/finance";
@@ -66,6 +67,54 @@ function Line({ txn, account, receipt, t }: { txn: Transaction; account: string 
         {money(txn.amount)}
       </span>
     </li>
+  );
+}
+
+/** The business's year as Schedule C asks for it (finance/schedule-c.ts): money in, each cost by its line, and what the accounts saw left. */
+function ScheduleCard({ s, t }: { s: ScheduleC; t: T }) {
+  const row = (key: string, label: string, amount: number, strong = false) => (
+    <tr key={key}>
+      <th scope="row" className={clsx("py-2 text-left", strong ? "font-bold text-ink-1" : "font-semibold text-ink-2")}>
+        {label}
+      </th>
+      <td className={clsx("num whitespace-nowrap py-2 pl-3 text-right", strong ? "font-extrabold text-ink-1" : "text-ink-1")}>{money(amount)}</td>
+    </tr>
+  );
+  return (
+    <Card as="article" className="p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-bold text-ink-1">Schedule C</h3>
+          <p className="text-xs text-ink-3">
+            {s.accounts.length === 1 ? t("From {account}", { account: s.accounts[0]!.name }) : t("From your {n} business accounts", { n: s.accounts.length })}
+          </p>
+        </div>
+        <div className="text-right">
+          <div className="num text-xl font-extrabold tracking-tight text-ink-1">{signedMoney0(s.net)}</div>
+          <div className="text-xs font-semibold text-ink-2">{t("Form {form}", { form: "Schedule C" })}</div>
+        </div>
+      </div>
+      <table className="mt-3 w-full text-sm">
+        <caption className="sr-only">{t("Your business's year by Schedule C line")}</caption>
+        <tbody className="divide-y divide-[var(--line)]">
+          {row("sales", bizLineLabel("sales", t), s.receipts)}
+          {s.returns ? row("returns", bizLineLabel("sales", t, "out"), s.returns) : null}
+          {s.otherIncome ? row("other-income", bizLineLabel("other-income", t), s.otherIncome) : null}
+          {s.costs.map((c) => row(c.id, bizLineLabel(c.id, t), c.total))}
+          {row("costs", t("Costs in all"), s.costsTotal, true)}
+        </tbody>
+      </table>
+      <p className="mt-3 text-sm text-ink-2">
+        {t("What your business accounts saw: receipts less every cost. A meal usually counts at half, and a home office, miles in your own car or equipment that's depreciated aren't here.")}
+        {s.net >= SE_TAX_FROM ? ` ${t("A profit of $400 or more usually means self-employment tax too, on Schedule SE.")}` : ""}
+      </p>
+      <p className="mt-2 text-sm text-ink-2">
+        {s.guessed ? t("{n} of its lines are still where Prism guessed.", { n: s.guessed.toLocaleString("en-US") }) + " " : ""}
+        <Link href={`/business?y=${s.year}`} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+          {t("Check where each line goes")}
+        </Link>
+      </p>
+    </Card>
   );
 }
 
@@ -120,13 +169,15 @@ export default async function TaxesPage({ searchParams }: { searchParams: Promis
   const asked = typeof raw === "string" && /^\d{4}$/.test(raw) ? Number(raw) : null;
   const year = asked !== null && years.includes(asked) ? asked : defaultTaxYear(data);
   const s = taxSummary(data, year, t);
+  // The business's own year, on Schedule C: its lines are never in the sections above.
+  const business = scheduleC(data, year, t);
   const accounts = new Map([...data.accounts, ...(data.hiddenAccounts ?? [])].map((a) => [a.id, a]));
   // Only a signed-in person's own money can be downloaded; the example household and a household view can't.
   const canDownload = data.account !== null && data.source !== "demo" && data.view === "me";
   const moneyIn = s.sections.filter((x) => x.side === "in");
   const moneyOut = s.sections.filter((x) => x.side === "out");
   const politicalTotal = money(-s.political.reduce((sum, x) => sum + x.amount, 0));
-  const forms = [...new Set(s.sections.flatMap((x) => (x.form ? x.form.split(/,\s*|\s+or\s+/) : [])))];
+  const forms = [...new Set([...s.sections.flatMap((x) => (x.form ? x.form.split(/,\s*|\s+or\s+/) : [])), ...(business && business.receipts > 0 ? ["1099-NEC", "1099-K"] : [])])];
 
   const tabs =
     years.length > 1 ? (
@@ -161,7 +212,7 @@ export default async function TaxesPage({ searchParams }: { searchParams: Promis
     />
   );
 
-  if (s.transactions === 0) {
+  if (s.transactions === 0 && !business?.lines.length) {
     return (
       <div className="space-y-5">
         {header}
@@ -255,6 +306,15 @@ export default async function TaxesPage({ searchParams }: { searchParams: Promis
               <Section key={x.id} s={x} accounts={accounts} t={t} />
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {business && business.lines.length ? (
+        <section aria-labelledby="business" className="space-y-3">
+          <h2 id="business" className="text-sm font-bold uppercase tracking-[0.08em] text-ink-3">
+            {t("Your business")}
+          </h2>
+          <ScheduleCard s={business} t={t} />
         </section>
       ) : null}
 
