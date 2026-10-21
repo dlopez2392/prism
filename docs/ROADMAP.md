@@ -435,3 +435,8 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     investments (never retirement), from the last three whole months, with
     lender-reported loan payments counted once. Also `how_long_could_i_last`
     for the AI connector.
+39. **Your own inflation rate.** **Built (2026-10-21):** on Spending, what
+    the same bills and subscriptions cost now against a year ago, weighted
+    by what's spent on each, with what it adds to a year; what a typical
+    visit costs at the places the person goes most, listed apart and never
+    in the rate. Also `get_my_inflation` for the AI connector.

@@ -677,6 +677,19 @@ amount; what that leaves to live on, what's been spent day to day since
 payday, and about what's left a day. Prism moves no money: it's the plan,
 laid out.
 
+## Your own inflation rate
+
+The "Your own inflation rate" card on Spending (`src/lib/finance/inflation.ts`,
+`get_my_inflation`): what the same bills and subscriptions cost now against
+a year ago, from the person's own charges. It compares the last 60 days with
+60 days centred on a year ago. A place is a **price** when it repeated at one
+price a year ago, and charges now at one price too, or at the old price until
+the latest stepped. A one-off is never a price, and loan payments and
+donations are left out. The rate is the change in prices, weighted by what's
+spent on each now, and needs two prices to compare. What a **typical visit**
+costs at the grocer or the gas station is listed apart and never counted in
+the rate, since a visit moves with what's bought as well as with prices.
+
 ## How long could you last
 
 The "If your paychecks stopped" card on Future (`src/lib/finance/runway.ts`,
@@ -1046,7 +1059,7 @@ as U.S. banks write them in either language.
 |---|---|
 | **Overview** | A **Heads up** for anything to act on now (a bank that has stopped updating or will within the week, a bill before payday the account won't cover), net worth hero, safe-to-spend, four headline numbers, spending pace vs last month, category donut, budget rings, evidence-backed insights, upcoming bills, recent activity |
 | **Cash flow** | Income → categories → saved **Sankey**; **your paychecks** (who pays you, how often, what lands, the next payday) and where your income comes from, by kind; money in vs out by month, what you kept each month, savings-rate trend |
-| **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, **Owed to you** and **Your tags**, and a searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop), **splits** a purchase across categories, **tags** it and notes **who owes them** for it, all kept sealed in their account and applied everywhere, Claude included |
+| **Spending** | **Your own inflation rate** (what the same bills and subscriptions cost now against a year ago, weighted by what you spend on each, with typical visits listed apart), stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, **Owed to you** and **Your tags**, and a searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop), **splits** a purchase across categories, **tags** it and notes **who owes them** for it, all kept sealed in their account and applied everywhere, Claude included |
 | **Refunds** | Money coming back to you: refunds you're waiting on (found come back on their own, the late ones first), what friends owe you, money you may be owed and haven't asked for (recent fees, charges twice, charges after cancelling), and what came back this year |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
 | **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **If your paychecks stopped** (how many months checking and savings would last at the usual spending, on essentials only, and counting investments), **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), **bills that don't come every month** (every three, six or twelve months, each with its next date and what to put aside for it each month), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |

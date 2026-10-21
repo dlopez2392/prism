@@ -57,6 +57,16 @@ test("Future says how long the cash would last if the paychecks stopped, and wha
   await expect(card.getByText("Housing", { exact: true })).toBeVisible();
 });
 
+test("Spending gives the person's own inflation rate, with the prices that rose and typical visits apart", async ({ page }) => {
+  await page.goto("/spending");
+  const card = page.locator("section", { hasText: "Your own inflation rate" });
+  await expect(card.getByText(/^\+\d+\.\d%$/)).toBeVisible();
+  await expect(card.getByText("Tunely Music", { exact: true })).toBeVisible();
+  await expect(card.getByText("$10.99 → $11.99")).toBeVisible();
+  await card.getByText("What a typical visit costs now").click();
+  await expect(card.getByText(/isn't counted in your rate/)).toBeVisible();
+});
+
 test("the payoff plan compares both orders, follows the one picked, and asks for a missing rate", async ({ page }) => {
   await page.goto("/net-worth");
   const card = page.locator("section", { hasText: "Paying off what you owe" }).last();

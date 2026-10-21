@@ -15,6 +15,7 @@ import {
   getFees,
   getRefunds,
   howLongCouldILast,
+  myInflation,
   netWorth,
   overview,
   searchTransactions,
@@ -494,6 +495,17 @@ describe("how_long_could_i_last", () => {
     expect(r).toMatchObject({ months_measured: 3, cash_in_checking_and_savings: usd(a.cash), essentials_a_month: usd(a.essentials) });
     expect(r.months_on_essentials).toBe(Math.floor(a.months.essentials * 10) / 10);
     expect(r.months_on_essentials_with_investments).toBeGreaterThan(r.months_on_essentials);
+  });
+});
+
+describe("get_my_inflation", () => {
+  it("gives the example household's rate from its price rises, with typical visits apart", () => {
+    const r = myInflation(demo());
+    expect(r.rate_percent).toBeGreaterThan(0);
+    expect(r.prices.map((p) => p.name)).toEqual(expect.arrayContaining(["Guardline Auto Insurance", "Fiberly Internet", "Tunely Music"]));
+    expect(r.prices.find((p) => p.name === "Tunely Music")).toMatchObject({ a_year_ago: 10.99, now: 11.99 });
+    expect(r.prices.some((p) => /finance|loan/i.test(p.name))).toBe(false);
+    expect(r.typical_visit.length).toBeGreaterThan(0);
   });
 });
 
