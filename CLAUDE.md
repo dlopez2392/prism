@@ -416,6 +416,12 @@
   words; each credit pays one refund, oldest first. Personal view only
   (`withOwnNotes`), never the household or the demo's stored data. Prism
   never asks anyone for money.
+- Your own inflation rate (`src/lib/finance/inflation.ts`, the Spending
+  card, `get_my_inflation`): the RATE is prices only (a charge that repeated
+  at one price a year ago, now at one price or stepped at its latest), never
+  a one-off, a loan payment or a donation. Typical visits (grocer, gas) move
+  with the basket too: list them apart, never in the rate, and never call
+  them prices.
 - How long could you last (`src/lib/finance/runway.ts`, the Future card,
   `how_long_could_i_last`): cash is checking + savings only; investments are
   brokerage + crypto, never retirement, and only in their own figure. Costs

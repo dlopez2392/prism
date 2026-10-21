@@ -698,4 +698,19 @@ export const CORE: Record<string, string> = {
   "{who} paid you back": "{who} ya te pagó",
   "{who} paid you back {amount} for {merchant}": "{who} ya te pagó {amount} de {merchant}",
   "…and {n} earlier": "…y {n} anteriores",
+  "1 more costs the same as a year ago.": "1 más cuesta lo mismo que hace un año.",
+  "At the places you go most. A visit moves with prices and with what you buy, so it isn't counted in your rate.":
+    "En los lugares a los que más vas. Una visita cambia con los precios y con lo que compras, así que no cuenta en tu tasa.",
+  "Once Prism holds a year of your charges, this shows how much more the same bills and subscriptions cost you than a year before.":
+    "Cuando Prism tenga un año de tus cargos, aquí verás cuánto más te cuestan las mismas facturas y suscripciones que un año antes.",
+  "What a typical visit costs now": "Lo que cuesta una visita típica ahora",
+  "What the same bills and subscriptions cost you now against a year ago, from your own charges, not the national average.":
+    "Lo que te cuestan ahora las mismas facturas y suscripciones frente a hace un año, según tus propios cargos, no el promedio nacional.",
+  "Your own inflation rate": "Tu propia tasa de inflación",
+  "in a year: about {amount} less a year for the same things.": "en un año: unos {amount} menos al año por las mismas cosas.",
+  "in a year: about {amount} more a year for the same things.": "en un año: unos {amount} más al año por las mismas cosas.",
+  "in a year: the same things cost what they did.": "en un año: las mismas cosas cuestan lo mismo que antes.",
+  "{n} more cost the same as a year ago.": "{n} más cuestan lo mismo que hace un año.",
+  "{pct} less": "{pct} menos",
+  "{pct} more": "{pct} más",
 };

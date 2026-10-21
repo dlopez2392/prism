@@ -144,9 +144,10 @@ export function buildDemoData(today: ISODate): FinanceData {
       if (dom === days) add(sav, date, rng.cents(54, 71), "Interest earned", "income");
 
       // ── Fixed monthly obligations (checking) ────────────────────────────
+      // The car insurance renewed higher six months ago.
       if (dom === 1) add(chk, date, -195_000, "Maple Court Apartments", "housing");
       if (dom === 5) add(chk, date, -1_800, "Nestwell Renters Insurance", "housing");
-      if (dom === 8) add(chk, date, -12_800, "Guardline Auto Insurance", "transport");
+      if (dom === 8) add(chk, date, offset >= -6 ? -12_800 : -11_900, "Guardline Auto Insurance", "transport");
       if (dom === 12) {
         const seasonal = monthNum >= 6 && monthNum <= 8 ? 58 : monthNum <= 2 || monthNum === 12 ? 26 : 0;
         add(chk, date, -rng.cents(68 + seasonal, 84 + seasonal), "Bright Power & Light", "bills");
@@ -172,10 +173,11 @@ export function buildDemoData(today: ISODate): FinanceData {
       }
 
       // ── Subscriptions (card) ────────────────────────────────────────────
+      // Some went up during the year, as prices do (the Spending page's own inflation rate reads them).
       if (dom === 1) onCard(date, -4_500, "FitClub Gym", "health");
-      if (dom === 3) onCard(date, -1_199, "Tunely Music", "fun");
+      if (dom === 3) onCard(date, offset >= -9 ? -1_199 : -1_099, "Tunely Music", "fun");
       if (dom === 9) onCard(date, -299, "CloudBox Storage", "bills");
-      if (dom === 15) onCard(date, -7_000, "Fiberly Internet", "bills");
+      if (dom === 15) onCard(date, offset >= -7 ? -7_000 : -6_500, "Fiberly Internet", "bills");
       if (dom === 20) onCard(date, -5_500, "Pulse Mobile", "bills");
       if (dom === 22) onCard(date, offset >= -1 ? -1_799 : -1_549, "Streamflix", "fun");
 

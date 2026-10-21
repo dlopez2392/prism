@@ -22,6 +22,7 @@ import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences, setAside } from "@/lib/finance/recurring";
 import { cardsFor } from "@/lib/finance/cards";
 import { feesFor } from "@/lib/finance/fees";
+import { inflationFor, type PriceChange } from "@/lib/finance/inflation";
 import { payLaterFor, PROVIDER_NAMES } from "@/lib/finance/paylater";
 import { P2P_APP_NAMES, p2pLabel } from "@/lib/finance/p2p";
 import { comparePayoff, debtAccounts, PAYOFF_LIMITS, type Debt, type PayoffPlan } from "@/lib/finance/payoff";
@@ -625,6 +626,24 @@ export function howLongCouldILast(data: AgentData) {
         }
       : { unknown: "Not enough history yet: there isn't a whole month of spending to measure." }),
     note: "Cash on hand divided by what a month costs, averaged over the last full months. Essentials are housing, food, transport, health and bills, plus loan payments the lender reports that no spending line already pays. Retirement accounts are never counted. A description, not advice.",
+  };
+}
+
+// — get_my_inflation ————————————————————————————————————————————
+
+/** The user's own inflation rate: what the same bills and subscriptions cost now against a year ago, and what a typical visit costs at the places they go most. */
+export function myInflation(data: AgentData) {
+  const f = inflationFor(data.transactions, data.today);
+  const pct = (r: number) => Math.round(r * 1000) / 10;
+  const row = (c: PriceChange) => ({ name: c.name, a_year_ago: usd(c.before), now: usd(c.after), change_percent: pct(c.change), spent_a_year_now: usd(c.yearly) });
+  return {
+    ...frame(data),
+    compared: { now: f.now, a_year_ago: f.yearAgo },
+    rate_percent: f.rate === null ? null : pct(f.rate),
+    extra_a_year_for_the_same_things: usd(f.extraYearly),
+    prices: f.prices.map(row),
+    typical_visit: f.visits.map(row),
+    note: "The rate is from prices only: the same bill or subscription, repeating at one price, now against a year ago, weighted by what's spent on each now. A typical visit (the grocer, the gas station) moves with prices and with what's bought, so it's listed apart and never in the rate. Loan payments and donations are left out. Null rate: fewer than two prices to compare yet.",
   };
 }
 

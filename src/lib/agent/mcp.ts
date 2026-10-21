@@ -35,6 +35,7 @@ import {
   getFees,
   getRefunds,
   howLongCouldILast,
+  myInflation,
   type AgentData,
 } from "./tools";
 
@@ -282,6 +283,17 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "How long could I last", ...READ_ONLY },
     },
     run(howLongCouldILast),
+  );
+
+  server.registerTool(
+    "get_my_inflation",
+    {
+      title: "My own inflation rate",
+      description:
+        "The user's own inflation rate: how much more the same bills and subscriptions (rent, insurance, internet, phone, streaming…) cost now than a year ago, each a year ago and now, weighted by what's spent on it, and what that adds to a year; plus what a typical visit costs now against a year ago at the places they go most (groceries, gas), which moves with what's bought too and so is never in the rate. From the user's own charges, not the national figure.",
+      annotations: { title: "My own inflation rate", ...READ_ONLY },
+    },
+    run(myInflation),
   );
 
   server.registerTool(

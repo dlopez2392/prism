@@ -23,10 +23,12 @@ import { categoryBreakdown, dailySpend, monthlyByCategory, sumSpending, topMerch
 import { categoryColor, categoryLabel, SPEND_CATEGORIES } from "@/lib/finance/categories";
 import { addDays, daysBetween } from "@/lib/finance/dates";
 import { stillOwed, tagTotals } from "@/lib/finance/details";
-import { capitalized, money, money0, monthLong, monthShort, monthYear, signedMoney0, signedPercent } from "@/lib/finance/format";
+import { capitalized, money, money0, monthLong, monthShort, monthYear, percent, signedMoney0, signedPercent } from "@/lib/finance/format";
 import { againstLabel, ledgerHash, monthHref, monthWindow, periodLabel, rangeView } from "@/lib/finance/view";
 import { getFinance } from "@/lib/server/finance";
 import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/t";
+import { inflationFor, type Inflation, type PriceChange } from "@/lib/finance/inflation";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
@@ -75,6 +77,8 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
         ? t("Wrong category? Sign in and connect your bank to fix it, and Prism remembers it for next time.")
         : null;
   const names = SPEND_CATEGORIES.map((c) => categoryLabel(c, t));
+  // The same things, now against a year ago: never the period on screen, which changes what's compared.
+  const inflation = inflationFor(txns, data.today);
 
   return (
     <div className="space-y-5">
@@ -226,6 +230,8 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
         <CalendarHeatmap days={days} ariaLabel={t("Daily spending over the last year")} />
       </ChartCard>
 
+      <InflationCard inflation={inflation} t={t} />
+
       {canFix ? (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
           <Card className="p-5 sm:p-6 lg:col-span-6">
@@ -287,5 +293,72 @@ export default async function SpendingPage({ searchParams }: { searchParams: Pro
         </div>
       </Card>
     </div>
+  );
+}
+
+/** "$119.00 → $128.00": a year ago, then now. */
+function fromTo(c: PriceChange): string {
+  return `${money(c.before)} → ${money(c.after)}`;
+}
+
+function InflationCard({ inflation: f, t }: { inflation: Inflation; t: T }) {
+  const changed = f.prices.filter((c) => c.after !== c.before);
+  const same = f.prices.length - changed.length;
+  const visits = f.visits.slice(0, 5);
+  return (
+    <Card className="p-5 sm:p-6">
+      <CardHeader
+        title={t("Your own inflation rate")}
+        subtitle={t("What the same bills and subscriptions cost you now against a year ago, from your own charges, not the national average.")}
+      />
+      {f.rate === null ? (
+        <p className="mt-4 text-sm text-ink-2">
+          {t("Once Prism holds a year of your charges, this shows how much more the same bills and subscriptions cost you than a year before.")}
+        </p>
+      ) : (
+        <>
+          <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="num text-[32px] font-extrabold leading-none tracking-tight text-ink-1">{signedPercent(f.rate, 1)}</span>
+            <span className="text-sm text-ink-2">
+              {f.extraYearly > 0
+                ? t("in a year: about {amount} more a year for the same things.", { amount: money0(f.extraYearly) })
+                : f.extraYearly < 0
+                  ? t("in a year: about {amount} less a year for the same things.", { amount: money0(-f.extraYearly) })
+                  : t("in a year: the same things cost what they did.")}
+            </span>
+          </div>
+          {changed.length ? (
+            <ul className="mt-4 divide-y divide-[var(--line)]">
+              {changed.slice(0, 8).map((c) => (
+                <li key={c.name} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-ink-1 [overflow-wrap:anywhere]">{c.name}</div>
+                    <div className="num text-xs text-ink-3">{fromTo(c)}</div>
+                  </div>
+                  <span className="num shrink-0 font-semibold text-ink-1">{c.change > 0 ? t("{pct} more", { pct: percent(Math.abs(c.change), 1) }) : t("{pct} less", { pct: percent(Math.abs(c.change), 1) })}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {same > 0 ? <p className="mt-2 text-xs text-ink-3">{same === 1 ? t("1 more costs the same as a year ago.") : t("{n} more cost the same as a year ago.", { n: same })}</p> : null}
+        </>
+      )}
+      {visits.length ? (
+        <details className="mt-4 text-sm">
+          <summary className="cursor-pointer rounded-ctl font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-[var(--focus)]">{t("What a typical visit costs now")}</summary>
+          <p className="mt-2 text-xs text-ink-3">{t("At the places you go most. A visit moves with prices and with what you buy, so it isn't counted in your rate.")}</p>
+          <ul className="mt-2 space-y-1 text-xs text-ink-3">
+            {visits.map((c) => (
+              <li key={c.name} className="flex justify-between gap-3">
+                <span className="[overflow-wrap:anywhere]">{c.name}</span>
+                <span className="num shrink-0">
+                  {fromTo(c)} ({signedPercent(c.change, 0)})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </Card>
   );
 }
