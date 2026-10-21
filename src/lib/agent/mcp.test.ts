@@ -99,6 +99,7 @@ describe("the MCP endpoint", () => {
       "get_overview",
       "get_refunds",
       "get_tax_summary",
+      "how_long_could_i_last",
       "list_accounts",
       "list_subscriptions",
       "plan_debt_payoff",

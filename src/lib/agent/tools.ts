@@ -601,6 +601,33 @@ export function getRefunds(data: AgentData) {
   };
 }
 
+// — how_long_could_i_last ——————————————————————————————————————
+
+/** If the paychecks stopped today: how long checking and savings would cover the usual spending, the essentials alone, and the essentials with investments. */
+export function howLongCouldILast(data: AgentData) {
+  const r = analyze(data).runway;
+  const months = (m: number) => Math.floor(m * 10) / 10;
+  return {
+    ...frame(data),
+    ...(r
+      ? {
+          cash_in_checking_and_savings: usd(r.cash),
+          investments_brokerage_and_crypto: usd(r.investments),
+          months_measured: r.monthsMeasured,
+          usual_spending_a_month: usd(r.usual),
+          essentials_a_month: usd(r.essentials),
+          essentials: [...r.essentialParts.map((p) => ({ what: p.category, a_month: usd(p.amount) })), ...r.loans.map((l) => ({ what: `${l.name} payment (lender-reported)`, a_month: usd(l.amount) }))],
+          months_at_usual_spending: months(r.months.usual),
+          months_on_essentials: months(r.months.essentials),
+          months_on_essentials_with_investments: r.months.withInvestments === null ? null : months(r.months.withInvestments),
+          lasts_until_at_usual_spending: r.until.usual,
+          lasts_until_on_essentials: r.until.essentials,
+        }
+      : { unknown: "Not enough history yet: there isn't a whole month of spending to measure." }),
+    note: "Cash on hand divided by what a month costs, averaged over the last full months. Essentials are housing, food, transport, health and bills, plus loan payments the lender reports that no spending line already pays. Retirement accounts are never counted. A description, not advice.",
+  };
+}
+
 // — get_net_worth ——————————————————————————————————————————————
 
 export function netWorth(data: AgentData) {

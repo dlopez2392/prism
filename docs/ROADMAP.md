@@ -429,3 +429,9 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     late past its usual wait (with an Overview heads-up), and what friends
     owe. Prism never asks anyone for money. Next: an alert email for a late
     refund (a new alert kind; the owner's call, as it needs a DROP).
+38. **How long could you last.** **Built (2026-10-21):** on Future, if the
+    paychecks stopped: how many months checking and savings would cover the
+    usual spending, the essentials alone, and the essentials counting
+    investments (never retirement), from the last three whole months, with
+    lender-reported loan payments counted once. Also `how_long_could_i_last`
+    for the AI connector.

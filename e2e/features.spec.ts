@@ -48,6 +48,15 @@ test("Future lists the bills that don't come monthly, with what to put aside for
   await expect(card.getByText(/^Every year · next/)).toBeVisible();
 });
 
+test("Future says how long the cash would last if the paychecks stopped, and what counts as essential", async ({ page }) => {
+  await page.goto("/future");
+  const card = page.locator("section", { hasText: "If your paychecks stopped" });
+  for (const label of ["At your usual spending", "On essentials only", "Counting investments"]) await expect(card.getByText(label, { exact: true })).toBeVisible();
+  await expect(card.getByText(/^\d+(\.\d)? months$|^1 month$|^10 years or more$/).first()).toBeVisible();
+  await card.getByText("What counts as essential").click();
+  await expect(card.getByText("Housing", { exact: true })).toBeVisible();
+});
+
 test("the payoff plan compares both orders, follows the one picked, and asks for a missing rate", async ({ page }) => {
   await page.goto("/net-worth");
   const card = page.locator("section", { hasText: "Paying off what you owe" }).last();

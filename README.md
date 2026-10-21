@@ -677,6 +677,19 @@ amount; what that leaves to live on, what's been spent day to day since
 payday, and about what's left a day. Prism moves no money: it's the plan,
 laid out.
 
+## How long could you last
+
+The "If your paychecks stopped" card on Future (`src/lib/finance/runway.ts`,
+`how_long_could_i_last`): the cash in checking and savings divided by what a
+month costs, averaged over the last three whole months (never a month the
+history starts partway through). Three figures: at the usual spending, on
+essentials only (housing, food, transport, health, bills), and essentials
+counting brokerage and crypto (never retirement), each with about when it
+would run out. A loan payment the lender reports is added when no spending
+line in the last 45 days already paid it, so a loan filed as a bill counts
+once. Three to six months of essentials is named as a common cushion, as an
+observation, never advice.
+
 ## Bills that don't come every month
 
 The car insurance renewal, the water bill every three months, a yearly
@@ -1036,7 +1049,7 @@ as U.S. banks write them in either language.
 | **Spending** | Stacked monthly bars by category, category change vs the prior period, top merchants, a year-long **calendar heatmap**, **Owed to you** and **Your tags**, and a searchable ledger where a signed-in person **fixes any category** (for one purchase or every purchase at that shop), **splits** a purchase across categories, **tags** it and notes **who owes them** for it, all kept sealed in their account and applied everywhere, Claude included |
 | **Refunds** | Money coming back to you: refunds you're waiting on (found come back on their own, the late ones first), what friends owe you, money you may be owed and haven't asked for (recent fees, charges twice, charges after cancelling), and what came back this year |
 | **Budgets** | Month plan left, bullet chart (spent · projected · limit), a ring per budget with a "today" tick, and an editor that sets each limit beside what that category usually costs; in a household, the **household's own budgets**, pacing spending from shared accounts |
-| **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), **bills that don't come every month** (every three, six or twelve months, each with its next date and what to put aside for it each month), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
+| **Future** | 60-day checking **balance forecast** with an 80% band, paydays and bills marked, safe-to-spend, **If your paychecks stopped** (how many months checking and savings would last at the usual spending, on essentials only, and counting investments), **Can I afford it?** (a purchase, a new monthly bill or a raise, answered as you type: fits, tight or doesn't fit, with the lowest point, safe-to-spend and what you usually keep before and after; nothing saved), **bills that don't come every month** (every three, six or twelve months, each with its next date and what to put aside for it each month), subscriptions with price-rise flags, and **Add to calendar** for bill reminders |
 | **Goals** | A ring per goal, progress-as-share-of-target chart with projections, a **what-if** slider that can save its amount, and add / edit / delete; a goal can **follow an account**, so what's saved is that balance, month by month; in a household, **goals saved toward together**, which any member can update |
 | **Net worth** | Own vs owe over 12 months, every account with its trend, holdings **treemap**, credit-score gauge and factors; a signed-in person **adds what no bank reports** (a home, a car, a loan from family) and updates its value, sealed in their account; **paying off what you owe**: highest rate first against smallest balance first, with an extra each month, against paying only what each asks (when each debt is gone, the interest, and what's owed month by month; nothing saved) |
 | **Your year** | One calendar year on one page: what came in, what went out, what you kept (against the same stretch the year before when Prism holds it), month by month, where it went by category, the ten places you paid most, net worth from the year's start, pay, subscriptions, and the year in a few lines; honest about where the records start and a year still under way; **print or save as PDF** (always in the light theme) and download that year's transactions |
