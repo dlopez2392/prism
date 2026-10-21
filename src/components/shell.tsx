@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 import { useT } from "@/components/locale";
 import { msg } from "@/lib/i18n/t";
 import {
+  BadgeDollarSign,
   CalendarRange,
   ChartPie,
   CreditCard,
@@ -46,6 +47,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
       { href: "/budgets", label: msg("Budgets"), icon: Target },
       { href: "/subscriptions", label: msg("Subscriptions"), icon: Repeat },
       { href: "/cards", label: msg("Cards"), icon: CreditCard },
+      { href: "/fees", label: msg("Fees"), icon: BadgeDollarSign },
       { href: "/year", label: msg("Your year"), icon: CalendarRange },
       { href: "/taxes", label: msg("Taxes"), icon: ReceiptText },
     ],

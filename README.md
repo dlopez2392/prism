@@ -625,6 +625,21 @@ only with `PLAID_LIABILITIES=on`. The next close is a month after the last.
 Before it, the page says what paying would bring the reported share down to
 (30%, then 10%), from today's balance: a description, never advice.
 
+## Fees
+
+`/fees` (`src/lib/finance/fees.ts`, `get_fees`, an Overview heads-up) lists
+every fee the person's banks and cards charged over the last 12 months:
+overdraft, returned payment, ATM, foreign transaction, late, monthly service,
+cash advance. A fee is Plaid's own `BANK_FEES_*` category (`bankFee`), or, for
+imported history, its words on a line that reads as a bill or as nothing, up
+to $100. Interest isn't a fee here (Cards counts it). Money of the same
+amount back to the same account within 45 days, under the same name or with
+refund words, marks a fee given back. Each fee still lost has a polite request
+for it back, written in the page's language, that the person copies or shares
+and sends themselves: Prism never sends it. The same amount at the same place
+on the same day in the same account (at least $10, last 90 days) is asked
+about as a possible double charge, never asserted. Nothing is stored.
+
 ## Bills that don't come every month
 
 The car insurance renewal, the water bill every three months, a yearly

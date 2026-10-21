@@ -32,6 +32,7 @@ import {
   upcomingBills,
   listSubscriptions,
   getCards,
+  getFees,
   type AgentData,
 } from "./tools";
 
@@ -246,6 +247,17 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Credit cards", ...READ_ONLY },
     },
     run(getCards),
+  );
+
+  server.registerTool(
+    "get_fees",
+    {
+      title: "Bank fees",
+      description:
+        "Every fee the user's banks and cards charged over the last 12 months (overdraft, returned payment, ATM, foreign transaction, late, monthly service, cash advance, other), each cited, whether it was given back, totals by kind after refunds, and charges in the last 90 days that may have gone through twice (same place, amount and day: possibly right). Interest is not a fee here; get_cards has it.",
+      annotations: { title: "Bank fees", ...READ_ONLY },
+    },
+    run(getFees),
   );
 
   server.registerTool(

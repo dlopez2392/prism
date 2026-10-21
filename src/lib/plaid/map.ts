@@ -10,7 +10,7 @@
 //      twice — once when you buy, once when you pay the card.
 
 import { lastMonths, monthKey } from "@/lib/finance/dates";
-import type { Account, AccountKind, AssetClass, CategoryId, Cents, Holding, IncomeKind, ISODate, TaxHint, Transaction } from "@/lib/finance/types";
+import type { Account, AccountKind, AssetClass, CategoryId, Cents, FeeKind, Holding, IncomeKind, ISODate, TaxHint, Transaction } from "@/lib/finance/types";
 import type { PlaidAccount, PlaidHolding, PlaidSecurity, PlaidTransaction } from "./client";
 
 export const toCents = (dollars: number | null | undefined): Cents => Math.round((dollars ?? 0) * 100);
@@ -137,9 +137,31 @@ export function taxHintOf(pfc: { primary: string; detailed: string } | null | un
   }
 }
 
+/** Plaid's detailed BANK_FEES category → which fee it was. Interest isn't a fee here: payoff.ts and the Cards page count it. */
+export function feeKindOf(pfc: { primary: string; detailed: string } | null | undefined): FeeKind | undefined {
+  if (pfc?.primary !== "BANK_FEES" || pfc.detailed === "BANK_FEES_INTEREST_CHARGE") return undefined;
+  switch (pfc.detailed) {
+    case "BANK_FEES_OVERDRAFT_FEES":
+      return "overdraft";
+    case "BANK_FEES_INSUFFICIENT_FUNDS":
+      return "nsf";
+    case "BANK_FEES_ATM_FEES":
+      return "atm";
+    case "BANK_FEES_FOREIGN_TRANSACTION_FEES":
+      return "foreign";
+    case "BANK_FEES_LATE_FEES":
+      return "late";
+    case "BANK_FEES_CASH_ADVANCE":
+      return "cash-advance";
+    default:
+      return "other";
+  }
+}
+
 export function mapTransaction(t: PlaidTransaction): Transaction {
   const incomeKind = incomeKindOf(t.personal_finance_category);
   const taxHint = taxHintOf(t.personal_finance_category);
+  const bankFee = feeKindOf(t.personal_finance_category);
   return {
     id: t.transaction_id,
     accountId: t.account_id,
@@ -150,6 +172,7 @@ export function mapTransaction(t: PlaidTransaction): Transaction {
     ...(incomeKind ? { incomeKind } : {}),
     ...(taxHint ? { taxHint } : {}),
     ...(t.personal_finance_category?.detailed === "BANK_FEES_INTEREST_CHARGE" ? { interestCharge: true as const } : {}),
+    ...(bankFee ? { bankFee } : {}),
     pending: t.pending,
   };
 }
