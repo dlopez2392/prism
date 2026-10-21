@@ -14,6 +14,7 @@ import { generateInsights } from "./insights";
 import { netWorthSeries } from "./networth";
 import { detectRecurring } from "./recurring";
 import { refundsFor } from "./refunds";
+import { runwayFor } from "./runway";
 import { subscriptionsFor } from "./subscriptions";
 import { EN, type T } from "@/lib/i18n/t";
 import type { FinanceData } from "./types";
@@ -70,6 +71,8 @@ export function analyze(data: FinanceData, t: T = EN) {
     streams,
     subscriptions,
     refunds,
+    // How long the cash on hand would last if the paychecks stopped.
+    runway: runwayFor(data.accounts, txns, today),
     income: incomeSummary(txns, streams, today),
     checking,
     forecast,

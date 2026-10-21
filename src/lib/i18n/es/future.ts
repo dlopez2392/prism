@@ -172,4 +172,26 @@ export const FUTURE: Record<string, string> = {
     "Te llegaron {amount} el {date}. Aquí tiene una tarea cada dólar hasta tu próximo día de pago, el {next}.",
   "{amount} more spent than planned since payday.": "{amount} gastados de más desde el día de pago.",
   "{n} bills before payday ({paid} paid)": "{n} facturas antes del día de pago ({paid} pagadas)",
+  "10 years or more": "10 años o más",
+  "At your usual spending": "Con tu gasto de siempre",
+  "Counting investments": "Contando inversiones",
+  "Essentials only, with {amount} invested. Selling takes time, and values move.":
+    "Solo lo esencial, con {amount} invertidos. Vender lleva tiempo y los valores cambian.",
+  "How long the {cash} in checking and savings would last, from what you spent last month.":
+    "Cuánto durarían los {cash} en tus cuentas de cheques y ahorros, según lo que gastaste el mes pasado.",
+  "How long the {cash} in checking and savings would last, from what you spent the last {n} months.":
+    "Cuánto durarían los {cash} en tus cuentas de cheques y ahorros, según lo que gastaste en los últimos {n} meses.",
+  "If your paychecks stopped": "Si dejaras de recibir tu sueldo",
+  "Less than a month": "Menos de un mes",
+  "Less than three months of essentials. Many people aim for three to six.":
+    "Menos de tres meses de lo esencial. Muchas personas buscan tener de tres a seis.",
+  "More than six months of essentials. Three to six is a common cushion.": "Más de seis meses de lo esencial. De tres a seis es un colchón común.",
+  "On essentials only": "Solo con lo esencial",
+  "Shopping, fun and travel are left out of essentials. Retirement savings aren't counted: taking them early costs penalties.":
+    "Compras, diversión y viajes quedan fuera de lo esencial. Los ahorros para el retiro no cuentan: sacarlos antes tiene penalizaciones.",
+  "Three to six months of essentials is a common cushion, and you're within it.":
+    "De tres a seis meses de lo esencial es un colchón común, y estás dentro de ese rango.",
+  "What counts as essential": "Qué cuenta como esencial",
+  "{amount} a month · until about {date}": "{amount} al mes · hasta alrededor de {date}",
+  "{name} payment": "Pago de {name}",
 };

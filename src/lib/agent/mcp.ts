@@ -34,6 +34,7 @@ import {
   getCards,
   getFees,
   getRefunds,
+  howLongCouldILast,
   type AgentData,
 } from "./tools";
 
@@ -270,6 +271,17 @@ export function prismMcpServer(load: () => Promise<AgentData>): McpServer {
       annotations: { title: "Refunds and money owed back", ...READ_ONLY },
     },
     run(getRefunds),
+  );
+
+  server.registerTool(
+    "how_long_could_i_last",
+    {
+      title: "How long could I last",
+      description:
+        "If the user's paychecks stopped today: how many months the cash in checking and savings would cover their usual spending, their essentials alone (housing, food, transport, health, bills, plus loan payments the lender reports), and the essentials counting brokerage and crypto too (never retirement), with about when each would run out. Costs are averaged over the last full months. A description of the cushion, not advice.",
+      annotations: { title: "How long could I last", ...READ_ONLY },
+    },
+    run(howLongCouldILast),
   );
 
   server.registerTool(

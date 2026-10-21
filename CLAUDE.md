@@ -416,6 +416,13 @@
   words; each credit pays one refund, oldest first. Personal view only
   (`withOwnNotes`), never the household or the demo's stored data. Prism
   never asks anyone for money.
+- How long could you last (`src/lib/finance/runway.ts`, the Future card,
+  `how_long_could_i_last`): cash is checking + savings only; investments are
+  brokerage + crypto, never retirement, and only in their own figure. Costs
+  average WHOLE months (a month the history starts partway through is
+  skipped). A lender's loan payment is added only when no spending line in
+  45 days paid that amount, never twice. Name the 3-6 month cushion as an
+  observation, never a recommendation.
 - Paying off what you owe (`src/lib/finance/payoff.ts`, the card on Net
   worth, `plan_debt_payoff`): one arithmetic for the screen and the
   connectors. A rate or a payment is the lender's (`Account.liability`) or

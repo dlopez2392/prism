@@ -14,6 +14,7 @@ import {
   getCards,
   getFees,
   getRefunds,
+  howLongCouldILast,
   netWorth,
   overview,
   searchTransactions,
@@ -482,6 +483,17 @@ describe("get_refunds", () => {
     expect(r.friends_owe).toEqual([expect.objectContaining({ who: "Sam", amount: 43 })]);
     expect(r.coming_back).toBe(3.5 + 120 + 43);
     for (const w of r.waiting) expect(w.purchase).not.toBeNull();
+  });
+});
+
+describe("how_long_could_i_last", () => {
+  it("answers from the same figures the Future card draws", () => {
+    const data = demo();
+    const r = howLongCouldILast(data) as Extract<ReturnType<typeof howLongCouldILast>, { months_on_essentials: number }>;
+    const a = analyze(data).runway!;
+    expect(r).toMatchObject({ months_measured: 3, cash_in_checking_and_savings: usd(a.cash), essentials_a_month: usd(a.essentials) });
+    expect(r.months_on_essentials).toBe(Math.floor(a.months.essentials * 10) / 10);
+    expect(r.months_on_essentials_with_investments).toBeGreaterThan(r.months_on_essentials);
   });
 });
 

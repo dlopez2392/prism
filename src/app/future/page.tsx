@@ -19,7 +19,9 @@ import { affordBase } from "@/lib/finance/afford";
 import { dueReminders, remindable } from "@/lib/finance/calendar";
 import { paymentsDue, rateText } from "@/lib/finance/debts";
 import { addDays, daysBetween } from "@/lib/finance/dates";
-import { capitalized, dayDate, money, money0, shortDate } from "@/lib/finance/format";
+import { capitalized, dayDate, money, money0, monthYear, shortDate } from "@/lib/finance/format";
+import { categoryLabel } from "@/lib/finance/categories";
+import type { Runway } from "@/lib/finance/runway";
 import { scheduleText } from "@/lib/finance/income";
 import { analyze, FORECAST_DAYS } from "@/lib/finance/model";
 import { paydayPlan, type PaydayPlan } from "@/lib/finance/payday";
@@ -133,6 +135,8 @@ export default async function FuturePage() {
       </div>
 
       {plan ? <PaydayCard plan={plan} t={t} /> : null}
+
+      {a.runway ? <RunwayCard runway={a.runway} t={t} /> : null}
 
       <ChartCard
         title={t("Where your balance is heading")}
@@ -415,6 +419,87 @@ function PaydayCard({ plan, t }: { plan: PaydayPlan; t: T }) {
         )}
       </div>
     </Card>
+  );
+}
+
+/** "4.2 months", "Less than a month", "10 years or more": how long, to a tenth of a month. */
+function monthsText(m: number, t: T): string {
+  if (m < 1) return t("Less than a month");
+  if (m >= 120) return t("10 years or more");
+  const n = Math.floor(m * 10) / 10;
+  return n === 1 ? t("1 month") : t("{n} months", { n: n.toLocaleString(t.locale === "es" ? "es-US" : "en-US") });
+}
+
+function RunwayCard({ runway: r, t }: { runway: Runway; t: T }) {
+  const { locale } = t;
+  const e = r.months.essentials;
+  return (
+    <Card className="p-5 sm:p-6">
+      <CardHeader
+        title={t("If your paychecks stopped")}
+        subtitle={
+          r.monthsMeasured === 1
+            ? t("How long the {cash} in checking and savings would last, from what you spent last month.", { cash: money0(r.cash) })
+            : t("How long the {cash} in checking and savings would last, from what you spent the last {n} months.", { cash: money0(r.cash), n: r.monthsMeasured })
+        }
+      />
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <RunwayFigure
+          label={t("At your usual spending")}
+          value={monthsText(r.months.usual, t)}
+          note={t("{amount} a month · until about {date}", { amount: money0(r.usual), date: monthYear(r.until.usual, locale) })}
+        />
+        <RunwayFigure
+          label={t("On essentials only")}
+          value={monthsText(e, t)}
+          note={t("{amount} a month · until about {date}", { amount: money0(r.essentials), date: monthYear(r.until.essentials, locale) })}
+        />
+        {r.months.withInvestments !== null ? (
+          <RunwayFigure
+            label={t("Counting investments")}
+            value={monthsText(r.months.withInvestments, t)}
+            note={t("Essentials only, with {amount} invested. Selling takes time, and values move.", { amount: money0(r.investments) })}
+          />
+        ) : null}
+      </div>
+      <div className="mt-3">
+        {e >= 6 ? (
+          <StatusPill status="good">{t("More than six months of essentials. Three to six is a common cushion.")}</StatusPill>
+        ) : e >= 3 ? (
+          <StatusPill status="neutral">{t("Three to six months of essentials is a common cushion, and you're within it.")}</StatusPill>
+        ) : (
+          <StatusPill status="warn">{t("Less than three months of essentials. Many people aim for three to six.")}</StatusPill>
+        )}
+      </div>
+      <details className="mt-3 text-sm">
+        <summary className="cursor-pointer rounded-ctl font-semibold text-accent-ink focus-visible:outline-2 focus-visible:outline-[var(--focus)]">{t("What counts as essential")}</summary>
+        <ul className="mt-2 space-y-1 text-xs text-ink-3">
+          {r.essentialParts.map((p) => (
+            <li key={p.category} className="flex justify-between gap-3">
+              <span>{categoryLabel(p.category, t)}</span>
+              <span className="num shrink-0">{t("{amount} a month", { amount: money(p.amount) })}</span>
+            </li>
+          ))}
+          {r.loans.map((l) => (
+            <li key={l.name} className="flex justify-between gap-3">
+              <span className="[overflow-wrap:anywhere]">{t("{name} payment", { name: l.name })}</span>
+              <span className="num shrink-0">{t("{amount} a month", { amount: money(l.amount) })}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-xs text-ink-3">{t("Shopping, fun and travel are left out of essentials. Retirement savings aren't counted: taking them early costs penalties.")}</p>
+      </details>
+    </Card>
+  );
+}
+
+function RunwayFigure({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="rounded-ctl bg-surface-2 p-3">
+      <div className="text-[13px] font-semibold text-ink-2">{label}</div>
+      <div className="num mt-1 text-[22px] font-extrabold leading-tight tracking-tight text-ink-1">{value}</div>
+      <div className="mt-1 text-xs text-ink-3">{note}</div>
+    </div>
   );
 }
 
