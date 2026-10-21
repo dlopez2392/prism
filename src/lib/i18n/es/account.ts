@@ -210,4 +210,13 @@ export const ACCOUNT: Record<string, string> = {
     "{product} avisa a cinco dispositivos como máximo. Desactiva uno abajo y vuelve a intentarlo.",
   "{product} shows its words in this language on this device. Dates follow it too; amounts stay in U.S. dollars as your bank writes them.":
     "{product} te muestra sus palabras en este idioma en este dispositivo. Las fechas también cambian; los montos se quedan en dólares, como los escribe tu banco.",
+  "AI apps": "Apps de IA",
+  "1 connected": "1 conectada",
+  "{n} connected": "{n} conectadas",
+  "None yet — connect one above": "Ninguna todavía: conecta una arriba",
+  "Questions it can answer": "Preguntas que puede responder",
+  "Which subscriptions could I cancel, and what would I save in a year?": "¿Qué suscripciones podría cancelar y cuánto ahorraría en un año?",
+  "What fees did my bank charge me this year, and were any refunded?": "¿Qué cargos me cobró mi banco este año y me reembolsaron alguno?",
+  "Can I afford a $400 a month car payment?": "¿Me alcanza para un pago de auto de $400 al mes?",
+  "Which card should I pay down first, and how long until it's paid off?": "¿Qué tarjeta debería pagar primero y cuánto falta para liquidarla?",
 };

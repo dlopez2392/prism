@@ -55,3 +55,17 @@ test("two-step sign-in, once on, is asked for after the email code, and nothing 
   await page.goto("/account");
   await expect(page.getByText(`Signed in as ${account.email}.`)).toBeVisible();
 });
+
+test("Ask AI sits near the top of Account and shows what it can answer", async ({ page, account }) => {
+  void account;
+  const errors = watchErrors(page);
+  await page.goto("/account");
+  const ai = page.locator("section#ai");
+  await expect(ai.getByRole("heading", { name: "Ask AI about your money" })).toBeVisible();
+  await expect(ai.getByText("Can I afford a $400 a month car payment?")).toBeVisible();
+  // Above the account summary, not at the foot of the page.
+  const aiTop = (await ai.boundingBox())!.y;
+  const savedTop = (await page.getByRole("heading", { name: "Saved to your account" }).boundingBox())!.y;
+  expect(aiTop).toBeLessThan(savedTop);
+  expect(errors).toEqual([]);
+});
