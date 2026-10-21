@@ -240,11 +240,13 @@ describe("the recap of last month", () => {
         { label: "Coming up", value: "9 bills in the next 30 days, about $3,100 in all" },
       ],
       note: null,
+      // The month in full is the check-in.
+      href: "/check-in",
     });
     expect(e.fingerprints).toEqual([fingerprint(U, "monthly:2026-09")]);
     expect(e.asOf).toEqual({ day: "2026-10-02", by: "visit" });
     expect(recap({ snapshot: seen("02"), sent: new Set(e.fingerprints) }, "03")).toBeNull();
-    expect(phoneAlertFor(e)).toEqual({ title: "Your September in Prism", body: "In and out: $5,820 came in and $4,100 went out, so you kept $1,720", url: "/" });
+    expect(phoneAlertFor(e)).toEqual({ title: "Your September in Prism", body: "In and out: $5,820 came in and $4,100 went out, so you kept $1,720", url: "/check-in" });
   });
 
   it("says it in words alone when amounts are off", () => {
@@ -382,6 +384,6 @@ describe("in Spanish, for someone who reads Prism in Spanish", () => {
       ["First Bank deja de actualizarse el vie, 9 oct", "A menos que vuelvas a iniciar sesión antes. Toma un minuto en Conexiones y no se pierde nada."],
     ]);
     expect(phoneAlertFor(e, es).body).toMatch(/ Y 1 más en el correo de hoy\.$/);
-    expect(phoneAlertFor(recapOn("02"), es)).toEqual({ title: "Tu mes de septiembre en Prism", body: "Entradas y salidas: Entraron $5,820 y salieron $4,100, así que ahorraste $1,720", url: "/" });
+    expect(phoneAlertFor(recapOn("02"), es)).toEqual({ title: "Tu mes de septiembre en Prism", body: "Entradas y salidas: Entraron $5,820 y salieron $4,100, así que ahorraste $1,720", url: "/check-in" });
   });
 });

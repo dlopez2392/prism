@@ -67,6 +67,16 @@ test("Spending gives the person's own inflation rate, with the prices that rose 
   await expect(card.getByText(/isn't counted in your rate/)).toBeVisible();
 });
 
+test("the check-in gives last month, and what's worth a look opens the page that settles it", async ({ page }) => {
+  await page.goto("/check-in");
+  await expect(page.locator("h1")).toHaveText(/^Your \w+ check-in$/);
+  await expect(page.locator("[data-hero]").getByText(/^You kept, in \w+$/)).toBeVisible();
+  const list = page.locator("section", { hasText: "Worth a look" });
+  await list.getByRole("link", { name: /Sam still owes you \$43\.00/ }).click();
+  await expect(page).toHaveURL(/\/refunds$/);
+  await expect(page.locator("h1")).toHaveText("Refunds");
+});
+
 test("the payoff plan compares both orders, follows the one picked, and asks for a missing rate", async ({ page }) => {
   await page.goto("/net-worth");
   const card = page.locator("section", { hasText: "Paying off what you owe" }).last();

@@ -21,6 +21,7 @@ import { analyze } from "@/lib/finance/model";
 import { allocation, groupAccounts, projectGoal } from "@/lib/finance/networth";
 import { monthlyCost, normalizeMerchant, occurrences, setAside } from "@/lib/finance/recurring";
 import { cardsFor } from "@/lib/finance/cards";
+import { checkIn } from "@/lib/finance/check-in";
 import { feesFor } from "@/lib/finance/fees";
 import { inflationFor, type PriceChange } from "@/lib/finance/inflation";
 import { payLaterFor, PROVIDER_NAMES } from "@/lib/finance/paylater";
@@ -644,6 +645,34 @@ export function myInflation(data: AgentData) {
     prices: f.prices.map(row),
     typical_visit: f.visits.map(row),
     note: "The rate is from prices only: the same bill or subscription, repeating at one price, now against a year ago, weighted by what's spent on each now. A typical visit (the grocer, the gas station) moves with prices and with what's bought, so it's listed apart and never in the rate. Loan payments and donations are left out. Null rate: fewer than two prices to compare yet.",
+  };
+}
+
+// — get_check_in ———————————————————————————————————————————————
+
+/** The money check-in: last month in numbers, what's worth a look now (each with the Prism page that settles it), what changed, and the month ahead. */
+export function getCheckIn(data: AgentData) {
+  const c = checkIn(analyze(data));
+  const m = c.month;
+  return {
+    ...frame(data),
+    last_month: m
+      ? {
+          month: m.month,
+          came_in: usd(m.income),
+          went_out: usd(m.spent),
+          kept: usd(m.income - m.spent),
+          month_before: m.before ? { came_in: usd(m.before.income), went_out: usd(m.before.spent) } : null,
+          net_worth_at_end: m.netWorth ? usd(m.netWorth.end) : null,
+          net_worth_change: m.netWorth ? usd(m.netWorth.change) : null,
+        }
+      : null,
+    // "now": money or access at stake soon; "soon": worth a look this month; "idea": worth knowing.
+    worth_a_look: c.items.map((i) => ({ urgency: i.tone, title: i.title, detail: i.detail, page: i.href })),
+    biggest_category_moves: c.moves.map((mv) => ({ category: mv.category, last_month: usd(mv.now), month_before: usd(mv.before), change: usd(mv.change) })),
+    prices_that_rose: c.rises.map((r) => ({ name: r.name, a_year_ago: usd(r.before), now: usd(r.after), change_percent: Math.round(r.change * 1000) / 10 })),
+    bills_next_30_days: c.ahead ? { count: c.ahead.count, total: usd(c.ahead.total) } : null,
+    next_payday: c.nextPayday,
   };
 }
 

@@ -20,6 +20,15 @@ const email: Email = {
 describe("an alert email, written out", () => {
   const out = renderEmail(email, links);
 
+  it("opens the check-in from the month's recap, and the home page from the week's summary", () => {
+    const recap = renderEmail({ ...email, summary: { title: "Your September", lines: [], note: null, href: "/check-in" } }, links);
+    expect(recap.text).toContain(`${links.site}/check-in`);
+    expect(recap.html).toContain(`href="${links.site}/check-in"`);
+    expect(recap.html).toContain("Open your check-in");
+    expect(out.text).toContain(`${links.site}/\n`);
+    expect(out.html).not.toContain("/check-in");
+  });
+
   it("says the same in text and HTML: each alert, the summary, when the figures are from, and how to stop them", () => {
     for (const part of ["may not be covered on Thu, Oct 8", "$840 from Sep 27 to Oct 3", "on Sun, Oct 4", links.unsubscribe, `${links.site}/future`]) {
       expect(out.text).toContain(part);

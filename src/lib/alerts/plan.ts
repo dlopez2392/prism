@@ -54,7 +54,8 @@ export type Recipient = {
 
 export type EmailItem = { title: string; detail: string; href: string; urgent: boolean };
 export type SummaryLine = { label: string; value: string };
-export type Summary = { title: string; lines: SummaryLine[]; note: string | null };
+/** `href`: the page on Prism the summary opens (the home page unless it says). */
+export type Summary = { title: string; lines: SummaryLine[]; note: string | null; href?: string };
 
 export type Email = {
   subject: string;
@@ -305,7 +306,8 @@ function recapOf(r: Recipient, snap: AlertSnapshot | null, today: ISODate, t: T)
             : cap(bills, locale),
     });
   }
-  return { id, summary: { title, lines, note: null } };
+  // The month in full, and what to look at now, is the check-in.
+  return { id, summary: { title, lines, note: null, href: "/check-in" } };
 }
 
 function clip(s: string): string {
@@ -375,5 +377,5 @@ export function phoneAlertFor(email: Email, t: T = EN): PhoneAlert {
   }
   const s = email.summary;
   const line = s?.note ?? (s?.lines[0] ? `${s.lines[0].label}: ${s.lines[0].value}` : t("Open {product} for this week's figures.", { product }));
-  return { title: t("{title} in {product}", { title: s?.title ?? t("Your week"), product }), body: fit(line), url: "/" };
+  return { title: t("{title} in {product}", { title: s?.title ?? t("Your week"), product }), body: fit(line), url: s?.href ?? "/" };
 }

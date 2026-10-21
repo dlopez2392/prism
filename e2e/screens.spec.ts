@@ -7,6 +7,7 @@ import { expectNoSidewaysScroll, watchErrors } from "./helpers";
 
 const SCREENS: { path: string; title: RegExp; hero: boolean }[] = [
   { path: "/", title: /./, hero: true },
+  { path: "/check-in", title: /check-in/, hero: true },
   { path: "/cash-flow", title: /Cash flow/, hero: true },
   { path: "/spending", title: /Spending/, hero: true },
   { path: "/budgets", title: /Budgets/, hero: true },

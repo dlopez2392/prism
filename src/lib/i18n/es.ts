@@ -12,6 +12,7 @@ import { CALENDAR } from "./es/calendar";
 import { CARDS } from "./es/cards";
 import { CONNECTIONS } from "./es/connections";
 import { CORE } from "./es/core";
+import { CHECK_IN } from "./es/check-in";
 import { FEES } from "./es/fees";
 import { REFUNDS } from "./es/refunds";
 import { FUTURE } from "./es/future";
@@ -39,6 +40,7 @@ export const ES_PARTS: Record<string, Record<string, string>> = {
   plus: PLUS,
   subscriptions: SUBSCRIPTIONS,
   cards: CARDS,
+  checkIn: CHECK_IN,
   fees: FEES,
   refunds: REFUNDS,
 };

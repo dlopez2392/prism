@@ -12,6 +12,7 @@ import {
   listAccounts,
   listSubscriptions,
   getCards,
+  getCheckIn,
   getFees,
   getRefunds,
   howLongCouldILast,
@@ -506,6 +507,17 @@ describe("get_my_inflation", () => {
     expect(r.prices.find((p) => p.name === "Tunely Music")).toMatchObject({ a_year_ago: 10.99, now: 11.99 });
     expect(r.prices.some((p) => /finance|loan/i.test(p.name))).toBe(false);
     expect(r.typical_visit.length).toBeGreaterThan(0);
+  });
+});
+
+describe("get_check_in", () => {
+  it("gives last month, what's worth a look with its page, and the month ahead", () => {
+    const r = getCheckIn(demo());
+    // The example day is in September, so last month is August.
+    expect(r.last_month?.month).toBe("2026-08");
+    expect(r.worth_a_look.length).toBeGreaterThan(0);
+    for (const i of r.worth_a_look) expect(i.page).toMatch(/^\//);
+    expect(r.bills_next_30_days!.count).toBeGreaterThan(0);
   });
 });
 
