@@ -469,3 +469,11 @@ describe("get_fees", () => {
     for (const f of r.fees) expect(f.transaction).not.toBeNull();
   });
 });
+
+describe("get_cards: pay later", () => {
+  it("lists the example household's Klarna plan, half paid", () => {
+    const r = getCards(demo());
+    expect(r.buy_now_pay_later.plans).toEqual([expect.objectContaining({ provider: "Klarna", installment: 42.5, payments_seen: 2, payments_left: 2, still_to_pay: 85 })]);
+    expect(r.buy_now_pay_later.at_least_still_to_pay).toBe(85);
+  });
+});

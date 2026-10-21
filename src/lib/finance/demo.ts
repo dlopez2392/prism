@@ -228,6 +228,10 @@ export function buildDemoData(today: ISODate): FinanceData {
   add(chk, addDays(today, -130), -3_500, "OVERDRAFT ITEM FEE", "other");
   add(chk, addDays(today, -55), -1_200, "MONTHLY MAINTENANCE FEE", "bills");
   add(chk, addDays(today, -52), 1_200, "MAINTENANCE FEE REFUND", "other");
+  // A pay-in-4 plan half paid, and one paid off last month (buy now, pay later).
+  add(chk, addDays(today, -19), -4_250, "KLARNA* Lumen Home", "shopping");
+  add(chk, addDays(today, -5), -4_250, "KLARNA* Lumen Home", "shopping");
+  for (const k of [82, 68, 54, 40]) add(chk, addDays(today, -k), -2_199, "AFTERPAY", "shopping");
 
   txns.sort((a, b) => (a.date === b.date ? a.id.localeCompare(b.id) : a.date < b.date ? -1 : 1));
 

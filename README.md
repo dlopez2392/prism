@@ -625,6 +625,15 @@ only with `PLAID_LIABILITIES=on`. The next close is a month after the last.
 Before it, the page says what paying would bring the reported share down to
 (30%, then 10%), from today's balance: a description, never advice.
 
+Buy now, pay later (`src/lib/finance/paylater.ts`, on Cards and in
+`get_cards`): plans with Affirm, Klarna, Afterpay, Sezzle and Zip, found from
+the payments to them (no aggregator reports the plans). A run of payments of
+the same amount from one account, every two weeks, is a pay-in-4 plan: four
+less those seen are still to come, two weeks apart. Every month, it's an
+ongoing payment whose length the payments don't show. A plan whose next
+payment is more than 10 days late is over. What's owed is "at least": a plan
+that began before Prism's history looks shorter than it is.
+
 ## Fees
 
 `/fees` (`src/lib/finance/fees.ts`, `get_fees`, an Overview heads-up) lists
