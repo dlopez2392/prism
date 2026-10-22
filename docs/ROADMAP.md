@@ -460,3 +460,13 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     returns it under `business_schedule_c`. Business lines leave the personal
     tax sections. Part of Prism Plus with the tax year. Not built: mileage,
     a home office or depreciation, which Prism can't see.
+43. **Filed return upload.** **Built (2026-10-21):** `/taxes/return` reads
+    the PDF of a filed Form 1040 in the browser (pdf.js) and never uploads
+    it; only the figures on a few lines are found, by the words printed on
+    them, and the person checks them before saving (or types them in). Taxes
+    shows last year's return beside this year: AGI, total tax, effective
+    rate, refund or bill, last year's business income beside this year's
+    Schedule C, and the safe-harbor amount (100% of last year's tax, 110%
+    over $150,000 AGI). `get_tax_summary` returns them under
+    `returns_on_file`. Part of Prism Plus. Not built, and not possible
+    today: pulling a return from TurboTax, which has no API for it.

@@ -721,6 +721,34 @@ download lists them by line, and `get_tax_summary` returns them under
 counts at half, and a home office, mileage or depreciation aren't visible to
 Prism. Part of Prism Plus with the tax year.
 
+## A filed return
+
+`/taxes/return` (`src/components/return-upload.tsx`,
+`src/lib/finance/tax-return.ts`) adds the figures from a filed Form 1040.
+TurboTax and the other tax programs have no API for reading a return, so the
+person brings the PDF their software saved:
+- **Read on the device.** pdf.js opens the PDF in the browser (a password is
+  asked for when the file has one, and never sent); the file is never
+  uploaded.
+- **Only the figures, found by their words.** Each one is found by the words
+  printed on its line ("This is your adjusted gross income"), never by
+  position alone, and the line number beside an empty amount is never read as
+  one. Names, Social Security numbers, addresses, dependents and bank details
+  are never read or kept.
+- **Checked before it's kept.** The person sees every figure, can change any,
+  or can type them all in. `saveTaxReturn` checks them again and keeps them in
+  `TxnDetails.returns` by tax year, sealed with the rest. `removeTaxReturn`
+  comes back with what Undo needs.
+
+Taxes shows last year's return beside this year: AGI, total tax, the
+effective rate, the refund or the bill, last year's business income beside
+this year's Schedule C, and, while the year is under way, the safe-harbor
+amount (paying at least last year's total tax, or 110% of it when AGI was over
+$150,000 or $75,000 married filing separately, generally avoids an
+underpayment penalty). `get_tax_summary` returns the same under
+`returns_on_file`. Part of Prism Plus. The example household has a return of
+its own, so a visitor sees what it does.
+
 ## Money check-in
 
 `/check-in` (`src/lib/finance/check-in.ts`, `get_check_in`) is one page for

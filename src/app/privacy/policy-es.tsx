@@ -146,6 +146,13 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
               y el monto de la compra, cuánto te van a devolver y por qué, el día en que empezaste a esperar y el día en que dijiste que llegó. {p} nunca le
               pide un reembolso a nadie por ti. Un recordatorio de lo que alguien te debe se escribe en tu dispositivo y va a donde lo envíes; {p} nunca lo envía.
             </li>
+            <li>
+              Si agregas una declaración de impuestos presentada, las cifras que revisas y guardas de ella: el año fiscal, tu estado civil para efectos de la
+              declaración y los montos de algunas líneas de tu Formulario 1040 (como tus salarios, tu ingreso bruto ajustado, el impuesto total, los pagos y el
+              reembolso o el monto adeudado), guardados cifrados en tu cuenta y nunca mostrados a tu hogar. El PDF se abre en tu dispositivo y nunca se sube, y
+              {p} nunca lee ni guarda de él tu nombre, tu número de Seguro Social, tu dirección, tus dependientes ni tus datos bancarios. Puedes quitar una
+              declaración cuando quieras.
+            </li>
             <li>Tus próximas facturas y días de pago, si activas el enlace de calendario.</li>
             {alerts ? (
               <li>

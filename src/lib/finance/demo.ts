@@ -428,5 +428,23 @@ export function buildDemoData(today: ISODate): FinanceData {
     holdings,
     credit,
     refundMarks,
+    // Last year's return, as Alex saved it from the PDF: the figures only (finance/tax-return.ts).
+    taxReturns: [
+      {
+        year: Number(today.slice(0, 4)) - 1,
+        status: "single",
+        wages: 9_840_000,
+        business: null,
+        totalIncome: 9_985_000,
+        agi: 9_685_000,
+        taxable: 8_110_000,
+        totalTax: 1_296_000,
+        withheld: 1_341_000,
+        estimated: null,
+        payments: 1_341_000,
+        refund: 45_000,
+        owed: null,
+      },
+    ],
   };
 }

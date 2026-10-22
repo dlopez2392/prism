@@ -17,7 +17,9 @@ import { buttonGhost } from "@/components/dialog";
 import { PlusCard } from "@/components/plus";
 import { PrintButton } from "@/components/print-button";
 import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill } from "@/components/ui";
-import { dayDate, money, shortDate, signedMoney0 } from "@/lib/finance/format";
+import { dayDate, money, money0, percent, shortDate, signedMoney0 } from "@/lib/finance/format";
+import { returnFacts, STATUS_LABELS, type TaxReturn } from "@/lib/finance/tax-return";
+import { TaxReturns, type ReturnCard } from "@/components/tax-returns";
 import { p2pLabel } from "@/lib/finance/p2p";
 import { defaultTaxYear, GIFT_RECEIPT_FROM, TAX_SECTIONS, taxSummary, taxYears, type TaxSection } from "@/lib/finance/taxes";
 import { bizLineLabel, scheduleC, SE_TAX_FROM, type ScheduleC } from "@/lib/finance/schedule-c";
@@ -118,6 +120,35 @@ function ScheduleCard({ s, t }: { s: ScheduleC; t: T }) {
   );
 }
 
+/** A kept return as Taxes shows it: the figures that matter, and, for last year's, what it says about this one. */
+function returnCard(r: TaxReturn, year: number, partial: boolean, business: ScheduleC | null, t: T): ReturnCard {
+  const f = returnFacts(r);
+  const figures: ReturnCard["figures"] = [];
+  if (r.agi !== null) figures.push({ label: t("Adjusted gross income"), value: money0(r.agi) });
+  if (r.totalTax !== null) figures.push({ label: t("Total tax"), value: money0(r.totalTax) });
+  if (f.effectiveRate !== null) figures.push({ label: t("Effective rate"), value: percent(f.effectiveRate) });
+  if (f.settled !== null) figures.push(f.settled >= 0 ? { label: t("Refund"), value: money0(f.settled) } : { label: t("You owed"), value: money0(-f.settled) });
+  const notes: string[] = [];
+  // Last year's return, while this year is still under way: the safe-harbor rule, and the business beside it.
+  if (r.year === year - 1 && partial && f.safeHarbor) {
+    notes.push(
+      f.safeHarbor.share === 1
+        ? t("For {year}, paying at least {amount} through withholding and estimated payments, your {last} total tax, generally avoids an underpayment penalty.", { year, amount: money0(f.safeHarbor.amount), last: r.year })
+        : t("For {year}, paying at least {amount} through withholding and estimated payments, 110% of your {last} total tax since your income was over $150,000, generally avoids an underpayment penalty.", { year, amount: money0(f.safeHarbor.amount), last: r.year }),
+    );
+  }
+  if (r.year === year - 1 && r.business !== null && business?.lines.length) {
+    notes.push(t("Your {last} return had {amount} of business income. Your business accounts show {now} so far in {year}.", { last: r.year, amount: signedMoney0(r.business), now: signedMoney0(business.net), year }));
+  }
+  return {
+    year: r.year,
+    title: r.year === year ? t("Your {year} return, as filed", { year: r.year }) : t("Your {year} return", { year: r.year }),
+    subtitle: r.status ? t(STATUS_LABELS[r.status]) : t("Filing status not given"),
+    figures,
+    notes,
+  };
+}
+
 function Section({ s, accounts, t }: { s: TaxSection; accounts: Map<string, Account>; t: T }) {
   const big = s.id === "gifts" ? s.lines.filter((x) => -x.amount >= GIFT_RECEIPT_FROM).length : 0;
   const n = s.lines.length;
@@ -174,6 +205,10 @@ export default async function TaxesPage({ searchParams }: { searchParams: Promis
   const accounts = new Map([...data.accounts, ...(data.hiddenAccounts ?? [])].map((a) => [a.id, a]));
   // Only a signed-in person's own money can be downloaded; the example household and a household view can't.
   const canDownload = data.account !== null && data.source !== "demo" && data.view === "me";
+  // The person's filed returns for this year and the one before: what last year's says about this one.
+  const filed = (data.taxReturns ?? []).filter((r) => r.year === year || r.year === year - 1);
+  const canAddReturn = canDownload && !filed.some((r) => r.year === year - 1);
+  const returnCards = filed.map((r) => returnCard(r, year, s.partial, business, t));
   const moneyIn = s.sections.filter((x) => x.side === "in");
   const moneyOut = s.sections.filter((x) => x.side === "out");
   const politicalTotal = money(-s.political.reduce((sum, x) => sum + x.amount, 0));
@@ -282,6 +317,27 @@ export default async function TaxesPage({ searchParams }: { searchParams: Promis
           {s.partial ? <p className="mt-1 text-xs text-ink-3">{t("{year} isn't over, so these will grow until December 31.", { year })}</p> : null}
         </Card>
       </div>
+
+      {returnCards.length || canAddReturn ? (
+        <section aria-labelledby="returns" className="space-y-3">
+          <h2 id="returns" className="text-sm font-bold uppercase tracking-[0.08em] text-ink-3">
+            {t("Your returns")}
+          </h2>
+          <TaxReturns
+            cards={returnCards}
+            canEdit={canDownload}
+            add={
+              canAddReturn
+                ? {
+                    year: year - 1,
+                    title: t("Add your {year} return", { year: year - 1 }),
+                    body: t("Choose the PDF your tax software saved, and Prism puts last year's figures beside this year's: the tax, the refund or the bill, and what paying enough this year looks like. The file never leaves your device."),
+                  }
+                : null
+            }
+          />
+        </section>
+      ) : null}
 
       {moneyIn.length ? (
         <section aria-labelledby="money-in" className="space-y-3">
