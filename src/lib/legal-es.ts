@@ -77,6 +77,7 @@ export const PRIVACY_LISTS_ES: Record<string, string> = {
     "Guarda una invitación a un hogar que abriste mientras inicias sesión para aceptarla, solo en esa pestaña.",
   "Until you accept it or close the tab": "Hasta que la aceptes o cierres la pestaña",
   "Your time zone, so days and months line up with yours.": "Tu zona horaria, para que los días y los meses coincidan con los tuyos.",
+  "Remembers that you hid Getting started on Overview.": "Recuerda que ocultaste Para empezar en Resumen.",
   "Whether you picked light or dark.": "Si elegiste el modo claro o el oscuro.",
   "Until you clear it": "Hasta que lo borres",
 

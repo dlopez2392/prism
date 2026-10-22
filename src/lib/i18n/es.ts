@@ -9,6 +9,7 @@
 import { ACCOUNT } from "./es/account";
 import { BUSINESS } from "./es/business";
 import { TAX_RETURN } from "./es/tax-return";
+import { SETUP } from "./es/setup";
 import { ESTIMATED_TAX } from "./es/estimated-tax";
 import { ALERTS } from "./es/alerts";
 import { CALENDAR } from "./es/calendar";
@@ -48,6 +49,7 @@ export const ES_PARTS: Record<string, Record<string, string>> = {
   refunds: REFUNDS,
   business: BUSINESS,
   taxReturn: TAX_RETURN,
+  setup: SETUP,
   estimatedTax: ESTIMATED_TAX,
 };
 

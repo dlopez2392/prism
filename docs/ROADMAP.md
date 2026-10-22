@@ -481,3 +481,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     dates, and `get_tax_summary` returns them under `estimated_taxes`. Not
     built: an alert email or push, which needs a new alert kind in
     `profiles.alert_kinds` (a constraint the owner would change).
+45. **Getting started.** **Built (2026-10-22):** a checklist on Overview
+    for a signed-in person's own view: connect a bank, set budgets, turn on
+    alerts (where this site can send them), put bills in the calendar,
+    counted; and, apart and never counted, marking a business account and
+    adding last year's return. Each step is done by the thing itself, never a
+    tick. It leaves once every counted step is done, and Hide puts it away on
+    that device (the `prism-setup` cookie, declared in the privacy policy).

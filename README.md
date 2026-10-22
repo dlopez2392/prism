@@ -414,8 +414,8 @@ How it's built:
 
 **Switching it on** (owner, in this order):
 
-1. **Stripe account.** Sign up at stripe.com as Bespoke Intelligence
-   Solutions, and turn on two-step sign-in for it.
+1. **Stripe account.** Sign up at stripe.com as Bespoke Intelligent
+   Solutions LLC, and turn on two-step sign-in for it.
 2. **Public details** (Settings → Business → Public details): Terms of service
    `https://prism.bis-rgv.com/terms` and Privacy policy
    `https://prism.bis-rgv.com/privacy`. Checkout's "I agree to the Terms" box
@@ -771,6 +771,18 @@ It shows as a card on Taxes, an item in the check-in when a payment is due
 within 30 days, single-day events in the calendar feed (the dates and the
 quarter's amount only), and `estimated_taxes` in `get_tax_summary`. Prism
 states the rule and never says what to pay, and never pays anything.
+
+## Getting started
+
+Overview shows a signed-in person a **Getting started** checklist
+(`src/lib/finance/setup.ts`, `src/components/setup-checklist.tsx`) until it's
+done. Four steps are counted: connect a bank (own money, linked or imported),
+set budgets, turn on alerts (only where the site can send them) and put bills
+in the calendar. Two more are listed apart and never counted, because they
+apply only to some people: marking a business account, and adding last year's
+return. A step is done when the thing itself is, never because someone ticked
+it. The card leaves once every counted step is done; **Hide** puts it away
+sooner with the `prism-setup` cookie on that device.
 
 ## Money check-in
 

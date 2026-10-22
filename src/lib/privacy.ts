@@ -8,7 +8,7 @@
 import { BRAND } from "@/lib/brand";
 
 /** Shown on the page. Change it whenever the policy's substance changes. */
-export const POLICY_UPDATED = "October 21, 2026";
+export const POLICY_UPDATED = "October 22, 2026";
 
 /** Where privacy questions and requests go. Must be a mailbox someone reads. */
 export const PRIVACY_CONTACT = BRAND.privacyEmail;
@@ -59,6 +59,7 @@ export const STORED_ON_DEVICE: StoredOnDevice[] = [
     lasts: "Until you accept it or close the tab",
   },
   { name: "prism-tz", kind: "Cookie", what: "Your time zone, so days and months line up with yours.", lasts: "1 year" },
+  { name: "prism-setup", kind: "Cookie", what: "Remembers that you hid Getting started on Overview.", lasts: "1 year" },
   { name: "prism-theme", kind: "Browser storage", what: "Whether you picked light or dark.", lasts: "Until you clear it" },
 ];
 

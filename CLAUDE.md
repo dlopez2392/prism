@@ -440,6 +440,11 @@
   date. Targets assume last year's withholding and SAY so. Only federal IRS
   payments count (`IRS`/`NOT_IRS`). An email or push reminder needs a new
   `profiles.alert_kinds` value: that's a constraint change for the owner.
+- Getting started (`src/lib/finance/setup.ts`): a step is DONE by the thing
+  itself, never by a tick, and steps that apply only to some people
+  (`core: false`) are never counted. A new cookie or storage key must be
+  declared in `STORED_ON_DEVICE` (privacy.ts) with its Spanish in legal-es.ts,
+  which moves the policy date; privacy.test.ts enforces the declaration.
 - Money check-in (`/check-in`, `src/lib/finance/check-in.ts`,
   `get_check_in`): it GATHERS from the other engines (alerts, refunds, fees,
   budgets, cards, runway, inflation); it never computes its own version of

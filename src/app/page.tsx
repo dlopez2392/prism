@@ -7,6 +7,9 @@
 
 import { Plus, Sparkles, Telescope } from "lucide-react";
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { SetupChecklist } from "@/components/setup-checklist";
+import { SETUP_COOKIE, setupOpen, setupSteps } from "@/lib/finance/setup";
 import { HeadsUp, InsightList, SeeAll, StatTile, TransactionRow, UpcomingList } from "@/components/blocks";
 import { alertsFor } from "@/lib/finance/alerts";
 import { ChartCard } from "@/components/chart-card";
@@ -29,7 +32,7 @@ import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/t";
 
 export default async function OverviewPage() {
-  const [data, t] = await Promise.all([getFinance(), getT()]);
+  const [data, t, jar] = await Promise.all([getFinance(), getT(), cookies()]);
   const { locale } = t;
   const a = analyze(data, t);
   const month = monthLong(a.today, locale);
@@ -62,6 +65,20 @@ export default async function OverviewPage() {
   const savedRate = thisMonth.savingsRate;
   // Only what's the person's own to act on: another member's bank isn't theirs to sign in to. A price rise is an insight below.
   const headsUp = household ? [] : alertsFor(a, t).filter((x) => x.urgent);
+  // Getting started: a signed-in person's own view, until every counted step is done or they hide it.
+  const steps =
+    data.account && !household
+      ? setupSteps({
+          ownMoney: data.source !== "demo",
+          budgetsSet: data.planEdited.budgets,
+          alertsAvailable: data.account.alerts !== null,
+          alertsOn: data.account.alerts?.on === true,
+          calendarFeed: data.account.calendarFeed,
+          businessAccounts: data.businessAccountIds?.length ?? 0,
+          taxReturns: data.taxReturns?.length ?? 0,
+        })
+      : null;
+  const showSetup = steps !== null && setupOpen(steps) && jar.get(SETUP_COOKIE)?.value !== "hidden";
 
   return (
     <div className="space-y-5">
@@ -75,6 +92,8 @@ export default async function OverviewPage() {
       </div>
 
       <HeadsUp alerts={headsUp} t={t} />
+
+      {showSetup ? <SetupChecklist steps={steps!} t={t} /> : null}
 
       {/* Row 1 — the hero and the number people actually act on. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
