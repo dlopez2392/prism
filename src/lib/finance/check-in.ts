@@ -19,6 +19,7 @@ import { categoryBreakdown } from "./cashflow";
 import { cardsFor } from "./cards";
 import { categoryLabel } from "./categories";
 import { addDays, addMonths, daysBetween, startOfMonth } from "./dates";
+import { estimatedTax } from "./estimated-tax";
 import { feesFor } from "./fees";
 import { money, money0, shortDate } from "./format";
 import { inflationFor, type PriceChange } from "./inflation";
@@ -56,6 +57,8 @@ const MOVE_MIN: Cents = 5_000;
 const MOVE_SHARE = 0.15;
 /** A card payment is "due" in the list from this many days ahead. */
 const DUE_DAYS = 7;
+/** An estimated tax payment is mentioned from this many days ahead. */
+const EST_DAYS = 30;
 /** What a friend owes is worth a nudge after this many days. */
 const OWED_DAYS = 14;
 /** A cushion under this many months of essentials is mentioned. */
@@ -152,6 +155,21 @@ export function checkIn(a: Analysis, t: T = EN): CheckIn {
       title: t("{pct} of your card limits in use", { pct: `${Math.round(cards.usage * 100)}%` }),
       detail: t("Credit scores tend to favour under 30%. Cards shows what paying before each statement would take."),
       href: "/cards",
+    });
+  }
+
+  // An estimated tax payment due within the month, not yet met.
+  const est = estimatedTax(a.data);
+  if (est?.next && est.next.state !== "paid" && daysBetween(today, est.next.due) <= EST_DAYS) {
+    items.push({
+      id: `estimated-tax:${est.taxYear}:${est.next.n}`,
+      tone: daysBetween(today, est.next.due) <= DUE_DAYS ? "now" : "soon",
+      title: t("Estimated tax payment due {date}", { date: shortDate(est.next.due, locale) }),
+      detail:
+        est.perQuarter !== null && est.next.target !== null
+          ? t("Under the safe-harbor rule, about {amount} more by then, with withholding like last year's. Taxes shows the year.", { amount: money0(Math.max(0, est.next.target - est.next.paid)) })
+          : t("Taxes shows the year's four dates and what Prism has seen paid to the IRS."),
+      href: "/taxes",
     });
   }
 

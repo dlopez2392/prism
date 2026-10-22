@@ -749,6 +749,29 @@ underpayment penalty). `get_tax_summary` returns the same under
 `returns_on_file`. Part of Prism Plus. The example household has a return of
 its own, so a visitor sees what it does.
 
+## Estimated tax
+
+`src/lib/finance/estimated-tax.ts` covers the IRS's four quarterly due dates
+(April 15, June 15, September 15 and the next January 15, each moved past
+weekends, Martin Luther King Jr. Day and D.C.'s Emancipation Day). It applies
+to someone whose business accounts made money this year, or whose last return
+had estimated payments or a balance due of $1,000 or more.
+
+- **The year being paid:** last year's until its January payment is due,
+  this year's after.
+- **Each quarter's target:** a quarter of last year's safe-harbor amount
+  (last year's total tax, 110% over $150,000 AGI) less last year's withholding,
+  assuming this year's withholding is about the same. Without last year's
+  return there are dates but no targets.
+- **What was paid:** payments to the IRS from any linked account, business
+  ones included, by each due date. A spring payment that matches last year's
+  balance due is last year's bill and isn't counted.
+
+It shows as a card on Taxes, an item in the check-in when a payment is due
+within 30 days, single-day events in the calendar feed (the dates and the
+quarter's amount only), and `estimated_taxes` in `get_tax_summary`. Prism
+states the rule and never says what to pay, and never pays anything.
+
 ## Money check-in
 
 `/check-in` (`src/lib/finance/check-in.ts`, `get_check_in`) is one page for

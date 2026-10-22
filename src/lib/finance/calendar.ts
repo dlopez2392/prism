@@ -17,6 +17,7 @@
 import { BRAND } from "@/lib/brand";
 import { addDays, dayOfMonth, dayOfWeek } from "./dates";
 import { money, money0, shortDate } from "./format";
+import type { TaxDue } from "./estimated-tax";
 import { detectRecurring, upcoming, type Cadence, type RecurringStream } from "./recurring";
 import type { Account, Cents, ISODate, Transaction } from "./types";
 import type { Locale } from "@/lib/i18n/locale";
@@ -100,6 +101,8 @@ export type CalendarOptions = {
   streams: RecurringStream[];
   /** Card and loan payments due, from the lenders; none when Prism isn't reading them. */
   dues?: DueReminder[];
+  /** Estimated tax due dates still to come (finance/estimated-tax.ts); none for someone who doesn't pay it. */
+  taxDues?: TaxDue[];
   accounts: Pick<Account, "id" | "name" | "mask" | "kind">[];
   today: ISODate;
   now: Date;
@@ -118,7 +121,7 @@ export type CalendarOptions = {
 };
 
 /** An event's category, as calendar apps that show them read it: the English names Prism's own screens use, translated where written. */
-const CATEGORY = { bills: msg("Bills"), subscriptions: msg("Subscriptions"), transfers: msg("Transfers"), paydays: msg("Paydays") } as const;
+const CATEGORY = { bills: msg("Bills"), subscriptions: msg("Subscriptions"), transfers: msg("Transfers"), paydays: msg("Paydays"), taxes: msg("Taxes") } as const;
 
 export type BillEvent = {
   uid: string;
@@ -295,6 +298,26 @@ export function billEvents(opts: CalendarOptions): BillEvent[] {
       category: t(CATEGORY.bills),
     });
   }
+  for (const d of opts.taxDues ?? []) {
+    if (d.due < opts.today) continue;
+    const label = t("Estimated tax due (payment {n} of 4 for {year})", { n: d.quarter, year: d.taxYear });
+    events.push({
+      // One event per tax year and quarter: a fresh copy updates its amount.
+      uid: `${stableHash(`tax|${d.taxYear}|${d.quarter}`)}@prism.bis`,
+      start: d.due,
+      rrule: "",
+      title: opts.amountsInTitles && d.amount ? `${label} · ${money0(d.amount)}` : label,
+      description: [
+        d.amount
+          ? t("About {amount} a quarter under the safe-harbor rule, with withholding like last year's. What you owe depends on this year's income.", { amount: money0(d.amount) })
+          : t("Add last year's return in Prism to see what the safe-harbor rule asks for."),
+        t("Pay at irs.gov/payments. Prism never pays anything."),
+        "",
+        t("See the year: {url}", { url: `${opts.origin}/taxes` }),
+      ].join("\n"),
+      category: t(CATEGORY.taxes),
+    });
+  }
   return events.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : a.title.localeCompare(b.title, locale)));
 }
 
@@ -386,10 +409,12 @@ export function buildCalendar(opts: CalendarOptions): string {
 export function feedSnapshot(
   data: { transactions: Transaction[]; accounts: (CalendarOptions["accounts"][number] & Pick<Account, "liability">)[]; today: ISODate },
   lang: Locale = "en",
+  taxDues: TaxDue[] = [],
 ) {
   const streams = remindable(detectRecurring(data.transactions, data.today), data.accounts, true).map((s) => ({ ...s, transactionIds: [] as string[] }));
   const used = new Set(streams.map((s) => s.accountId));
   const accounts = data.accounts.filter((a) => used.has(a.id)).map(({ id, name, mask, kind }) => ({ id, name, mask, kind }));
   // A card's or a loan's next payment: its label, the date and what the lender asks — no balance history, no rate.
-  return { v: 1 as const, builtOn: data.today, lang, streams, accounts, dues: dueReminders(data.accounts, data.today) };
+  // And the estimated tax due dates still to come: a date, a quarter and what it asks for, nothing else.
+  return { v: 1 as const, builtOn: data.today, lang, streams, accounts, dues: dueReminders(data.accounts, data.today), taxDues };
 }

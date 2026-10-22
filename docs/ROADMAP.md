@@ -470,3 +470,14 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     over $150,000 AGI). `get_tax_summary` returns them under
     `returns_on_file`. Part of Prism Plus. Not built, and not possible
     today: pulling a return from TurboTax, which has no API for it.
+44. **Estimated tax reminders.** **Built (2026-10-22):** for someone whose
+    business made money this year, or whose last return had estimated
+    payments or a balance due of $1,000+, Taxes shows the four IRS due dates
+    of the year being paid (moved past weekends, MLK Day and Emancipation
+    Day), each with a quarter of last year's safe-harbor amount less last
+    year's withholding, what Prism saw paid to the IRS by then, and a status.
+    Last year's balance due, paid in the spring, isn't counted. The check-in
+    mentions a payment due within 30 days, the calendar feed carries the
+    dates, and `get_tax_summary` returns them under `estimated_taxes`. Not
+    built: an alert email or push, which needs a new alert kind in
+    `profiles.alert_kinds` (a constraint the owner would change).

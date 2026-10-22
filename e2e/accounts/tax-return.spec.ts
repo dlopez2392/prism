@@ -131,6 +131,15 @@ test("a return's PDF is read on the device, checked, saved, and shown on Taxes w
   await expect(card.getByText(`For ${thisYear}, paying at least $12,488 through withholding and estimated payments, your ${last} total tax, generally avoids an underpayment penalty.`)).toBeVisible();
   await expect(page.getByText("123-45-6789")).toHaveCount(0);
 
+  // A return with estimated payments brings this year's four due dates, each a quarter of the safe harbor
+  // less last year's withholding: ($12,488 − $11,200) ÷ 4. In early January the year being paid is still last year's.
+  if (new Date().getMonth() > 0) {
+    const estimated = page.locator("article", { has: page.getByRole("heading", { name: `Estimated tax for ${thisYear}`, exact: true }) });
+    await expect(estimated.getByRole("table")).toBeVisible();
+    await expect(estimated.getByText(/that leaves about \$322 a quarter\.$/)).toBeVisible();
+    await expect(estimated.getByText("Prism never pays anything.", { exact: false })).toBeVisible();
+  }
+
   // Removed at once, and put back by Undo.
   await card.getByRole("button", { name: `Remove your ${last} return` }).click();
   await expect(page.getByText(`Your ${last} return is removed.`)).toBeVisible();

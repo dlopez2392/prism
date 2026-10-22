@@ -13,6 +13,7 @@ import { getT } from "@/lib/i18n/server";
 import { currentAccount } from "@/lib/supabase/server";
 import { accountFeedToken, removeAccountFeed, saveFeedSnapshot } from "./account-store";
 import { feedSnapshot } from "@/lib/finance/calendar";
+import { taxDues } from "@/lib/finance/estimated-tax";
 import { getFinance } from "./finance";
 import { vaultKey, type VaultKey } from "./vault";
 
@@ -42,7 +43,7 @@ export async function calendarFeed(prev: FeedState, form: FormData): Promise<Fee
     const data = await getFinance();
     // Nothing real linked yet: publish an empty calendar, never the demo household's bills.
     // In the page's language; the person's later visits keep it in step with theirs.
-    await saveFeedSnapshot(account, feedSnapshot(data.source === "demo" ? { transactions: [], accounts: [], today: data.today } : data, t.locale), key);
+    await saveFeedSnapshot(account, data.source === "demo" ? feedSnapshot({ transactions: [], accounts: [], today: data.today }, t.locale) : feedSnapshot(data, t.locale, taxDues(data)), key);
     return { path: `/calendar/feed/${token}.ics` };
   } catch {
     return { path: prev.path, error: t("That didn't work. Try again in a moment.") };

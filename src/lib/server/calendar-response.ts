@@ -7,15 +7,22 @@
 
 import { BRAND } from "@/lib/brand";
 import { buildCalendar, dueReminders, parseReminder, type CalendarOptions, type DueReminder } from "@/lib/finance/calendar";
+import { taxDues, validTaxDue, type TaxDue } from "@/lib/finance/estimated-tax";
 import { detectRecurring } from "@/lib/finance/recurring";
 import type { FinanceData } from "@/lib/finance/types";
 import type { T } from "@/lib/i18n/t";
 
 /** From transactions and accounts (a download, the demo feed) or from a stored snapshot (a person's feed). */
 type Source = { today: FinanceData["today"] } & (
-  | { transactions: FinanceData["transactions"]; accounts: FinanceData["accounts"] }
-  | { streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"]; dues: DueReminder[] }
+  | ({ transactions: FinanceData["transactions"]; accounts: FinanceData["accounts"] } & Partial<Pick<FinanceData, "taxReturns" | "businessAccountIds" | "businessMarks" | "hiddenAccounts">>)
+  | { streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"]; dues: DueReminder[]; taxDues?: unknown }
 );
+
+/** The estimated tax due dates: from a stored snapshot, each checked; from the money, worked out. */
+function taxDuesOf(data: Source): TaxDue[] {
+  if ("streams" in data) return Array.isArray(data.taxDues) ? data.taxDues.filter(validTaxDue) : [];
+  return taxDues(data);
+}
 
 export function calendarResponse(
   req: Request,
@@ -29,6 +36,7 @@ export function calendarResponse(
   const body = buildCalendar({
     streams: "streams" in data ? data.streams : detectRecurring(data.transactions, data.today),
     dues: "streams" in data ? data.dues : dueReminders(data.accounts, data.today),
+    taxDues: taxDuesOf(data),
     accounts: data.accounts,
     today: data.today,
     now: new Date(),

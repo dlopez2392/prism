@@ -31,6 +31,7 @@ import { comparePayoff, debtAccounts, PAYOFF_LIMITS, type Debt, type PayoffPlan 
 import { defaultTaxYear, taxSummary, taxYears } from "@/lib/finance/taxes";
 import { BIZ_LINE_INFO, bizLineLabel, scheduleC, SE_TAX_FROM } from "@/lib/finance/schedule-c";
 import { returnFacts } from "@/lib/finance/tax-return";
+import { estimatedTax } from "@/lib/finance/estimated-tax";
 import type { Account, CategoryId, Cents, FinanceData, ISODate, Liability, Transaction } from "@/lib/finance/types";
 
 /** The money a connected app is shown, and what kind of money it is. */
@@ -764,6 +765,24 @@ export function taxes(data: AgentData, args: { year?: number } = {}) {
       : {}),
     business_schedule_c: scheduleCSummary(data, year),
     returns_on_file: returnsOnFile(data, year),
+    estimated_taxes: estimatedTaxes(data),
+  };
+}
+
+/** The tax year being paid now: its four estimated tax due dates and what Prism saw paid to the IRS (finance/estimated-tax.ts), or null when nothing says the user pays estimated tax. */
+function estimatedTaxes(data: AgentData) {
+  const e = estimatedTax(data);
+  if (!e) return null;
+  return {
+    note: "The IRS's quarterly estimated tax dates for the tax year being paid now. A target is a quarter of last year's safe-harbor amount less last year's withholding, assuming this year's withholding is about the same: the rule, not advice, and what the user owes depends on this year's income. Paid is what Prism saw reach the IRS from linked accounts; payments by check or from unlinked accounts aren't seen. Prism never pays anything.",
+    tax_year: e.taxYear,
+    why: e.why,
+    safe_harbor: e.safeHarbor ? { amount: usd(e.safeHarbor.amount), share_of_last_years_tax: e.safeHarbor.share, from_return: e.safeHarbor.lastYear } : null,
+    withheld_last_year: e.withheldLastYear === null ? null : usd(e.withheldLastYear),
+    per_quarter: e.perQuarter === null ? null : usd(e.perQuarter),
+    quarters: e.quarters.map((q) => ({ quarter: q.n, due: q.due, target_by_then: q.target === null ? null : usd(q.target), paid_by_then: usd(q.paid), state: q.state })),
+    paid_total: usd(e.paidTotal),
+    ...(e.lastYearsBill ? { not_counted_last_years_balance: { date: e.lastYearsBill.date, amount: usd(-e.lastYearsBill.amount) } } : {}),
   };
 }
 
