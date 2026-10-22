@@ -252,7 +252,7 @@ describe("feedSnapshot", () => {
 
   it("is empty for a household with nothing repeating", async () => {
     const { feedSnapshot } = await import("./calendar");
-    expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY })).toEqual({ v: 1, builtOn: TODAY, lang: "en", streams: [], accounts: [], dues: [] });
+    expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY })).toEqual({ v: 1, builtOn: TODAY, lang: "en", streams: [], accounts: [], dues: [], taxDues: [] });
     expect(feedSnapshot({ transactions: [], accounts: [], today: TODAY }, "es").lang).toBe("es");
   });
 });
@@ -323,5 +323,25 @@ describe("in Spanish, for someone who reads Prism in Spanish", () => {
     const data = buildDemoData(TODAY);
     const uids = (t?: ReturnType<typeof translator>) => billEvents(options({ streams: detectRecurring(data.transactions, TODAY), accounts: data.accounts, dues: [due], t })).map((e) => e.uid).sort();
     expect(uids(es)).toEqual(uids());
+  });
+});
+
+describe("estimated tax due dates", () => {
+  const due = { due: "2027-01-15", quarter: 4 as const, taxYear: 2026, amount: 100_000 };
+
+  it("are one day each, named by quarter and year, with the safe-harbor quarter and never a payment link of Prism's own", () => {
+    const ics = buildCalendar(options({ streams: [], taxDues: [due] }));
+    const event = ics.split("BEGIN:VEVENT")[1]!.replace(/\r\n /g, "");
+    expect(event).toContain("DTSTART;VALUE=DATE:20270115");
+    expect(event).not.toContain("RRULE");
+    expect(event).toContain("SUMMARY:Estimated tax due (payment 4 of 4 for 2026) · $1\\,000");
+    expect(event).toContain("Pay at irs.gov/payments. Prism never pays anything.");
+    expect(event).toContain("CATEGORIES:Taxes");
+    expect(event).toContain(`UID:${stableHash("tax|2026|4")}@prism.bis`);
+  });
+
+  it("keep the amount off the title when asked, and leave out a date already past", () => {
+    const events = billEvents(options({ streams: [], taxDues: [due, { ...due, quarter: 1, due: "2026-04-15" }], amountsInTitles: false }));
+    expect(events.map((e) => e.title)).toEqual(["Estimated tax due (payment 4 of 4 for 2026)"]);
   });
 });

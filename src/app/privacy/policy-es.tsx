@@ -153,7 +153,7 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
               {p} nunca lee ni guarda de él tu nombre, tu número de Seguro Social, tu dirección, tus dependientes ni tus datos bancarios. Puedes quitar una
               declaración cuando quieras.
             </li>
-            <li>Tus próximas facturas y días de pago, si activas el enlace de calendario.</li>
+            <li>Tus próximas facturas y días de pago, si activas el enlace de calendario, y, si pagas impuesto estimado, sus fechas de vencimiento y lo que pide cada una.</li>
             {alerts ? (
               <li>
                 Si activas las alertas por correo: lo que elegiste que cubran; lo que tu última visita encontró que merecía una, como una factura que puede no
