@@ -38,7 +38,7 @@ export function SetupChecklist({ steps, t }: { steps: SetupStep[]; t: T }) {
   const some = steps.filter((s) => !s.core && !s.done);
   return (
     <Card className="p-5 sm:p-6">
-      <CardHeader title={t("Getting started")} subtitle={t("{done} of {n} done", { done, n: core.length })} action={<HideSetup />} />
+      <CardHeader title={t("Getting started")} subtitle={t("{done} of {n} done", { done, n: core.length })} action={<HideSetup t={t} />} />
       <div className="mt-3">
         <Meter ratio={done / core.length} color="var(--accent)" label={t("{done} of {n} done", { done, n: core.length })} />
       </div>

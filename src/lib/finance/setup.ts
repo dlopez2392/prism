@@ -14,6 +14,9 @@
 
 import { msg } from "@/lib/i18n/t";
 
+/** The cookie that keeps Getting started hidden on a device: a year. */
+export const SETUP_COOKIE = "prism-setup";
+
 export type SetupStep = {
   id: "bank" | "budgets" | "alerts" | "calendar" | "business" | "return";
   done: boolean;
