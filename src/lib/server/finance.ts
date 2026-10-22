@@ -16,6 +16,7 @@ import { buildDemoData } from "@/lib/finance/demo";
 import type { AgentData } from "@/lib/agent/tools";
 import { applyPlan, followAccounts, toGoal, type Plan } from "@/lib/finance/plan";
 import { feedSnapshot } from "@/lib/finance/calendar";
+import { taxDues, type TaxDue } from "@/lib/finance/estimated-tax";
 import type { Cents, FinanceData, Goal, Holding, Institution, ISODate, Transaction } from "@/lib/finance/types";
 import { importAccountId, summarize, type ImportedHistory, type ImportSummary, type LockedImport } from "@/lib/finance/import";
 import { getAccounts, getHoldings, plaidConfig, PlaidError, type PlaidAccount, type PlaidConfig, type PlaidTransaction } from "@/lib/plaid/client";
@@ -535,7 +536,11 @@ const ownMoney = cache(async (): Promise<{ loaded: Loaded; base: Live; shared: L
   const own = await moneyFor(src, today);
   let base = own.money;
   if (src.account) {
-    if (isLive(src)) await refreshFeedIfStale(src.account, src.feedUpdatedAt, base, t.locale, src.language !== t.locale);
+    if (isLive(src)) {
+      // The estimated tax dates read the person's own notes (their returns, their business accounts), so they're worked out only when the feed is written.
+      const dues = () => taxDues(withOwnNotes(hideAccounts(applyPlan(base, src.plan), src.details ?? null), src.details ?? null));
+      await refreshFeedIfStale(src.account, src.feedUpdatedAt, base, t.locale, src.language !== t.locale, dues);
+    }
     base = greeted(base, src.firstName, isLive(src));
     rememberZone(src.account, src.timeZone, zone);
     rememberLanguage(src.account, src.language, t.locale);
@@ -763,13 +768,13 @@ const FEED_STALE_MS = 6 * 60 * 60_000;
  * the language of the page, and at once when they've just changed language,
  * so their calendar follows them. Only for someone who has a feed.
  */
-async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live, lang: Locale, newLanguage: boolean): Promise<void> {
+async function refreshFeedIfStale(account: Account, updatedAt: string | null, data: Live, lang: Locale, newLanguage: boolean, dues: () => TaxDue[]): Promise<void> {
   if (!updatedAt || (!newLanguage && Date.now() - Date.parse(updatedAt) < FEED_STALE_MS)) return;
   // No key, no refresh: a snapshot is only ever stored sealed.
   const key = safeVaultKey();
   if (!key) return;
   try {
-    await saveFeedSnapshot(account, feedSnapshot(data, lang), key);
+    await saveFeedSnapshot(account, feedSnapshot(data, lang, dues()), key);
   } catch {
     // A stale calendar is better than a broken page.
   }

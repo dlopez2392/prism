@@ -435,6 +435,11 @@
   a field that reads names, SSNs, addresses, dependents or bank details. The
   safe-harbor line states the IRS rule; never turn it into what the person
   "should" pay.
+- Estimated tax (`src/lib/finance/estimated-tax.ts`): due dates come from
+  `dueDates` only (weekend + MLK + Emancipation Day shifts); never hard-code a
+  date. Targets assume last year's withholding and SAY so. Only federal IRS
+  payments count (`IRS`/`NOT_IRS`). An email or push reminder needs a new
+  `profiles.alert_kinds` value: that's a constraint change for the owner.
 - Money check-in (`/check-in`, `src/lib/finance/check-in.ts`,
   `get_check_in`): it GATHERS from the other engines (alerts, refunds, fees,
   budgets, cards, runway, inflation); it never computes its own version of

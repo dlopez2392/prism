@@ -22,7 +22,7 @@ import { isLocale } from "@/lib/i18n/locale";
 import { translator } from "@/lib/i18n/translator";
 import { supabaseEnv } from "@/lib/supabase/config";
 
-type Snapshot = { v: 1; streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"]; dues?: unknown; lang?: unknown };
+type Snapshot = { v: 1; streams: CalendarOptions["streams"]; accounts: CalendarOptions["accounts"]; dues?: unknown; taxDues?: unknown; lang?: unknown };
 
 const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
@@ -62,7 +62,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   return calendarResponse(
     req,
     // Due payments arrived with card and loan terms; a snapshot from before them simply has none.
-    { streams: snap.streams, accounts: snap.accounts, dues: Array.isArray(snap.dues) ? snap.dues.filter(validDue) : [], today: new Date().toISOString().slice(0, 10) },
+    // Estimated tax dates arrived later still; checked when the calendar is built.
+    { streams: snap.streams, accounts: snap.accounts, dues: Array.isArray(snap.dues) ? snap.dues.filter(validDue) : [], taxDues: snap.taxDues, today: new Date().toISOString().slice(0, 10) },
     // Private: the URL is a secret, so no shared cache may keep a copy.
     // A snapshot from before languages has none, and was English.
     { feed: true, filename: "prism-bills.ics", cacheControl: "private, max-age=900", demo: false, t: lang },

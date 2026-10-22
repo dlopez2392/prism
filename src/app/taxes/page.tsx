@@ -20,6 +20,8 @@ import { ButtonLink, Card, CardHeader, EmptyState, PageHeader, Pill } from "@/co
 import { dayDate, money, money0, percent, shortDate, signedMoney0 } from "@/lib/finance/format";
 import { returnFacts, STATUS_LABELS, type TaxReturn } from "@/lib/finance/tax-return";
 import { TaxReturns, type ReturnCard } from "@/components/tax-returns";
+import { EstimatedTaxCard } from "@/components/estimated-tax";
+import { estimatedTax } from "@/lib/finance/estimated-tax";
 import { p2pLabel } from "@/lib/finance/p2p";
 import { defaultTaxYear, GIFT_RECEIPT_FROM, TAX_SECTIONS, taxSummary, taxYears, type TaxSection } from "@/lib/finance/taxes";
 import { bizLineLabel, scheduleC, SE_TAX_FROM, type ScheduleC } from "@/lib/finance/schedule-c";
@@ -209,6 +211,8 @@ export default async function TaxesPage({ searchParams }: { searchParams: Promis
   const filed = (data.taxReturns ?? []).filter((r) => r.year === year || r.year === year - 1);
   const canAddReturn = canDownload && !filed.some((r) => r.year === year - 1);
   const returnCards = filed.map((r) => returnCard(r, year, s.partial, business, t));
+  // The tax year being paid now, when it's the one on screen: its four due dates.
+  const estimated = data.view === "household" ? null : estimatedTax(data);
   const moneyIn = s.sections.filter((x) => x.side === "in");
   const moneyOut = s.sections.filter((x) => x.side === "out");
   const politicalTotal = money(-s.political.reduce((sum, x) => sum + x.amount, 0));
@@ -317,6 +321,15 @@ export default async function TaxesPage({ searchParams }: { searchParams: Promis
           {s.partial ? <p className="mt-1 text-xs text-ink-3">{t("{year} isn't over, so these will grow until December 31.", { year })}</p> : null}
         </Card>
       </div>
+
+      {estimated && estimated.taxYear === year ? (
+        <section aria-labelledby="estimated" className="space-y-3">
+          <h2 id="estimated" className="text-sm font-bold uppercase tracking-[0.08em] text-ink-3">
+            {t("Estimated tax")}
+          </h2>
+          <EstimatedTaxCard e={estimated} canAddReturn={canAddReturn} t={t} />
+        </section>
+      ) : null}
 
       {returnCards.length || canAddReturn ? (
         <section aria-labelledby="returns" className="space-y-3">

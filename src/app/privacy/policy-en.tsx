@@ -138,7 +138,7 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
               shown to your household. The PDF itself is opened on your device and never uploaded, and {BRAND.product} never reads or keeps your name, Social
               Security number, address, dependents or bank details from it. You can remove a return at any time.
             </li>
-            <li>Your upcoming bills and paydays, if you turn on the calendar feed.</li>
+            <li>Your upcoming bills and paydays, if you turn on the calendar feed, and, when you pay estimated tax, its due dates and what each asks for.</li>
             {alerts ? (
               <li>
                 If you turn on alert emails: what you chose them to cover; what your last visit found worth one, such as a bill that may not be covered, and

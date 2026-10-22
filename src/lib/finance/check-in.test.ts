@@ -45,4 +45,16 @@ describe("check-in", () => {
     const marks = Object.fromEntries(Object.entries(data.refundMarks!).map(([id, m]) => [id, { ...m, got: TODAY }]));
     expect(checkIn(analyze({ ...data, refundMarks: marks })).items.some((i) => i.id.startsWith("refund:"))).toBe(false);
   });
+
+  it("mentions an estimated tax payment due within the month, with what the safe harbor asks for by then", () => {
+    const soon = buildDemoData("2027-01-05");
+    const last = soon.taxReturns![0]!;
+    // In early January the payments being made are still for 2026, so it's the 2025 return that sets them.
+    const withEstimates = { ...soon, taxReturns: [{ ...last, year: 2025, estimated: 200_000, withheld: 1_000_000, refund: null }] };
+    const item = checkIn(analyze(withEstimates)).items.find((i) => i.id === "estimated-tax:2026:4");
+    expect(item).toMatchObject({ tone: "soon", href: "/taxes", title: "Estimated tax payment due Jan 15" });
+    expect(item?.detail).toMatch(/^Under the safe-harbor rule, about \$[\d,]+ more by then/);
+    // And nothing for the example household as it is: no business, and its return had a refund.
+    expect(c.items.some((i) => i.id.startsWith("estimated-tax:"))).toBe(false);
+  });
 });
