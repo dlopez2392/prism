@@ -198,7 +198,7 @@ export default async function FuturePage() {
       ) : null}
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
-        <Card className="p-5 sm:p-6 lg:col-span-7">
+        <Card id="next-30" className="scroll-mt-6 p-5 sm:p-6 lg:col-span-7">
           <CardHeader
             title={t("The next 30 days")}
             subtitle={t("Paydays, bills and transfers we found repeating")}
