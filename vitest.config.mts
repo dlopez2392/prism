@@ -36,6 +36,7 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
       RESEND_API_KEY: "",
       CRON_SECRET: "",
+      NOTICE_EMAIL: "",
       ALERTS_FROM: "",
       ALERTS_SITE_URL: "",
       STRIPE_SECRET_KEY: "",

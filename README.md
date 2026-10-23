@@ -455,8 +455,38 @@ Prism Plus, and cancelling in the portal should say when it ends. Test
 subscriptions never count once the live keys go in. Then, before the **live**
 keys: the lawyer approves the paid Terms and the privacy policy's Stripe
 lines, and everyone with an account is told about the change before it takes
-effect, as the Terms promise. Live mode needs its own products, portal and
-webhook (Stripe can copy products from test mode).
+effect, as the Terms promise (next section). Live mode needs its own products,
+portal and webhook (Stripe can copy products from test mode). **Live keys sell
+nothing before November 23, 2026**, the day every account was told Prism Plus
+starts (`PLUS_STARTS`): until then a live key leaves billing off, exactly as no
+key does, so putting them in early charges no one. Test keys are never held back.
+
+### Telling people about a change
+
+The Terms and the privacy policy promise that a change that matters is told
+"in the app or by email before it takes effect". A change notice is data in
+`src/lib/legal-notice.ts` (`NOTICES`): its id, the day it's published, the day
+the change takes effect, and each change in a plain sentence, in English and
+Spanish (`i18n/es/notice.ts`).
+
+- **In the app:** a bar under the header for everyone signed in, from the
+  publishing day until 30 days after the change, on every page, until they
+  choose **Got it** (the `prism-notice` cookie, declared in the privacy policy).
+- **By email, once, to every account, only when the owner says so.** In Vercel,
+  prism → Settings → Environment Variables → Add: key `NOTICE_EMAIL`, value
+  the notice's id (`plus-2026-11`), Production only, plain (it isn't a secret).
+  Save, then redeploy (Deployments → the latest → ⋯ → Redeploy). The next daily
+  job (13:00 UTC) sends it first, for up to 15 seconds a day, in each person's
+  language, and records each one that went (`notice_deliveries`), so nobody
+  gets it twice; whoever it didn't reach is first the next day. It never goes
+  on or after the change's day: a notice after the change isn't one. The counts
+  (never addresses) are in the Vercel log line "Prism: change notice" and in
+  the job's run record (`job_runs.report.notice`). Remove the variable once
+  `due` reaches 0.
+
+A new notice is a new entry with a new id (the cookie and the delivery log are
+keyed by it), its Spanish, and, if it changes when something starts, the guard
+that holds it until that day.
 
 Ending the founding offer later: new prices under **new** lookup keys (for
 example `prism_plus_monthly_2027`) and the new amounts in `plans.ts`. Never

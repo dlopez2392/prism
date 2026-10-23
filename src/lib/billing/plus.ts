@@ -18,6 +18,7 @@ import "server-only";
 import { after } from "next/server";
 import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { liveSalesOpen } from "@/lib/legal-notice";
 import { supabaseEnv } from "@/lib/supabase/config";
 import type { Account } from "@/lib/supabase/server";
 import { FREE_CONNECTIONS, type Interval, type PlanId, type PlusFeature } from "./plans";
@@ -67,9 +68,14 @@ export const EVERYTHING_OPEN: Plus = {
   trial: false,
 };
 
-/** Billing is switched on here: Stripe's keys, the job secret, and accounts. */
-export function billingConfig(): StripeConfig | null {
-  return supabaseEnv() ? stripeConfig() : null;
+/**
+ * Billing is switched on here: Stripe's keys, the job secret, and accounts.
+ * Live keys stay off until the day every account was told Prism Plus starts
+ * (legal-notice.ts, `liveSalesOpen`), so putting them in early charges no one.
+ */
+export function billingConfig(now: Date = new Date()): StripeConfig | null {
+  const config = supabaseEnv() ? stripeConfig() : null;
+  return config?.livemode && !liveSalesOpen(now) ? null : config;
 }
 
 type PlanRow = {

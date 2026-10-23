@@ -6,11 +6,13 @@
 // key, so the job reads nobody's data as itself: the database answers it
 // only for people who turned alert emails on, and only to the secret
 // (src/lib/alerts/job.ts), and with billing on only for people with Prism
-// Plus. The response and the log are counts, never names,
+// Plus. Before them, a change notice the operator switched on goes to every
+// account (alerts/notice-job.ts). The response and the log are counts, never names,
 // and so is the run's record (job_ran), which /api/health reports on.
 
 import { createClient } from "@supabase/supabase-js";
 import { runAlertJob } from "@/lib/alerts/job";
+import { noticeToSend, runNoticeJob, type NoticeReport } from "@/lib/alerts/notice-job";
 import { billingConfig } from "@/lib/billing/plus";
 import { alertsConfig, cronAllowed } from "@/lib/alerts/send";
 import { vaultKey, type Keyring } from "@/lib/server/vault";
@@ -21,6 +23,8 @@ export const maxDuration = 60;
 
 /** Stop starting new emails this long into the run, inside the function's 60 seconds. */
 const RUN_FOR_MS = 45_000;
+/** The most of a run the change notice may take before the day's alerts. */
+const NOTICE_FOR_MS = 15_000;
 
 export async function GET(req: Request): Promise<Response> {
   const config = alertsConfig();
@@ -40,13 +44,27 @@ export async function GET(req: Request): Promise<Response> {
     const { error } = await anon.rpc("job_ran", { p_secret: config.secret, p_name: "alerts", p_ok: ok, p_report: report });
     if (error) console.error("Prism: the alert job's run wasn't recorded.");
   };
+  const deadline = Date.now() + RUN_FOR_MS;
+  // A change notice the operator switched on (NOTICE_EMAIL) goes first, for a few seconds a day, so a busy alert run can't hold it past its date.
+  const notice = noticeToSend();
+  let noticeReport: NoticeReport | { notice: string; error: "not_run" } | null = null;
+  if (notice) {
+    try {
+      noticeReport = await runNoticeJob(anon, config, notice, { deadline: Math.min(deadline, Date.now() + NOTICE_FOR_MS) });
+      console.log("Prism: change notice", JSON.stringify(noticeReport));
+    } catch {
+      console.error("Prism: the change notice couldn't start: the database didn't answer it.");
+      noticeReport = { notice: notice.id, error: "not_run" };
+    }
+  }
   try {
     const billing = billingConfig();
-    const report = await runAlertJob(anon, config, key, { deadline: Date.now() + RUN_FOR_MS, billing: billing ? { livemode: billing.livemode } : null });
+    const report = await runAlertJob(anon, config, key, { deadline, billing: billing ? { livemode: billing.livemode } : null });
     console.log("Prism: alert emails", JSON.stringify(report));
+    const all = noticeReport ? { ...report, notice: noticeReport } : report;
     // Finished, unless Resend refused the key itself and the run stopped.
-    await ran(!report.stopped, report);
-    return Response.json(report);
+    await ran(!report.stopped && !(noticeReport && "stopped" in noticeReport && noticeReport.stopped), all);
+    return Response.json(all);
   } catch {
     console.error("Prism: the alert email job couldn't start: the database didn't answer it.");
     await ran(false, { error: "not_run" });

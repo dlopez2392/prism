@@ -8,7 +8,7 @@
 import { BRAND } from "@/lib/brand";
 
 /** Shown on the page. Change it whenever the policy's substance changes. */
-export const POLICY_UPDATED = "October 22, 2026";
+export const POLICY_UPDATED = "October 23, 2026";
 
 /** Where privacy questions and requests go. Must be a mailbox someone reads. */
 export const PRIVACY_CONTACT = BRAND.privacyEmail;
@@ -60,6 +60,7 @@ export const STORED_ON_DEVICE: StoredOnDevice[] = [
   },
   { name: "prism-tz", kind: "Cookie", what: "Your time zone, so days and months line up with yours.", lasts: "1 year" },
   { name: "prism-setup", kind: "Cookie", what: "Remembers that you hid Getting started on Overview.", lasts: "1 year" },
+  { name: "prism-notice", kind: "Cookie", what: "Remembers which notice of a change to Prism's terms you've read, so it isn't shown again.", lasts: "1 year" },
   { name: "prism-theme", kind: "Browser storage", what: "Whether you picked light or dark.", lasts: "Until you clear it" },
 ];
 
@@ -112,7 +113,7 @@ export const ALCHEMY: Provider = {
 /** Resend's entry while the operator has alert emails switched on (RESEND_API_KEY and CRON_SECRET), in the same deploy. */
 export const RESEND_WITH_ALERTS: Provider = {
   name: "Resend",
-  does: "Sends your sign-in codes by email, and your alert emails if you turn them on. For an alert it receives your email address and the email itself, which can name a bank or a shop and, if you allow it, amounts.",
+  does: "Sends your sign-in codes by email, your alert emails if you turn them on, and, before a change to Prism's terms or this policy that matters takes effect, one email telling you about it. For an alert it receives your email address and the email itself, which can name a bank or a shop and, if you allow it, amounts.",
   policy: "https://resend.com/legal/privacy-policy",
 };
 

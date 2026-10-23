@@ -566,6 +566,16 @@
   business they own alone and report on Schedule C. A feature for a business
   with other owners, one that files its own return, or a client's books means
   changing the Terms first.
+- Change notices (`src/lib/legal-notice.ts`): a change to the Terms or the
+  privacy policy that matters is told BEFORE it takes effect, as both promise:
+  a new entry in `NOTICES` (new id, plain sentences, Spanish in
+  `i18n/es/notice.ts`) shows a bar to everyone signed in, and its email goes
+  to every account only once the OWNER sets `NOTICE_EMAIL` to its id (never
+  set it yourself: emailing every customer is their call). The job never
+  sends on or after the change's day. A change that starts on a date gets a
+  guard holding it until then, as `liveSalesOpen` holds live Stripe keys until
+  `PLUS_STARTS` (November 23, 2026, the owner's date, promised to every
+  account): never move that date earlier.
 - The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
   overlay) + `src/lib/server/plan-store.ts` (cookies) +
   `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,
