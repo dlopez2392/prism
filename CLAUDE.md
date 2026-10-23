@@ -562,6 +562,10 @@
   money or reveal account numbers means changing the Terms and the privacy
   policy FIRST, with a new `TERMS_UPDATED`. Arbitration, the Texas venue and
   the "free today" promise are the owner's decisions, for a lawyer to review.
+  Who Prism is for is one too (2026-10-23): a person's own money, including a
+  business they own alone and report on Schedule C. A feature for a business
+  with other owners, one that files its own return, or a client's books means
+  changing the Terms first.
 - The person's plan: `src/lib/finance/plan.ts` (pure: parsing, validation,
   overlay) + `src/lib/server/plan-store.ts` (cookies) +
   `src/lib/server/plan-actions.ts` (Server Actions). `getFinance()` applies it,

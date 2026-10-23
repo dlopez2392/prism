@@ -72,8 +72,16 @@ export function TermsOfService({ billing }: TermsSwitches) {
               To create an account or connect accounts, you must be at least {MINIMUM_AGE} and live in the United States. Anyone can look around the demo
               household.
             </li>
-            <li>{BRAND.product} is for your own personal use, not for running a business or managing other people&apos;s money for pay.</li>
-            <li>Only connect accounts that are yours, or that you&apos;re allowed to view.</li>
+            <li>
+              {BRAND.product} is for your own money. That includes a business you own by yourself and report on your own tax return, on Schedule C:
+              freelance or contract work, gig work, a side business, or a single-member LLC taxed that way. {BRAND.product} isn&apos;t for a business owned
+              with other people or one that files its own tax return, such as a partnership or a corporation, and it isn&apos;t for managing other
+              people&apos;s money for pay.
+            </li>
+            <li>
+              Only connect accounts that are yours, including your own business&apos;s, or that you&apos;re allowed to view. {BRAND.product} reads a
+              business account exactly as it reads your others, and can never move money from it.
+            </li>
           </Bullets>
         </Section>
 
@@ -86,6 +94,11 @@ export function TermsOfService({ billing }: TermsSwitches) {
             {BRAND.product} isn&apos;t a bank, a broker, a financial adviser or a credit bureau. What it shows you is information, not financial, investment, tax
             or legal advice. Forecasts, insights and suggested budgets are estimates based on your past transactions, and they can be wrong. For big decisions,
             talk to a qualified professional.
+          </p>
+          <p>
+            For a business of your own, {BRAND.product} sorts the transactions it sees into the lines of Schedule C and adds them up, as a starting point
+            for your return. It isn&apos;t bookkeeping or tax-preparation software, and it never prepares or files anything. It sees only the accounts you
+            connect, and its sorting can be wrong. What you report to the IRS is your responsibility: check it, or ask a tax professional.
           </p>
           <p>
             Your numbers come from your banks and other companies, through the providers named below. They can be late, incomplete or wrong. Before you rely on
@@ -235,7 +248,7 @@ export function TermsOfService({ billing }: TermsSwitches) {
         <Section id="ours" title="Prism itself">
           <p>
             {BRAND.product}, its name, design and software belong to {BRAND.companyShort}. We give you a personal permission to use {BRAND.product} under these
-            terms, which you can&apos;t transfer to anyone else. {BRAND.product}&apos;s source code is published so anyone can see how it protects your data, but
+            terms, for yourself and for a business of your own as described above, which you can&apos;t transfer to anyone else. {BRAND.product}&apos;s source code is published so anyone can see how it protects your data, but
             publishing it gives no permission to copy or reuse it.
           </p>
         </Section>
