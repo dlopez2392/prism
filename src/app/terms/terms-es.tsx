@@ -78,8 +78,16 @@ export function TerminosDelServicio({ billing }: TermsSwitches) {
               Para crear una cuenta o conectar cuentas, debes tener al menos {MINIMUM_AGE} años y vivir en los Estados Unidos. Cualquiera puede explorar el hogar
               de ejemplo.
             </li>
-            <li>{p} es para tu uso personal, no para llevar un negocio ni para manejar el dinero de otras personas a cambio de un pago.</li>
-            <li>Conecta solo cuentas que sean tuyas o que tengas permiso de ver.</li>
+            <li>
+              {p} es para tu propio dinero. Eso incluye un negocio que es solo tuyo y que declaras en tu propia declaración de impuestos, en el Anexo C
+              (Schedule C): trabajo independiente o por contrato, trabajo por aplicaciones, un negocio aparte, o una LLC con una sola persona como miembro que
+              declara así. {p} no es para un negocio que tiene más de una persona como dueña ni para uno que presenta su propia declaración, como una sociedad
+              colectiva o una corporación, ni para manejar el dinero de otras personas a cambio de un pago.
+            </li>
+            <li>
+              Conecta solo cuentas que sean tuyas, incluidas las de tu propio negocio, o que tengas permiso de ver. {p} lee una cuenta de negocio igual que las
+              demás y nunca puede mover dinero de ella.
+            </li>
           </Bullets>
         </Section>
 
@@ -92,6 +100,11 @@ export function TerminosDelServicio({ billing }: TermsSwitches) {
             {p} no es un banco, una casa de bolsa, un asesor financiero ni una agencia de crédito. Lo que te muestra es información, no asesoría financiera, de
             inversión, fiscal ni legal. Los pronósticos, las observaciones y los presupuestos sugeridos son estimaciones basadas en tus transacciones pasadas, y
             pueden estar equivocados. Para decisiones importantes, habla con un profesional calificado.
+          </p>
+          <p>
+            Para un negocio propio, {p} ordena las transacciones que ve según las líneas del Anexo C y las suma, como punto de partida para tu declaración. No
+            es software de contabilidad ni de preparación de impuestos, y nunca prepara ni presenta nada. Solo ve las cuentas que conectas, y su clasificación
+            puede tener errores. Lo que declaras al IRS es tu responsabilidad: revísalo o consulta a un profesional de impuestos.
           </p>
           <p>
             Tus números vienen de tus bancos y de otras empresas, a través de los proveedores que se nombran abajo. Pueden llegar tarde, estar incompletos o
@@ -241,7 +254,7 @@ export function TerminosDelServicio({ billing }: TermsSwitches) {
 
         <Section id="ours" title="Prism en sí">
           <p>
-            {p}, su nombre, su diseño y su software le pertenecen a {BRAND.companyShort}. Te damos un permiso personal para usar {p} según estos términos, que no
+            {p}, su nombre, su diseño y su software le pertenecen a {BRAND.companyShort}. Te damos un permiso personal para usar {p} según estos términos, para ti y para un negocio propio como se describe arriba, que no
             puedes transferir a nadie más. El código fuente de {p} es público para que cualquiera pueda ver cómo protege tus datos, pero publicarlo no da permiso
             para copiarlo ni reutilizarlo.
           </p>
