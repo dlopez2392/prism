@@ -207,8 +207,10 @@ export function PrivacyPolicy({ liabilities, homeValues, alchemy, alerts, billin
           <p>And, only when you choose:</p>
           <Bullets>
             <li>
-              <span className="font-semibold text-ink-1">AI apps you connect</span>, such as Claude or ChatGPT. They read your accounts, transactions, budgets
-              and goals only when answering your questions, can never change anything, and that company&apos;s own privacy policy covers what they receive.
+              <span className="font-semibold text-ink-1">AI apps you connect</span>, such as Claude or ChatGPT. Only when answering your questions, they read
+              the money Prism shows you: your accounts and transactions, with what you&apos;ve added to them (notes from Venmo, PayPal and Cash App, Amazon items,
+              splits, tags, who owes you, and how you sorted a business account for Schedule C), your budgets, goals, bills, subscriptions and refunds, and the
+              figures from a tax return you saved. They can never change anything, and that company&apos;s own privacy policy covers what they receive.
               Disconnect them any time on the{" "}
               <Link href="/account" className={link}>
                 Account

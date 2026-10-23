@@ -222,9 +222,11 @@ export function PoliticaDePrivacidad({ liabilities, homeValues, alchemy, alerts,
           <p>Y, solo cuando tú lo decides:</p>
           <Bullets>
             <li>
-              <span className="font-semibold text-ink-1">Las apps de IA que conectes</span>, como Claude o ChatGPT. Leen tus cuentas, transacciones,
-              presupuestos y metas solo para responder tus preguntas, nunca pueden cambiar nada, y la propia política de privacidad de esa empresa cubre lo que
-              reciben. Desconéctalas cuando quieras en la página de{" "}
+              <span className="font-semibold text-ink-1">Las apps de IA que conectes</span>, como Claude o ChatGPT. Solo para responder tus preguntas, leen el
+              dinero que Prism te muestra: tus cuentas y transacciones, con lo que les agregaste (notas de Venmo, PayPal y Cash App, artículos de Amazon,
+              divisiones, etiquetas, quién te debe y cómo ordenaste una cuenta de negocio para el Anexo C), tus presupuestos, metas, facturas, suscripciones y
+              reembolsos, y las cifras de una declaración de impuestos que guardaste. Nunca pueden cambiar nada, y la propia política de privacidad de esa empresa
+              cubre lo que reciben. Desconéctalas cuando quieras en la página de{" "}
               <Link href="/account" className={link}>
                 Cuenta
               </Link>

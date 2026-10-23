@@ -6,7 +6,8 @@
 -- to the job's secret, as the alert functions do (alert_job_allowed):
 --
 --   notice_due    each account's address and language, for the accounts the
---                 notice hasn't gone to yet, oldest account first, 500 at most.
+--                 notice hasn't gone to yet, 500 at most, in a fixed order (by id)
+--                 so a run that stops at its deadline picks up where it left off.
 --   notice_sent   records that it went to someone, so it goes once.
 --
 -- The delivery log names the notice and the person, nothing else.
