@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const { EVERYTHING_OPEN, plusFor, plusFromRow } = await import("./plus");
+const { billingConfig, EVERYTHING_OPEN, plusFor, plusFromRow } = await import("./plus");
 
 const row = (over: Record<string, unknown> = {}) => ({
   plan: null,
@@ -38,6 +38,17 @@ function billingOn() {
 
 describe("a person's plan", () => {
   afterEach(() => vi.unstubAllEnvs());
+
+  it("with live keys, sells nothing before the day every account was told Prism Plus starts", () => {
+    billingOn();
+    const before = new Date("2026-11-23T05:59:59Z");
+    const after = new Date("2026-11-23T06:00:00Z");
+    // Test keys are never held back: the owner tries Checkout with them first.
+    expect(billingConfig(before)?.livemode).toBe(false);
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_" + "k".repeat(24));
+    expect(billingConfig(before)).toBeNull();
+    expect(billingConfig(after)?.livemode).toBe(true);
+  });
 
   it("opens everything to everyone while billing is off, as before Prism Plus", async () => {
     const { account, rpc } = accountAnswering({ data: [row()], error: null });

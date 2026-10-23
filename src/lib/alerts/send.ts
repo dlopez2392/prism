@@ -81,7 +81,7 @@ export async function sendAlertEmail(
   config: AlertsConfig,
   to: string,
   message: Rendered,
-  oneClick: string,
+  oneClick: string | null,
   idempotencyKey: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<SendResult> {
@@ -95,7 +95,8 @@ export async function sendAlertEmail(
         subject: message.subject,
         text: message.text,
         html: message.html,
-        headers: { "List-Unsubscribe": `<${oneClick}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+        // A change notice has nothing to unsubscribe from: it goes once, to everyone, about their agreement with us.
+        ...(oneClick ? { headers: { "List-Unsubscribe": `<${oneClick}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
       }),
       signal: AbortSignal.timeout(10_000),
     });

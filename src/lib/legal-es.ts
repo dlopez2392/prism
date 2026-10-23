@@ -78,6 +78,8 @@ export const PRIVACY_LISTS_ES: Record<string, string> = {
   "Until you accept it or close the tab": "Hasta que la aceptes o cierres la pestaña",
   "Your time zone, so days and months line up with yours.": "Tu zona horaria, para que los días y los meses coincidan con los tuyos.",
   "Remembers that you hid Getting started on Overview.": "Recuerda que ocultaste Para empezar en Resumen.",
+  "Remembers which notice of a change to Prism's terms you've read, so it isn't shown again.":
+    "Recuerda qué aviso de un cambio en los términos de Prism ya leíste, para no mostrarlo otra vez.",
   "Whether you picked light or dark.": "Si elegiste el modo claro o el oscuro.",
   "Until you clear it": "Hasta que lo borres",
 
@@ -88,8 +90,8 @@ export const PRIVACY_LISTS_ES: Record<string, string> = {
   "Runs Prism's database and sign-in, in the United States.": "Opera la base de datos y el inicio de sesión de Prism, en los Estados Unidos.",
   "Hosts the Prism website and servers, in the United States.": "Aloja el sitio web y los servidores de Prism, en los Estados Unidos.",
   "Sends your sign-in codes by email.": "Envía por correo tus códigos para iniciar sesión.",
-  "Sends your sign-in codes by email, and your alert emails if you turn them on. For an alert it receives your email address and the email itself, which can name a bank or a shop and, if you allow it, amounts.":
-    "Envía por correo tus códigos para iniciar sesión, y tus correos de alertas si los activas. Para una alerta recibe tu dirección de correo y el correo mismo, que puede nombrar un banco o un comercio y, si lo permites, montos.",
+  "Sends your sign-in codes by email, your alert emails if you turn them on, and, before a change to Prism's terms or this policy that matters takes effect, one email telling you about it. For an alert it receives your email address and the email itself, which can name a bank or a shop and, if you allow it, amounts.":
+    "Envía por correo tus códigos para iniciar sesión, tus correos de alertas si los activas y, antes de que entre en vigor un cambio importante en los términos de Prism o en esta política, un correo que te lo explica. Para una alerta recibe tu dirección de correo y el correo mismo, que puede nombrar un banco o un comercio y, si lo permites, montos.",
   "Estimates the value of a vehicle you ask Prism to keep up to date. It receives the vehicle's VIN and mileage, and nothing else about you, about once a month.":
     "Estima el valor de un vehículo que le pides a Prism mantener al día. Recibe el VIN y el millaje del vehículo, y nada más sobre ti, más o menos una vez al mes.",
   "Estimates the value of a home you ask Prism to keep up to date. It receives the home's address, and nothing else about you, about once a month, and is asked not to keep it in its logs.":

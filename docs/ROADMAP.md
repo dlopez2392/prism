@@ -488,3 +488,10 @@ research found in September 2026 (`docs/research-2026-09-27.md`).
     adding last year's return. Each step is done by the thing itself, never a
     tick. It leaves once every counted step is done, and Hide puts it away on
     that device (the `prism-setup` cookie, declared in the privacy policy).
+46. **Change notices.** **Built (2026-10-23):** the promise in the Terms and
+    the privacy policy to tell people about a change before it takes effect,
+    kept: a bar under the header for everyone signed in until Got it, and one
+    email to every account, in their language, sent by the daily job only once
+    the owner names the notice in `NOTICE_EMAIL`, and never after the change's
+    day. The first: Prism Plus starts November 23, 2026 (the owner's date), and
+    live Stripe keys sell nothing before then.

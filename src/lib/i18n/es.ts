@@ -24,6 +24,7 @@ import { GOALS } from "./es/goals";
 import { HOUSEHOLD } from "./es/household";
 import { IMPORTS } from "./es/imports";
 import { NET_WORTH } from "./es/net-worth";
+import { NOTICE } from "./es/notice";
 import { PLUS } from "./es/plus";
 import { SUBSCRIPTIONS } from "./es/subscriptions";
 import { YEAR_TAXES } from "./es/year-taxes";
@@ -51,6 +52,7 @@ export const ES_PARTS: Record<string, Record<string, string>> = {
   taxReturn: TAX_RETURN,
   setup: SETUP,
   estimatedTax: ESTIMATED_TAX,
+  notice: NOTICE,
 };
 
 export const ES: Record<string, string> = Object.assign({}, ...Object.values(ES_PARTS));

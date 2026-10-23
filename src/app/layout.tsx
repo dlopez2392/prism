@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { BottomNav, PrismMark, Sidebar, type AccountNav } from "@/components/shell";
 import { CarryoverBanner } from "@/components/carryover-banner";
+import { ChangeNoticeBar } from "@/components/change-notice";
 import { HalfwayBanner } from "@/components/halfway-banner";
 import { ThemeToggle, THEME_SCRIPT } from "@/components/theme-toggle";
 import { ConnectBank } from "@/components/connect-bank";
@@ -14,6 +15,8 @@ import { LocaleProvider, ScreenLanguage } from "@/components/locale";
 import { getLocale } from "@/lib/i18n/server";
 import { messagesFor, translator } from "@/lib/i18n/translator";
 import { plusFor } from "@/lib/billing/plus";
+import { currentNotice, NOTICE_COOKIE } from "@/lib/legal-notice";
+import { cookies } from "next/headers";
 import { awaitingSecondStep, currentAccount } from "@/lib/supabase/server";
 import { TriangleAlert } from "lucide-react";
 import Link from "next/link";
@@ -54,6 +57,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const householdLocked = data.inHousehold && !plus.householdView;
   const locale = await getLocale();
   const t = translator(locale);
+  // A change that matters, told before it takes effect, to everyone signed in, until they've read it here.
+  const notice = data.account ? currentNotice(data.today) : null;
+  const showNotice = notice !== null && (await cookies()).get(NOTICE_COOKIE)?.value !== notice.id;
   const halfway = data.accountsEnabled && !data.account && (await awaitingSecondStep()) !== null;
   const sourceLabel =
     data.view === "household"
@@ -107,6 +113,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <ThemeToggle />
                 </div>
               </header>
+              {showNotice && notice ? <ChangeNoticeBar notice={notice} today={data.today} t={t} /> : null}
               {data.notice ? (
                 <div role="alert" className="mx-4 mt-4 flex items-center gap-2 rounded-ctl border border-line bg-surface-1 px-4 py-3 text-sm text-ink-1 sm:mx-6 lg:mx-8">
                   <TriangleAlert aria-hidden className="size-4 shrink-0 text-warn" />

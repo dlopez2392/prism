@@ -1547,3 +1547,40 @@ describe("Prism Plus", () => {
     expect(await planOf(Q)).toMatchObject({ household_plan: false });
   });
 });
+
+describe("change notices", () => {
+  const SECRET = "n".repeat(44);
+  const [N1, N2] = ["b2000000-0000-4000-8000-0000000000b1", "b2000000-0000-4000-8000-0000000000b2"];
+  const job = (sql: string, params: unknown[] = []) => as("anon", null, () => rows(sql, params));
+
+  beforeAll(async () => {
+    await rows(`insert into public.job_keys (name, sha256) values ('alerts', $1) on conflict (name) do update set sha256 = excluded.sha256`, [createHash("sha256").update(SECRET).digest("hex")]);
+    await rows(`insert into auth.users (id, email) values ($1, 'n1@x.test'), ($2, 'n2@x.test')`, [N1, N2]);
+    await as("authenticated", N2, () => rows(`update public.profiles set language = 'es' where user_id = $1`, [N2]));
+  });
+
+  it("answers only the job's secret, and no API role can read or change the delivery log", async () => {
+    expect(await as("anon", null, () => refused(`select * from public.notice_due($1, 'plus-2026-11')`, ["x".repeat(44)]))).toBe(true);
+    expect(await as("anon", null, () => refused(`select public.notice_sent($1, $2, 'plus-2026-11')`, ["x".repeat(44), N1]))).toBe(true);
+    expect(await as("authenticated", N1, () => refused(`select * from public.notice_due($1, 'plus-2026-11')`, [SECRET]))).toBe(true);
+    expect(await job(`select * from public.notice_due($1, 'Not A Notice')`, [SECRET]).then(() => false, () => true)).toBe(true);
+    for (const [role, who] of [["anon", null], ["authenticated", N1]] as const) {
+      expect(await as(role, who, () => refused(`select * from public.notice_deliveries`))).toBe(true);
+      expect(await as(role, who, () => refused(`insert into public.notice_deliveries (user_id, notice) values ($1, 'plus-2026-11')`, [N1]))).toBe(true);
+    }
+  });
+
+  it("lists every account the notice hasn't reached, in its language, and each one once", async () => {
+    const due = async () => (await job(`select * from public.notice_due($1, 'plus-2026-11')`, [SECRET])).filter((r) => r.user_id === N1 || r.user_id === N2);
+    expect(await due()).toEqual([
+      { user_id: N1, email: "n1@x.test", language: "en" },
+      { user_id: N2, email: "n2@x.test", language: "es" },
+    ]);
+    await job(`select public.notice_sent($1, $2, 'plus-2026-11')`, [SECRET, N1]);
+    await job(`select public.notice_sent($1, $2, 'plus-2026-11')`, [SECRET, N1]);
+    expect((await due()).map((r) => r.user_id)).toEqual([N2]);
+    // Another notice starts from no one.
+    expect((await job(`select user_id from public.notice_due($1, 'later-notice')`, [SECRET])).some((r) => r.user_id === N1)).toBe(true);
+    expect(await rows(`select count(*)::int as n from public.notice_deliveries where user_id = $1`, [N1])).toEqual([{ n: 1 }]);
+  });
+});
