@@ -8,6 +8,7 @@ import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaidAccount } from "@/lib/plaid/client";
 import type { StoredLiabilities } from "@/lib/plaid/liabilities";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 const scheduled: (() => unknown)[] = [];
@@ -82,6 +83,8 @@ async function connectedApp() {
   return agentFinance({ userId: "u1", email: "a@x.test", supabase: {} } as never);
 }
 const savedState = () => (saveAccountPlaidSync.mock.calls.at(-1) as unknown[] | undefined)?.[2] as { liabilities?: StoredLiabilities } | undefined;
+
+warmModules(() => import("./finance"));
 
 describe("a card's terms from its lender", () => {
   beforeEach(() => {

@@ -5,6 +5,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaidAccount, PlaidTransaction } from "@/lib/plaid/client";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 const jar = new Map<string, string>();
@@ -87,6 +88,8 @@ vi.mock("./household-store", async () => {
     },
   };
 });
+
+warmModules(() => import("./finance"));
 
 describe("the Household view", () => {
   beforeEach(() => {

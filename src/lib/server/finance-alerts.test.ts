@@ -9,6 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaidAccount } from "@/lib/plaid/client";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 const scheduled: (() => unknown)[] = [];
@@ -76,6 +77,8 @@ async function ownVisit() {
   for (const fn of scheduled.splice(0)) await fn();
   return data;
 }
+
+warmModules(() => import("./finance"));
 
 describe("what a visit leaves for alert emails", () => {
   beforeEach(() => {
