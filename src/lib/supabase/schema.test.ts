@@ -217,7 +217,17 @@ describe("a bank's stored sync", () => {
 
   it("keeps Plaid's warnings about a bank: the webhook can set three columns and nothing else, its owner can clear them", async () => {
     const state = async () => (await rows(`select attention, attention_at is not null as dated, disconnect_at is not null as ends from public.plaid_items where item_id = 'item-b'`))[0];
-    const warn = (event: string, at: string | null = null) => as("anon", null, async () => expect(await refused(`select public.plaid_bank_warning('item-b', $1, $2::timestamptz)`, [event, at])).toBe(false));
+    // Only with the jobs' secret, which the webhook route holds (CRON_SECRET; the database keeps its sha256).
+    const SECRET = "w".repeat(44);
+    await rows(`insert into public.job_keys (name, sha256) values ('alerts', $1) on conflict (name) do update set sha256 = excluded.sha256`, [createHash("sha256").update(SECRET).digest("hex")]);
+    const warn = (event: string, at: string | null = null) =>
+      as("anon", null, async () => expect(await refused(`select public.plaid_bank_warning_signed($1, 'item-b', $2, $3::timestamptz)`, [SECRET, event, at])).toBe(false));
+    await as("anon", null, async () => {
+      // Without the secret, or straight to the function underneath, nothing is kept.
+      expect(await refused(`select public.plaid_bank_warning_signed($1, 'item-b', 'revoked')`, ["x".repeat(44)])).toBe(true);
+      expect(await refused(`select public.plaid_bank_warning('item-b', 'revoked')`)).toBe(true);
+    });
+    expect((await rows(`select attention from public.plaid_items where item_id = 'item-b'`))[0]!.attention).toBeNull();
     const inAWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();
 
     await warn("disconnecting", inAWeek);
@@ -241,8 +251,8 @@ describe("a bank's stored sync", () => {
     await warn("disconnecting", null);
     await warn("disconnecting", new Date(Date.now() + 365 * 86_400_000).toISOString());
     await as("anon", null, async () => {
-      expect(await refused(`select public.plaid_bank_warning($1, 'revoked')`, ["' or 1=1 --"])).toBe(false);
-      expect(await refused(`select public.plaid_bank_warning('no-such-item', 'revoked')`)).toBe(false);
+      expect(await refused(`select public.plaid_bank_warning_signed($1, $2, 'revoked')`, [SECRET, "' or 1=1 --"])).toBe(false);
+      expect(await refused(`select public.plaid_bank_warning_signed($1, 'no-such-item', 'revoked')`, [SECRET])).toBe(false);
     });
     expect(await rows(`select item_id, attention from public.plaid_items order by item_id`)).toEqual([
       { item_id: "item-a", attention: null },
@@ -252,6 +262,7 @@ describe("a bank's stored sync", () => {
     expect((await rows(`select sealed_sync from public.plaid_items where item_id = 'item-b'`))[0]!.sealed_sync).toBe(packed);
     await as("authenticated", B, async () => {
       expect(await refused(`select public.plaid_bank_warning('item-b', 'revoked')`)).toBe(true);
+      expect(await refused(`select public.plaid_bank_warning_signed($1, 'item-b', 'revoked')`, [SECRET])).toBe(true);
     });
 
     // Its owner clears it (after a sync, or signing in again); nobody else, and never a connected app.
@@ -274,6 +285,8 @@ describe("a bank's stored sync", () => {
       expect(await refused(`update public.plaid_items set attention = 'disconnecting', attention_at = now() where item_id = 'item-b'`)).toBe(true);
     });
     expect(await state()).toEqual({ attention: null, dated: false, ends: false });
+    // The alert jobs' own tests set their own secret.
+    await rows(`delete from public.job_keys where name = 'alerts'`);
   });
 });
 

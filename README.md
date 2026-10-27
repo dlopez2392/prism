@@ -171,8 +171,9 @@ Prism says when something needs acting on, rather than waiting to be opened
 a wording without dollar amounts):
 
 - **A bank that has stopped updating, or soon will.** Plaid's ITEM webhooks
-  are kept as a warning on the bank (`plaid_bank_warning`, which sets three
-  plain columns and nothing else): sign in again (`ITEM_LOGIN_REQUIRED`),
+  are kept as a warning on the bank (`plaid_bank_warning_signed`, which
+  answers only to the jobs' `CRON_SECRET` and sets three plain columns and
+  nothing else): sign in again (`ITEM_LOGIN_REQUIRED`),
   consent ending on a date (`PENDING_DISCONNECT` in the US and Canada,
   `PENDING_EXPIRATION` in Europe, about a week ahead), or access withdrawn.
   A sign-in or a withdrawal ends when Plaid answers again; a consent running

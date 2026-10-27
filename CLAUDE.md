@@ -301,7 +301,9 @@
   go through `saveAccountPlaidSync` (version-guarded) after the response;
   `agentFinance` passes no saver. The webhook (`/api/plaid/webhook`) must
   verify Plaid's signature and may only call `plaid_item_changed` and
-  `plaid_bank_warning` — it has no key to anyone's bank and must never gain one.
+  `plaid_bank_warning_signed` (with `CRON_SECRET`; anon can't call
+  `plaid_bank_warning` itself since 2026-10-27) — it has no key to anyone's
+  bank and must never gain one.
 - Alert emails (`src/lib/alerts/*`, migration `alert_emails`): opt-in on the
   Account page. The daily job (`/api/cron/alerts`, Vercel Cron) holds no key
   to anyone's data: it reaches the database ONLY through `alerts_due`,

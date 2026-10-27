@@ -48,17 +48,19 @@ describe("Plaid's webhook", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("keeps a warning about the bank too: a consent ending on a date, a sign-in, a withdrawal", async () => {
+  it("keeps a warning about the bank too, with the jobs' secret: a consent ending on a date, a sign-in, a withdrawal", async () => {
     verified.mockResolvedValue(true);
+    const SECRET = "c".repeat(44);
+    vi.stubEnv("CRON_SECRET", SECRET);
     const res = await post({ webhook_type: "ITEM", webhook_code: "PENDING_DISCONNECT", item_id: "item-1", reason: "INSTITUTION_TOKEN_EXPIRATION", disconnect_time: "2026-10-08T13:25:17.766Z" });
     expect(res.status).toBe(200);
     expect(rpc.mock.calls).toEqual([
       ["plaid_item_changed", { p_item_id: "item-1" }],
-      ["plaid_bank_warning", { p_item_id: "item-1", p_event: "disconnecting", p_at: "2026-10-08T13:25:17.766Z" }],
+      ["plaid_bank_warning_signed", { p_secret: SECRET, p_item_id: "item-1", p_event: "disconnecting", p_at: "2026-10-08T13:25:17.766Z" }],
     ]);
     rpc.mockClear();
     await post({ webhook_type: "ITEM", webhook_code: "ERROR", item_id: "item-1", error: { error_code: "ITEM_LOGIN_REQUIRED" } });
-    expect(rpc).toHaveBeenLastCalledWith("plaid_bank_warning", { p_item_id: "item-1", p_event: "login-required", p_at: null });
+    expect(rpc).toHaveBeenLastCalledWith("plaid_bank_warning_signed", { p_secret: SECRET, p_item_id: "item-1", p_event: "login-required", p_at: null });
     // An error that isn't a sign-in is news for the next sync, but no warning.
     rpc.mockClear();
     await post({ webhook_type: "ITEM", webhook_code: "ERROR", item_id: "item-1", error: { error_code: "INSTITUTION_DOWN" } });
@@ -67,6 +69,15 @@ describe("Plaid's webhook", () => {
     rpc.mockReset();
     rpc.mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: null, error: { message: "db down" } });
     expect((await post({ webhook_type: "ITEM", webhook_code: "LOGIN_REPAIRED", item_id: "item-1" })).status).toBe(500);
+    // Without the secret here, the bank still gets its news, and no warning is attempted.
+    vi.stubEnv("CRON_SECRET", "");
+    rpc.mockReset();
+    rpc.mockResolvedValue({ data: null, error: null });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await post({ webhook_type: "ITEM", webhook_code: "ERROR", item_id: "item-1", error: { error_code: "ITEM_LOGIN_REQUIRED" } })).status).toBe(200);
+    expect(rpc.mock.calls.map((call) => (call as unknown[])[0])).toEqual(["plaid_item_changed"]);
+    log.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it("asks Plaid to try again when the flag couldn't be recorded", async () => {
