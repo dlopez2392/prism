@@ -3,6 +3,7 @@
 // settles it), what changed, and the month ahead.
 
 import { describe, expect, it } from "vitest";
+import { alertsFor } from "./alerts";
 import { checkIn } from "./check-in";
 import { buildDemoData } from "./demo";
 import { analyze } from "./model";
@@ -56,5 +57,24 @@ describe("check-in", () => {
     expect(item?.detail).toMatch(/^Under the safe-harbor rule, about \$[\d,]+ more by then/);
     // And nothing for the example household as it is: no business, and its return had a refund.
     expect(c.items.some((i) => i.id.startsWith("estimated-tax:"))).toBe(false);
+  });
+
+  it("in its last week, makes it an alert (with a wording without amounts), said once", () => {
+    const withEstimates = (today: string) => {
+      const d = buildDemoData(today);
+      return { ...d, taxReturns: [{ ...d.taxReturns![0]!, year: 2025, estimated: 200_000, withheld: 1_000_000, refund: null }] };
+    };
+    // Ten days out: a check-in item, not yet an alert.
+    expect(alertsFor(analyze(withEstimates("2027-01-05"))).some((x) => x.kind === "estimated-tax")).toBe(false);
+    const week = analyze(withEstimates("2027-01-10"));
+    const alert = alertsFor(week).find((x) => x.kind === "estimated-tax");
+    expect(alert).toMatchObject({ id: "estimated-tax:2026:4", on: "2027-01-15", href: "/taxes", urgent: true, title: "Estimated tax payment due Fri, Jan 15" });
+    expect(alert!.detail).toMatch(/^Under the safe-harbor rule, about \$[\d,]+ more by then.+Prism never pays anyone for you\.$/);
+    expect(alert!.quiet.detail).not.toMatch(/\$/);
+    const items = checkIn(week).items.filter((i) => i.id === "estimated-tax:2026:4");
+    expect(items).toHaveLength(1);
+    expect(items[0]!.tone).toBe("now");
+    // Due date passed: no alert.
+    expect(alertsFor(analyze(withEstimates("2027-01-16"))).some((x) => x.kind === "estimated-tax")).toBe(false);
   });
 });

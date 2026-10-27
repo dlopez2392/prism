@@ -160,7 +160,8 @@ export function checkIn(a: Analysis, t: T = EN): CheckIn {
 
   // An estimated tax payment due within the month, not yet met.
   const est = estimatedTax(a.data);
-  if (est?.next && est.next.state !== "paid" && daysBetween(today, est.next.due) <= EST_DAYS) {
+  // In its last week it's an alert (alerts.ts), already above under the same id.
+  if (est?.next && est.next.state !== "paid" && daysBetween(today, est.next.due) <= EST_DAYS && !items.some((i) => i.id === `estimated-tax:${est.taxYear}:${est.next!.n}`)) {
     items.push({
       id: `estimated-tax:${est.taxYear}:${est.next.n}`,
       tone: daysBetween(today, est.next.due) <= DUE_DAYS ? "now" : "soon",
