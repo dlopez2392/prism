@@ -4,6 +4,7 @@
 
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 const scheduled: (() => unknown)[] = [];
@@ -64,6 +65,8 @@ async function visit() {
   for (const fn of scheduled.splice(0)) await fn();
   return data;
 }
+
+warmModules(() => import("./finance"));
 
 describe("the household's copy of a shared Coinbase", () => {
   beforeEach(() => {

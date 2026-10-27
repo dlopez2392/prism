@@ -4,6 +4,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import type { PlaidAccount, PlaidTransaction } from "@/lib/plaid/client";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, has: () => false }), headers: async () => new Headers() }));
@@ -50,6 +51,8 @@ vi.mock("./account-store", () => ({
   saveAccountTimeZone: vi.fn(),
   saveFeedSnapshot: vi.fn(),
 }));
+
+warmModules(() => import("./finance"));
 
 describe("splits, tags and who owes you", () => {
   it("reach the person's own line, split into its parts, in what a connected app is told and in the morning check", async () => {

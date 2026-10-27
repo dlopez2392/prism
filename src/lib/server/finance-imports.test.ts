@@ -8,6 +8,7 @@ import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ImportedHistory } from "@/lib/finance/import";
 import type { PlaidAccount, PlaidTransaction } from "@/lib/plaid/client";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), after: () => undefined }));
@@ -58,6 +59,8 @@ async function mine() {
   const { getPersonalFinance } = await import("./finance");
   return getPersonalFinance();
 }
+
+warmModules(() => import("./finance"));
 
 describe("imported history", () => {
   beforeEach(() => {

@@ -6,6 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaidAccount } from "@/lib/plaid/client";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, has: () => false }), headers: async () => new Headers() }));
@@ -51,6 +52,8 @@ async function load() {
   const { agentFinance } = await import("./finance");
   return agentFinance({ userId: "u1", email: "a@x.test", supabase: {} } as never);
 }
+
+warmModules(() => import("./finance"));
 
 describe("a bank that needs its owner to sign in again", () => {
   beforeEach(() => {
