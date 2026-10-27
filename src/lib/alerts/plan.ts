@@ -141,6 +141,7 @@ function snapshotItems(r: Recipient, snap: AlertSnapshot, today: ISODate): Candi
     .filter((a) => {
       if (a.kind === "bill-short") return r.kinds.includes("bill-short") && a.on !== null && a.on >= today && daysBetween(today, a.on) <= BILL_LEAD_DAYS;
       if (a.kind === "price-rise") return r.kinds.includes("price-rise");
+      if (a.kind === "estimated-tax") return r.kinds.includes("estimated-tax") && a.on !== null && a.on >= today;
       return false;
     })
     .map((a: Alert) => {

@@ -160,7 +160,7 @@ function validMonthly(x: unknown): MonthlyNumbers | null | undefined {
     ahead: m.ahead ? { count: m.ahead.count, total: m.ahead.total } : null,
   };
 }
-const KINDS: AlertKind[] = ["bank", "bill-short", "price-rise"];
+const KINDS: AlertKind[] = ["bank", "bill-short", "price-rise", "estimated-tax"];
 const text = (x: unknown, max: number): x is string => typeof x === "string" && x.length <= max;
 const cents = (x: unknown): x is Cents => Number.isSafeInteger(x);
 

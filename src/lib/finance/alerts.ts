@@ -4,7 +4,8 @@
 // will within the week; a bill due before the next paycheck that the account
 // it comes out of won't cover; a recurring charge that just went up; a
 // subscription that just started (or a free trial that just turned into one);
-// and one the person cancelled that charged them again. Shown on Overview,
+// one the person cancelled that charged them again; and a quarterly estimated
+// tax payment due within the week, not yet seen paid. Shown on Overview,
 // and (once email is switched on) sent by email.
 //
 // The subscription news shares the price rise's kind ("price-rise", shown as
@@ -20,6 +21,7 @@
 // Pure: reads the analysis, writes nothing.
 
 import { addDays, daysBetween } from "./dates";
+import { estimatedTax } from "./estimated-tax";
 import { dayDate, money, money0, shortDate } from "./format";
 import type { Analysis } from "./model";
 import { normalizeMerchant, perYear } from "./recurring";
@@ -27,7 +29,7 @@ import { EN, type T } from "@/lib/i18n/t";
 import type { Cadence } from "./recurring";
 import type { Cents, ISODate } from "./types";
 
-export type AlertKind = "bank" | "bill-short" | "price-rise";
+export type AlertKind = "bank" | "bill-short" | "price-rise" | "estimated-tax";
 
 export type Alert = {
   /** Stable for one occasion: the same bank's same problem, the same bill on the same day, the same new price. */
@@ -231,10 +233,43 @@ function chargedAfterCancelling(a: Analysis, t: T): Alert[] {
   return out;
 }
 
+/** An estimated tax payment is news this many days before its due date. */
+export const ESTIMATED_TAX_DAYS = 7;
+
+/**
+ * The next quarterly estimated tax payment (estimated-tax.ts), in its last
+ * week, until Prism sees it paid: with the amount still to send under the
+ * safe-harbor rule when last year's return is on file, and without amounts in
+ * its quiet wording. Its id names the tax year and the quarter, the same as
+ * the check-in's, so it's said once per quarter.
+ */
+function estimatedTaxDue(a: Analysis, t: T): Alert | null {
+  const est = estimatedTax(a.data);
+  const q = est?.next;
+  if (!est || !q || q.state === "paid" || q.due < a.today || daysBetween(a.today, q.due) > ESTIMATED_TAX_DAYS) return null;
+  const date = dayDate(q.due, t.locale);
+  const left = q.target !== null ? Math.max(0, q.target - q.paid) : null;
+  const how = t("Pay on IRS Direct Pay or your IRS online account; Prism never pays anyone for you.");
+  return {
+    id: `estimated-tax:${est.taxYear}:${q.n}`,
+    kind: "estimated-tax",
+    title: t("Estimated tax payment due {date}", { date }),
+    detail:
+      left !== null && left > 0
+        ? `${t("Under the safe-harbor rule, about {amount} more by then, with withholding like last year's.", { amount: money0(left) })} ${how}`
+        : `${t("Taxes shows the year's four dates and what Prism has seen paid to the IRS.")} ${how}`,
+    quiet: { title: t("Estimated tax payment due {date}", { date }), detail: `${t("Taxes shows the year's four dates and what Prism has seen paid to the IRS.")} ${how}` },
+    on: q.due,
+    href: "/taxes",
+    urgent: true,
+  };
+}
+
 /** Everything worth a heads-up, the urgent first, in the language of `t` (English unless asked). */
 export function alertsFor(a: Analysis, t: T = EN): Alert[] {
   const bill = shortBill(a, t);
-  return [...bankAlerts(a, t), ...(bill ? [bill] : []), ...chargedAfterCancelling(a, t), ...priceRises(a, t), ...newSubscriptions(a, t)].sort(
+  const tax = estimatedTaxDue(a, t);
+  return [...bankAlerts(a, t), ...(bill ? [bill] : []), ...(tax ? [tax] : []), ...chargedAfterCancelling(a, t), ...priceRises(a, t), ...newSubscriptions(a, t)].sort(
     (x, y) => Number(y.urgent) - Number(x.urgent),
   );
 }

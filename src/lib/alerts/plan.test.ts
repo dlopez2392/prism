@@ -116,6 +116,26 @@ describe("an alert email", () => {
     expect(emailFor(person({ banks, kinds: [] }), MONDAY)).toBeNull();
   });
 
+  it("tells of an estimated tax payment only to someone who chose it, and not once its date has passed", () => {
+    const tax: Alert = {
+      id: "estimated-tax:2026:4",
+      kind: "estimated-tax",
+      title: "Estimated tax payment due Fri, Oct 9",
+      detail: "Under the safe-harbor rule, about $1,250 more by then, with withholding like last year's.",
+      quiet: { title: "Estimated tax payment due Fri, Oct 9", detail: "Taxes shows the year's four dates and what Prism has seen paid to the IRS." },
+      on: "2026-10-09",
+      href: "/taxes",
+      urgent: true,
+    };
+    const snap = snapshot({ alerts: [tax] });
+    expect(emailFor(person({ snapshot: snap, kinds: ["bank", "price-rise"] }), TUESDAY)).toBeNull();
+    const e = emailFor(person({ snapshot: snap, kinds: ["estimated-tax"] }), TUESDAY)!;
+    expect(e.items.map((i) => i.title)).toEqual([tax.title]);
+    expect(e.fingerprints).toEqual([fingerprint(U, tax.id)]);
+    expect(emailFor(person({ snapshot: snap, kinds: ["estimated-tax"], amounts: false }), TUESDAY)!.items[0]!.detail).toBe(tax.quiet.detail);
+    expect(emailFor(person({ snapshot: snap, kinds: ["estimated-tax"] }), new Date("2026-10-10T13:00:00Z"))).toBeNull();
+  });
+
   it("with amounts off, carries no dollar figure anywhere, summary included", () => {
     const banks = [{ id: "item-1", name: "First Bank", attention: "sign-in" as const, since: null, disconnectAt: null }];
     const e = emailFor(person({ amounts: false, banks }), MONDAY)!;

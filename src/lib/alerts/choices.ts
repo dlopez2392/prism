@@ -7,7 +7,7 @@
 
 import { msg } from "@/lib/i18n/t";
 
-export const ALERT_CHOICES = ["bank", "bill-short", "price-rise", "weekly"] as const;
+export const ALERT_CHOICES = ["bank", "bill-short", "price-rise", "estimated-tax", "weekly"] as const;
 export type AlertChoice = (typeof ALERT_CHOICES)[number];
 export const isAlertChoice = (x: unknown): x is AlertChoice => ALERT_CHOICES.includes(x as AlertChoice);
 
@@ -17,6 +17,10 @@ export const ALERT_CHOICE_LABELS: Record<AlertChoice, { label: string; hint: str
   "price-rise": {
     label: msg("A subscription changed"),
     hint: msg("A price went up, a new subscription or a free trial started charging you, or one you cancelled charged you again."),
+  },
+  "estimated-tax": {
+    label: msg("An estimated tax payment is due"),
+    hint: msg("A week before each quarterly IRS due date, if you pay estimated tax and Prism hasn't seen this quarter's payment."),
   },
   weekly: {
     label: msg("Summaries"),
