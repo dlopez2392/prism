@@ -186,9 +186,10 @@ person's own view only.
 
 ### Alert emails
 
-Opt-in, per person, on the Account page: which of the four kinds (a bank
-needs you, a bill may not be covered, a subscription went up, summaries)
-and whether amounts may show. Prism holds no service-role key, so
+Opt-in, per person, on the Account page: which of the five kinds (a bank
+needs you, a bill may not be covered, a subscription went up, an estimated
+tax payment is due within the week and not yet seen paid, summaries) and
+whether amounts may show. Prism holds no service-role key, so
 the daily job (`/api/cron/alerts`, Vercel Cron at 13:00 UTC) can't read
 anyone's money as itself:
 

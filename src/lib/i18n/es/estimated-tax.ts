@@ -33,6 +33,14 @@ export const ESTIMATED_TAX: Record<string, string> = {
   "See the year: {url}": "Mira el año: {url}",
   Status: "Estado",
   "Taxes shows the year's four dates and what Prism has seen paid to the IRS.": "Impuestos muestra las cuatro fechas del año y lo que Prism ha visto pagado al IRS.",
+  "Under the safe-harbor rule, about {amount} more by then, with withholding like last year's.":
+    "Según la regla de puerto seguro, unos {amount} más para esa fecha, con retenciones como las del año pasado.",
+  "A week before each quarterly IRS due date, if you pay estimated tax and Prism hasn't seen this quarter's payment.":
+    "Una semana antes de cada fecha trimestral del IRS, si pagas impuesto estimado y Prism no ha visto el pago de ese trimestre.",
+  "An estimated tax payment is due": "Se vence un pago de impuesto estimado",
+  "Pay on IRS Direct Pay or your IRS online account; Prism never pays anyone for you.":
+    "Paga en IRS Direct Pay o en tu cuenta en línea del IRS; Prism nunca le paga a nadie por ti.",
+  "See Taxes": "Ver Impuestos",
   "Under the safe-harbor rule, about {amount} more by then, with withholding like last year's. Taxes shows the year.":
     "Según la regla de puerto seguro, unos {amount} más para esa fecha, con retenciones como las del año pasado. Impuestos muestra el año.",
   "Your business made {amount} so far this year, and no paycheck withholds tax on it.": "Tu negocio ha ganado {amount} en lo que va del año, y ningún cheque de pago le retiene impuestos.",
