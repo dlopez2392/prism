@@ -58,7 +58,9 @@ describe("an Ethereum address", () => {
       { symbol: "USDC", name: "USD Coin", units: "7812500", decimals: 6 },
     ]);
     const calls = f.mock.calls.map(([url, init]) => ({ url: String(url), body: JSON.parse(String(init!.body)) as { method: string; params: unknown[] } }));
-    expect(calls.map((c) => c.url)).toEqual(["https://eth-mainnet.g.alchemy.com/v2/alc-key", "https://eth-mainnet.g.alchemy.com/v2/alc-key"]);
+    // The key travels in the Authorization header, never in the URL, where logs and errors would carry it.
+    expect(calls.map((c) => c.url)).toEqual(["https://eth-mainnet.g.alchemy.com/v2", "https://eth-mainnet.g.alchemy.com/v2"]);
+    expect(f.mock.calls.map(([, init]) => new Headers(init!.headers).get("authorization"))).toEqual(["Bearer alc-key", "Bearer alc-key"]);
     expect(calls.map((c) => c.body.method).sort()).toEqual(["alchemy_getTokenBalances", "eth_getBalance"]);
     expect(calls.find((c) => c.body.method === "alchemy_getTokenBalances")!.body.params).toEqual([ADDRESS, ETHEREUM_TOKENS.map((t) => t.contract)]);
   });
@@ -87,7 +89,8 @@ describe("a Solana address", () => {
       { symbol: "SOL", name: "Solana", units: "2500000000", decimals: 9 },
       { symbol: "USDC", name: "USD Coin", units: "1500000", decimals: 6 },
     ]);
-    expect(new Set(f.mock.calls.map(([url]) => String(url)))).toEqual(new Set(["https://solana-mainnet.g.alchemy.com/v2/alc-key"]));
+    expect(new Set(f.mock.calls.map(([url]) => String(url)))).toEqual(new Set(["https://solana-mainnet.g.alchemy.com/v2"]));
+    expect(new Set(f.mock.calls.map(([, init]) => new Headers(init!.headers).get("authorization")))).toEqual(new Set(["Bearer alc-key"]));
   });
 });
 

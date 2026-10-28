@@ -186,12 +186,13 @@ export async function readWholeWallet(key: string, known: Script[], fetchImpl: t
 }
 
 /** Each call on its own, all at once: plain JSON-RPC, which every endpoint answers (not every one takes a batch). */
-async function rpc(url: string, fetchImpl: typeof fetch, calls: { method: string; params: unknown[] }[]): Promise<unknown[]> {
+/** Alchemy's JSON-RPC, with the key in the Authorization header rather than the URL, where logs and errors would carry it (Alchemy's documented header method). */
+async function rpc(url: string, key: string, fetchImpl: typeof fetch, calls: { method: string; params: unknown[] }[]): Promise<unknown[]> {
   return Promise.all(
     calls.map(async (c, id) => {
       const r = (await getJson(fetchImpl, url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
         body: JSON.stringify({ jsonrpc: "2.0", id, method: c.method, params: c.params }),
       })) as { result?: unknown; error?: unknown } | null;
       if (!r || r.error !== undefined || r.result === undefined || r.result === null) throw new BalanceError("unavailable");
@@ -201,7 +202,7 @@ async function rpc(url: string, fetchImpl: typeof fetch, calls: { method: string
 }
 
 async function ethereum(address: string, key: string, fetchImpl: typeof fetch): Promise<WalletAsset[]> {
-  const [eth, tokens] = await rpc(`https://eth-mainnet.g.alchemy.com/v2/${encodeURIComponent(key)}`, fetchImpl, [
+  const [eth, tokens] = await rpc("https://eth-mainnet.g.alchemy.com/v2", key, fetchImpl, [
     { method: "eth_getBalance", params: [address, "latest"] },
     { method: "alchemy_getTokenBalances", params: [address, ETHEREUM_TOKENS.map((t) => t.contract)] },
   ]);
@@ -217,7 +218,7 @@ async function ethereum(address: string, key: string, fetchImpl: typeof fetch): 
 }
 
 async function solana(address: string, key: string, fetchImpl: typeof fetch): Promise<WalletAsset[]> {
-  const [sol, ...tokens] = await rpc(`https://solana-mainnet.g.alchemy.com/v2/${encodeURIComponent(key)}`, fetchImpl, [
+  const [sol, ...tokens] = await rpc("https://solana-mainnet.g.alchemy.com/v2", key, fetchImpl, [
     { method: "getBalance", params: [address] },
     ...SOLANA_TOKENS.map((t) => ({ method: "getTokenAccountsByOwner", params: [address, { mint: t.mint }, { encoding: "jsonParsed" }] })),
   ]);
