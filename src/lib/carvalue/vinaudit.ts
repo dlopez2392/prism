@@ -8,7 +8,9 @@
 // (claim_vehicle_value_lookup, supabase/migrations/20261016120000_vehicle_values.sql).
 //
 // VinAudit takes its key in the query string, so the address asked is never
-// logged or put in an error: it carries the key.
+// logged or put in an error: it carries the key. It takes it nowhere else:
+// checked 2026-10-28, the endpoint answers POST with 405 (its docs say POST
+// works) and ignores a key in Authorization, X-Api-Key or a "key" header.
 //
 // Pure apart from the request, which takes an injectable fetch.
 
