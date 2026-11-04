@@ -7,6 +7,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaidAccount } from "@/lib/plaid/client";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 const scheduled: (() => unknown)[] = [];
@@ -83,6 +84,8 @@ async function ownVisit() {
   return data;
 }
 const savedState = () => (saveAccountPlaidSync.mock.calls.at(-1) as unknown[] | undefined)?.[2] as { transactions: unknown[]; ready: boolean; accounts: PlaidAccount[] } | undefined;
+
+warmModules(() => import("./finance"));
 
 describe("an investment account connected on its own", () => {
   beforeEach(() => {

@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import type { ManualItem } from "@/lib/finance/manual";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, has: () => false }), headers: async () => new Headers() }));
@@ -36,6 +37,8 @@ vi.mock("./account-store", () => ({
   saveAccountTimeZone: vi.fn(),
   saveFeedSnapshot: vi.fn(),
 }));
+
+warmModules(() => import("./finance"));
 
 describe("things added by hand", () => {
   it("are the person's own household on their own: never the example one, and a connected app sees them", async () => {

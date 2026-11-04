@@ -6,6 +6,7 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaidAccount } from "@/lib/plaid/client";
+import { warmModules } from "./test-warm";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), after: () => undefined }));
@@ -81,6 +82,8 @@ async function ownVisit() {
   return getPersonalFinance();
 }
 const asked = () => banks.mock.calls.filter(([u]) => !String(u).includes("coinbase")).map(([, init]) => (JSON.parse(String(init?.body)) as { access_token?: string }).access_token);
+
+warmModules(() => import("./finance"));
 
 describe("once Prism Plus ends", () => {
   beforeEach(() => {
